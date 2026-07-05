@@ -1,0 +1,103 @@
+/* ============================================================
+   style.css — Design-Fundament
+   Tokens aus design-konzept-frisch.html (Design-SPRACHE).
+   Layout/Komponenten wachsen ab Schritt 3 hier weiter.
+   ============================================================ */
+
+:root{
+  /* Basisfarben */
+  --bg:#0C0D0E;
+  --surface:#15171A;
+  --surface-2:#1D2125;
+  --line:rgba(255,255,255,.08);
+  --text:#F2F5F3;
+  --dim:#868D88;
+  --dim-2:#5C625E;
+
+  /* Farbsystem pro Sportart */
+  --kraft:#CDFD34;
+  --rad:#37D7F4;
+  --wandern:#FCB44B;
+  --schwimmen:#A78BFA;
+  --challenge:#FF6B9D;
+  /* Sonstiges: neutral → nutzt --dim/--text, bewusst kein eigener Akzent */
+
+  /* Typografie */
+  --font-display:'Bricolage Grotesque',system-ui,sans-serif;
+  --font-body:'Sora',system-ui,sans-serif;
+
+  /* Radien */
+  --r-hero:26px;
+  --r-container:22px;
+  --r-tile:18px;
+  --r-button:14px;
+  --r-icon:13px;
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+
+html{height:100%}
+body{
+  min-height:100%;
+  font-family:var(--font-body);
+  color:var(--text);
+  background:radial-gradient(120% 80% at 50% -10%, #16191c 0%, var(--bg) 55%) fixed;
+  -webkit-font-smoothing:antialiased;
+  /* Platz für die untere Navi + iPhone-Home-Balken */
+  padding-bottom:calc(72px + env(safe-area-inset-bottom));
+}
+
+main{
+  max-width:520px;
+  margin:0 auto;
+  padding:18px 22px 24px;
+}
+
+h1,h2,h3,.num{
+  font-family:var(--font-display);
+  letter-spacing:-.02em;
+}
+.num{font-variant-numeric:tabular-nums}
+
+/* Untere Tab-Navi (Gerüst — Inhalte kommen aus app.js) */
+.nav{
+  position:fixed;left:0;right:0;bottom:0;
+  background:rgba(12,13,14,.86);
+  -webkit-backdrop-filter:blur(16px);
+  backdrop-filter:blur(16px);
+  border-top:1px solid var(--line);
+  padding:10px 8px calc(10px + env(safe-area-inset-bottom));
+}
+.nav:empty{display:none}
+
+/* Sanfter Auftritt */
+@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.anim{opacity:0;animation:rise .55s cubic-bezier(.2,.7,.2,1) forwards}
+@media (prefers-reduced-motion:reduce){.anim{animation:none;opacity:1}}
+
+/* ------------------------------------------------------------
+   Status-Karte (nur Platzhalter, fliegt in Schritt 3 raus)
+   ------------------------------------------------------------ */
+.status-card{
+  margin-top:14vh;
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:var(--r-hero);
+  padding:26px 24px;
+  position:relative;
+  overflow:hidden;
+}
+.status-card::before{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(90% 120% at 88% -20%, rgba(205,253,52,.16), transparent 60%);
+}
+.status-card .eyebrow{
+  position:relative;display:inline-flex;align-items:center;gap:7px;
+  font-size:11px;letter-spacing:.18em;text-transform:uppercase;
+  font-weight:600;color:var(--kraft);
+}
+.status-card .eyebrow .pip{width:6px;height:6px;border-radius:50%;background:var(--kraft);
+  box-shadow:0 0 10px var(--kraft)}
+.status-card h1{position:relative;font-size:26px;font-weight:700;margin:12px 0 6px}
+.status-card p{position:relative;color:var(--dim);font-size:13.5px;line-height:1.5}
+.status-card .fehler{color:#ff8a8a}
