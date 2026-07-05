@@ -28,6 +28,7 @@ const ctx = {
   get state() { return state; },
   save: async () => { await save(state); },
   render, sheet, esc, formatDatum,
+  tabWechsel: (t) => { tab = t; },
 };
 const kraft = erstelleKraftModul(ctx);
 
