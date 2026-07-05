@@ -220,3 +220,17 @@ body.sheet-auf .nav{transform:translateY(110%)}
 .picker-zeile.aktiv .tag-nr{background:rgba(205,253,52,.15);color:var(--kraft)}
 .korrektur{margin-top:18px}
 .klein-text{font-size:12.5px;line-height:1.5;margin:4px 0 10px}
+.sheet-abschnitt.zwischen{margin:22px 2px 10px;font-size:11.5px}
+.bib-hinweis{margin:-4px 2px 12px}
+
+/* Zyklus-Ablauf */
+.zyklus-karte{padding:6px 12px}
+.zyklus-zeile{display:flex;align-items:center;gap:10px;padding:9px 0;
+  border-bottom:1px solid var(--line)}
+.zyklus-zeile:last-child{border-bottom:none}
+.zyklus-zeile .name{flex:1;min-width:0;font-size:14.5px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.zyklus-zeile.aktuell .name{color:var(--kraft);font-weight:600}
+.zyklus-zeile.aktuell .tag-nr{background:rgba(205,253,52,.15);color:var(--kraft)}
+
+.knopf.aus{opacity:.4;pointer-events:none}
