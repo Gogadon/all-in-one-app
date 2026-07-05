@@ -18,6 +18,18 @@ import {
 const main = document.getElementById('main');
 const nav = document.getElementById('nav');
 
+// Sichtbare Viewport-Höhe exakt messen und als CSS-Variable setzen.
+// Zuverlässiger als 100dvh (Firefox-Android rechnet dvh sonst falsch → Spalt
+// unter der Navi). visualViewport bevorzugen, sonst innerHeight.
+function setzeAppHoehe() {
+  const h = window.visualViewport?.height ?? window.innerHeight;
+  document.documentElement.style.setProperty('--app-h', h + 'px');
+}
+setzeAppHoehe();
+window.addEventListener('resize', setzeAppHoehe);
+window.visualViewport?.addEventListener('resize', setzeAppHoehe);
+window.addEventListener('orientationchange', () => setTimeout(setzeAppHoehe, 200));
+
 // Feste Grundstruktur im Scroll-Container: Reload-Indikator + Inhaltsbereich.
 main.innerHTML = `<div id="ptr" class="ptr"><span class="ptr-spinner"></span></div><div class="main-inner" id="mainInner"></div>`;
 const mainInner = document.getElementById('mainInner');
