@@ -402,10 +402,10 @@ export function erstelleKraftModul(ctx) {
         html += seg.eintraege.map((e, i) => satzZeileHtml(session, seg, aktivitaet, e, i)).join('');
         html += `<button class="knopf klein" data-action="k.satzPlus" data-seg="${seg.id}">+ Satz</button>`;
       } else {
-        const e = seg.eintraege[0] ?? null;
-        html += `<div class="satz cardio">${e
-          ? eintragInputsHtml(aktivitaet, seg, e)
-          : `<button class="knopf klein" data-action="k.satzPlus" data-seg="${seg.id}">Werte eintragen</button>`}</div>`;
+        // Cardio/Sonstiges: genau ein Eintrag → Felder direkt anzeigen.
+        let e = seg.eintraege[0];
+        if (!e) { e = neuerEintrag({}); seg.eintraege.push(e); } // Altbestand absichern
+        html += `<div class="satz cardio">${eintragInputsHtml(aktivitaet, seg, e)}</div>`;
       }
 
       html += `</div>`;
@@ -640,12 +640,31 @@ export function erstelleKraftModul(ctx) {
 
   async function speichernUndZeigen() { await ctx.save(); ctx.render(); }
 
+  /**
+   * Macht ein frisches Segment startklar, damit sofort Felder da sind:
+   *  - Kraft: ein erster Satz, mit Gewicht+Wdh aus der letzten Session
+   *    vorbefüllt (oder leer beim allerersten Mal).
+   *  - Cardio/Sonstiges: ein leerer Eintrag → Eingabefelder sofort sichtbar.
+   * Passiert nur, wenn das Segment noch gar keine Einträge hat.
+   */
+  function bereiteSegmentVor(session, seg) {
+    if (seg.eintraege.length) return;
+    const { aktivitaet } = loeseSegmentAuf(S(), seg);
+    if (!aktivitaet) return;
+    if (aktivitaet.kategorie === 'kraft') {
+      const pf = prefillEintrag(S(), identVon(seg), session.datum);
+      addEintrag(seg, pf ?? neuerEintrag({}));
+    } else {
+      addEintrag(seg, neuerEintrag({}));
+    }
+  }
+
   const actions = {
     async 'k.start'(d) {
       const s = sessionAusEinheit(S(), MODUL, d.einheit);
       s.modul = MODUL;
       S().sessions.push(s);
-      s.segmente.forEach(seg => offen.add(seg.id));
+      s.segmente.forEach(seg => { offen.add(seg.id); bereiteSegmentVor(s, seg); });
       await speichernUndZeigen();
     },
     async 'k.ueberspringen'() { schalteWeiter(S(), MODUL); await speichernUndZeigen(); },
@@ -749,6 +768,7 @@ export function erstelleKraftModul(ctx) {
         const s = heutigeSession(); if (!s) return;
         const seg = addSegment(s, neuesSegment(d.akt));
         offen.add(seg.id);
+        bereiteSegmentVor(s, seg);   // sofort Felder da (Kraft vorbefüllt, Cardio leer)
       }
       picker = null; sheet.schliesse();
       await speichernUndZeigen();
