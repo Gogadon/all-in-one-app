@@ -19,27 +19,25 @@
 }
 
 *{box-sizing:border-box;margin:0;padding:0}
-html{height:100%}
+html{height:100%;background:var(--bg)}
 body{
-  /* App-Shell: Body füllt exakt den sichtbaren Viewport, Inhalt scrollt intern.
-     Höhe in Stufen: vh (Fallback) → dvh → per JS gemessene --app-h (exakt,
-     browserübergreifend gleich; Firefox-Android rechnet dvh sonst falsch). */
-  height:100vh;
-  height:100dvh;
-  height:var(--app-h, 100dvh);
+  /* Bewährtes Muster aus der Gym-App (läuft in Firefox-Android sauber):
+     Body = fester dvh-Container mit position:relative; Inhalt scrollt in #main
+     mit Bottom-Padding; die Navi liegt absolut am Body-Ende. */
+  height:100vh; height:100dvh; height:var(--app-h, 100dvh);
+  overflow:hidden; position:relative;
   display:flex; flex-direction:column;
-  overflow:hidden;
   font-family:var(--font-body); font-size:15px; color:var(--text);
   background:radial-gradient(120% 80% at 50% -10%, #16191c 0%, var(--bg) 55%) fixed;
   -webkit-font-smoothing:antialiased;
 }
 main{
-  flex:1; min-height:0;                 /* nimmt Resthöhe, scrollt intern */
-  overflow-y:auto; -webkit-overflow-scrolling:touch;
-  overscroll-behavior-y:contain;        /* kein Gummiband auf den Body */
-  position:relative;
+  flex:1 1 auto; min-height:0;
+  overflow-y:auto; overflow-x:hidden; -webkit-overflow-scrolling:touch;
+  overscroll-behavior-y:contain;
+  padding-bottom:calc(76px + min(env(safe-area-inset-bottom,0px),10px));
 }
-.main-inner{max-width:520px;margin:0 auto;padding:20px 18px 24px}
+.main-inner{max-width:520px;margin:0 auto;padding:20px 18px 8px}
 button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;-webkit-tap-highlight-color:transparent}
 input{font:inherit;color:inherit}
 
@@ -181,12 +179,12 @@ h1,h2,h3,.num{font-family:var(--font-display);letter-spacing:-.02em}
 .verlauf-zeile .dim{font-size:12px}
 
 /* --- Untere Navi ------------------------------------------------ */
-.nav{flex:none;z-index:40;
+.nav{position:absolute;left:0;right:0;bottom:0;z-index:40;
   display:flex;justify-content:space-around;
   background:rgba(12,13,14,.92);
   -webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);
   border-top:1px solid var(--line);
-  padding:8px 8px calc(8px + env(safe-area-inset-bottom));
+  padding:8px 8px calc(8px + min(env(safe-area-inset-bottom,0px),10px));
   transition:transform .25s}
 .nav-tab{display:flex;flex-direction:column;align-items:center;gap:3px;
   padding:6px 14px;color:var(--dim-2);font-size:10.5px;font-weight:600;
