@@ -19,8 +19,9 @@ import {
 } from '../js/core/library.js';
 import {
   planFuer, erstellePlan, entfernePlan,
-  addEinheit, benenneEinheitUm, entferneEinheit, verschiebeEinheit,
+  addEinheit, benenneEinheitUm, loescheEinheit, einheitenBibliothek, findeEinheit,
   addAktivitaetZuEinheit, entferneAktivitaetAusEinheit, verschiebeAktivitaetInEinheit,
+  zyklusEinheiten, addZuZyklus, entferneAusZyklus, verschiebeImZyklus, setzePosition,
   naechsteEinheit, schalteWeiter, sessionAusEinheit,
 } from '../js/core/plan.js';
 
@@ -106,22 +107,26 @@ test('Bibliothek: Suche und Kategorie-Vorschläge', () => {
 // Plan
 // ==================================================================
 
-/** Mini-Version von Manuels Welt: 3 Kraft-Einheiten im Zyklus. */
+/** Manuels Welt: Einheiten-Bibliothek + Verweis-Zyklus (dieselbe Einheit mehrfach). */
 function baueKraftWelt() {
   const state = leererZustand();
   const bank = addAktivitaet(state, { name: 'Bankdrücken', kategorie: 'kraft', messwerte: ['gewicht', 'wdh'] });
   const kniebeuge = addAktivitaet(state, { name: 'Kniebeuge', kategorie: 'kraft', messwerte: ['gewicht', 'wdh'] });
   const laufband = addAktivitaet(state, { name: 'Laufband', kategorie: 'sonstiges', messwerte: ['dauer', 'puls_avg', 'puls_max'] });
 
+  // Bibliothek
   const push = addEinheit(state, 'kraft', { name: 'Push' });
   const beine = addEinheit(state, 'kraft', { name: 'Beine · Nacken' });
-  const pull = addEinheit(state, 'kraft', { name: 'Pull' });
+  const rest = addEinheit(state, 'kraft', { name: 'Active Rest' });
 
-  addAktivitaetZuEinheit(state, 'kraft', push.id, laufband.id); // Warmup — Cardio im Kraft-Tag!
+  addAktivitaetZuEinheit(state, 'kraft', push.id, laufband.id); // Cardio im Kraft-Tag
   addAktivitaetZuEinheit(state, 'kraft', push.id, bank.id);
   addAktivitaetZuEinheit(state, 'kraft', beine.id, kniebeuge.id);
 
-  return { state, bank, kniebeuge, laufband, push, beine, pull };
+  // Zyklus: Push, Beine, Rest, Push, Rest  → Push kommt 2× vor
+  for (const e of [push, beine, rest, push, rest]) addZuZyklus(state, 'kraft', e.id);
+
+  return { state, bank, kniebeuge, laufband, push, beine, rest };
 }
 
 test('Plan: optional pro Modul — kein Plan ist der Normalzustand', () => {
@@ -129,35 +134,57 @@ test('Plan: optional pro Modul — kein Plan ist der Normalzustand', () => {
   assert.equal(planFuer(state, 'rad'), null);
   assert.equal(naechsteEinheit(state, 'rad'), null);
   erstellePlan(state, 'rad');
-  assert.equal(naechsteEinheit(state, 'rad'), null); // Plan da, aber leer → weiterhin null
+  assert.equal(naechsteEinheit(state, 'rad'), null); // Plan da, aber leerer Zyklus → null
   entfernePlan(state, 'rad');
   assert.equal(planFuer(state, 'rad'), null);
 });
 
-test('Plan: Zyklus läuft rund (nächste Einheit, weiterschalten, Wrap-around)', () => {
-  const { state } = baueKraftWelt();
-  assert.equal(naechsteEinheit(state, 'kraft').name, 'Push');
-  assert.equal(schalteWeiter(state, 'kraft').name, 'Beine · Nacken');
-  assert.equal(schalteWeiter(state, 'kraft').name, 'Pull');
-  assert.equal(schalteWeiter(state, 'kraft').name, 'Push'); // wieder von vorn
+test('Bibliothek vs. Zyklus: dieselbe Einheit mehrfach, Übungen & Historie geteilt', () => {
+  const { state, push } = baueKraftWelt();
+  assert.equal(einheitenBibliothek(state, 'kraft').length, 3);
+  const z = zyklusEinheiten(state, 'kraft');
+  assert.equal(z.length, 5);
+  assert.deepEqual(z.map(e => e.name), ['Push', 'Beine · Nacken', 'Active Rest', 'Push', 'Active Rest']);
+  // Push an Position 0 und 3 ist DASSELBE Objekt:
+  assert.equal(z[0], z[3]);
+  // Übung zu Push → an beiden Stellen sichtbar:
+  assert.equal(z[0].segmente.length, 2);
+  assert.equal(z[3].segmente.length, 2);
 });
 
-test('Plan: Einheiten verschieben/löschen — der Zeiger bleibt bei „seiner" Einheit', () => {
-  const { state, beine, pull } = baueKraftWelt();
-  schalteWeiter(state, 'kraft'); // Zeiger steht auf „Beine · Nacken"
+test('Plan: Zyklus läuft rund inkl. Wrap-around', () => {
+  const { state } = baueKraftWelt();
+  const namen = [];
+  for (let i = 0; i < 6; i++) { namen.push(naechsteEinheit(state, 'kraft').name); schalteWeiter(state, 'kraft'); }
+  assert.deepEqual(namen, ['Push', 'Beine · Nacken', 'Active Rest', 'Push', 'Active Rest', 'Push']);
+});
 
-  // „Beine · Nacken" ans Ende schieben → Zeiger wandert mit
-  verschiebeEinheit(state, 'kraft', beine.id, +1);
+test('Zyklus: Stelle verschieben/entfernen — Zeiger folgt „seiner" Stelle', () => {
+  const { state, beine } = baueKraftWelt();
+  schalteWeiter(state, 'kraft'); // Zeiger auf Stelle 1 (Beine)
   assert.equal(naechsteEinheit(state, 'kraft').name, 'Beine · Nacken');
-  assert.deepEqual(planFuer(state, 'kraft').einheiten.map(e => e.name), ['Push', 'Pull', 'Beine · Nacken']);
 
-  // Einheit VOR dem Zeiger löschen → Zeiger rückt nach, zeigt weiter auf dieselbe Einheit
-  entferneEinheit(state, 'kraft', pull.id);
+  // Beine (Stelle 1) nach unten → Zeiger wandert mit auf Stelle 2
+  verschiebeImZyklus(state, 'kraft', 1, +1);
+  assert.equal(naechsteEinheit(state, 'kraft').name, 'Beine · Nacken');
+  assert.deepEqual(zyklusEinheiten(state, 'kraft').map(e => e.name),
+    ['Push', 'Active Rest', 'Beine · Nacken', 'Push', 'Active Rest']);
+
+  // Stelle VOR dem Zeiger entfernen → Zeiger rückt nach, zeigt weiter auf Beine
+  entferneAusZyklus(state, 'kraft', 0);
   assert.equal(naechsteEinheit(state, 'kraft').name, 'Beine · Nacken');
 
-  // Die Zeiger-Einheit selbst löschen → Zeiger landet sauber im Zyklus
-  entferneEinheit(state, 'kraft', beine.id);
-  assert.equal(naechsteEinheit(state, 'kraft').name, 'Push');
+  // setzePosition direkt (Heute korrigieren)
+  setzePosition(state, 'kraft', 0);
+  assert.equal(naechsteEinheit(state, 'kraft').name, 'Active Rest');
+});
+
+test('Einheit löschen entfernt ALLE Zyklus-Vorkommen', () => {
+  const { state, push } = baueKraftWelt();
+  loescheEinheit(state, 'kraft', push.id);
+  assert.ok(!zyklusEinheiten(state, 'kraft').some(e => e.name === 'Push'));
+  assert.ok(!einheitenBibliothek(state, 'kraft').some(e => e.id === push.id));
+  assert.deepEqual(zyklusEinheiten(state, 'kraft').map(e => e.name), ['Beine · Nacken', 'Active Rest', 'Active Rest']);
 });
 
 test('Plan: Aktivitäten in Einheit pflegen (add, entfernen, ▲▼)', () => {
@@ -165,9 +192,9 @@ test('Plan: Aktivitäten in Einheit pflegen (add, entfernen, ▲▼)', () => {
   addAktivitaetZuEinheit(state, 'kraft', push.id, kniebeuge.id);
   assert.deepEqual(push.segmente.map(s => s.aktivitaetId), [laufband.id, bank.id, kniebeuge.id]);
 
-  verschiebeAktivitaetInEinheit(state, 'kraft', push.id, 2, -1); // Kniebeuge eins hoch
+  verschiebeAktivitaetInEinheit(state, 'kraft', push.id, 2, -1);
   assert.deepEqual(push.segmente.map(s => s.aktivitaetId), [laufband.id, kniebeuge.id, bank.id]);
-  verschiebeAktivitaetInEinheit(state, 'kraft', push.id, 0, -1); // oben bleibt oben (kein Fehler)
+  verschiebeAktivitaetInEinheit(state, 'kraft', push.id, 0, -1); // oben bleibt oben
   assert.equal(push.segmente[0].aktivitaetId, laufband.id);
 
   entferneAktivitaetAusEinheit(state, 'kraft', push.id, kniebeuge.id);
@@ -182,12 +209,11 @@ test('Plan → Session: Brücke füllt Segmente vor, schaltet aber NICHT weiter'
   assert.equal(session.ausPlan, push.id);
   assert.deepEqual(session.segmente.map(s => s.aktivitaetId), [laufband.id, bank.id]);
   assert.ok(session.segmente.every(s => s.eintraege.length === 0));
-  assert.equal(state.sessions.length, 0);                        // nichts automatisch eingehängt
-  assert.equal(naechsteEinheit(state, 'kraft').name, 'Push');    // Zyklus unverändert
+  assert.equal(state.sessions.length, 0);
+  assert.equal(naechsteEinheit(state, 'kraft').name, 'Push');
 
-  // Umbenennen zwischendurch schadet nicht
   benenneEinheitUm(state, 'kraft', push.id, 'Push A');
-  assert.equal(naechsteEinheit(state, 'kraft').name, 'Push A');
+  assert.equal(naechsteEinheit(state, 'kraft').name, 'Push A'); // wirkt an allen Stellen
 });
 
 test('Plan + Bibliothek überleben die Backup-Runde', () => {
@@ -195,6 +221,8 @@ test('Plan + Bibliothek überleben die Backup-Runde', () => {
   schalteWeiter(state, 'kraft');
   const zurueck = importBackup(exportBackup(state));
   assert.equal(zurueck.plaene.kraft.position, 1);
-  assert.equal(zurueck.plaene.kraft.einheiten[0].id, push.id);
+  assert.equal(zurueck.plaene.kraft.einheiten.length, 3);
+  assert.equal(zurueck.plaene.kraft.zyklus.length, 5);
+  assert.equal(zurueck.plaene.kraft.zyklus[0], push.id);
   assert.equal(zurueck.bibliothek.length, 3);
 });
