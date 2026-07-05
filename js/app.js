@@ -1,4 +1,4 @@
-// ============================================================
+// ============================================================ 
 // app.js — Einstieg & Schale
 // Lädt den Zustand, rendert Navi + aktiven Tab und leitet alle
 // Klicks/Änderungen über data-action / data-change an die
