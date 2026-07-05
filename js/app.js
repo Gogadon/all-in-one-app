@@ -24,35 +24,10 @@ const nav = document.getElementById('nav');
 function setzeAppHoehe() {
   const h = window.visualViewport?.height ?? window.innerHeight;
   document.documentElement.style.setProperty('--app-h', h + 'px');
-  zeigeDiagnose();
 }
-
-// --- TEMPORÄRES DIAGNOSE-OVERLAY (fliegt nach dem Fix wieder raus) ---
-let diagEl = null;
-function zeigeDiagnose() {
-  if (!diagEl) {
-    diagEl = document.createElement('div');
-    diagEl.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;'
-      + 'background:#000;color:#CDFD34;font:11px monospace;padding:6px 8px;'
-      + 'white-space:pre;line-height:1.4;border-bottom:1px solid #333';
-    document.body.appendChild(diagEl);
-  }
-  const vv = window.visualViewport;
-  const navH = nav?.getBoundingClientRect().height ?? 0;
-  const bodyH = document.body.getBoundingClientRect().height;
-  diagEl.textContent =
-    `innerHeight: ${window.innerHeight}\n` +
-    `visualViewport.height: ${vv ? Math.round(vv.height) : 'n/a'}\n` +
-    `visualViewport.offsetTop: ${vv ? Math.round(vv.offsetTop) : 'n/a'}\n` +
-    `--app-h gesetzt: ${getComputedStyle(document.documentElement).getPropertyValue('--app-h').trim()}\n` +
-    `body Höhe real: ${Math.round(bodyH)}\n` +
-    `nav Höhe: ${Math.round(navH)}  ·  nav unten bei: ${Math.round((nav?.getBoundingClientRect().bottom ?? 0))}`;
-}
-
 setzeAppHoehe();
 window.addEventListener('resize', setzeAppHoehe);
 window.visualViewport?.addEventListener('resize', setzeAppHoehe);
-window.visualViewport?.addEventListener('scroll', setzeAppHoehe);
 window.addEventListener('orientationchange', () => setTimeout(setzeAppHoehe, 200));
 
 // Feste Grundstruktur im Scroll-Container: Reload-Indikator + Inhaltsbereich.
