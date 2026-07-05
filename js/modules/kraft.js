@@ -25,9 +25,11 @@ import {
   addAlternative, entferneAlternative, vorschlagMesswerte,
 } from '../core/library.js';
 import {
-  planFuer, addEinheit, benenneEinheitUm, entferneEinheit, verschiebeEinheit,
+  planFuer, erstellePlan, addEinheit, benenneEinheitUm, loescheEinheit,
+  einheitenBibliothek, findeEinheit,
   addAktivitaetZuEinheit, entferneAktivitaetAusEinheit, verschiebeAktivitaetInEinheit,
-  naechsteEinheit, schalteWeiter, sessionAusEinheit, findeEinheit,
+  zyklusEinheiten, addZuZyklus, entferneAusZyklus, verschiebeImZyklus, setzePosition,
+  naechsteEinheit, schalteWeiter, sessionAusEinheit,
 } from '../core/plan.js';
 
 export const MODUL = 'kraft';
@@ -427,39 +429,54 @@ export function erstelleKraftModul(ctx) {
 
   function planHtml() {
     const plan = planFuer(S(), MODUL);
-    const naechste = naechsteEinheit(S(), MODUL);
-    let html = `<div class="tab-kopf anim"><span class="eyebrow"><span class="pip"></span>Kraft · Zyklus</span><h1>Plan</h1></div>`;
+    const zyklus = zyklusEinheiten(S(), MODUL);
+    const bib = einheitenBibliothek(S(), MODUL);
+    const pos = plan?.position ?? 0;
 
-    if (!plan || !plan.einheiten.length) {
-      html += `<div class="karte leer anim"><p>Noch keine Einheiten. Leg deine erste an — z.B. „Push" oder „Beine · Nacken".</p></div>`;
+    let html = `<div class="tab-kopf anim"><span class="eyebrow"><span class="pip"></span>Kraft</span><h1>Plan</h1></div>`;
+
+    // ---- ZYKLUS (Ablauf) ----
+    html += `<p class="sheet-abschnitt zwischen">Zyklus · Ablauf</p>`;
+    if (!zyklus.length) {
+      html += `<div class="karte leer anim"><p>Noch kein Ablauf. Leg unten Einheiten an und füg sie hier zum Zyklus hinzu — dieselbe Einheit darf mehrfach vorkommen.</p></div>`;
     } else {
-      html += plan.einheiten.map(e => planEinheitHtml(e, e === naechste)).join('');
+      html += `<div class="karte zyklus-karte anim">` + zyklus.map((e, i) => `
+        <div class="zyklus-zeile ${i === pos ? 'aktuell' : ''}">
+          <span class="tag-nr">${i + 1}</span>
+          <span class="name">${esc(e.name)}${i === pos ? ' <span class="dim">· heute</span>' : ''}</span>
+          <span class="werkzeuge">
+            <button data-action="k.zyklusSchieb" data-i="${i}" data-r="-1">▲</button>
+            <button data-action="k.zyklusSchieb" data-i="${i}" data-r="1">▼</button>
+            <button data-action="k.zyklusWeg" data-i="${i}">✕</button>
+          </span>
+        </div>`).join('') + `</div>`;
+      html += `<div class="knopf-zeile"><button class="knopf" data-action="k.zyklusPlus">+ Einheit in den Zyklus</button>
+        <button class="knopf geist" data-action="k.heuteWaehlen">Heute korrigieren</button></div>`;
     }
-    html += `<button class="knopf primaer voll" data-action="k.einheitPlus">+ Einheit</button>`;
 
-    // „Heute korrigieren" — Zyklus-Zeiger direkt auf eine Einheit setzen
-    if (plan && plan.einheiten.length) {
-      html += `<div class="karte korrektur anim">
-        <p class="sheet-abschnitt">Heute korrigieren</p>
-        <p class="dim klein-text">Falls die App den falschen Zyklustag zeigt (oder zum Ausprobieren): direkt auf eine Einheit setzen. Der Zyklus läuft ab dort weiter.</p>
-        <button class="knopf" data-action="k.heuteWaehlen">${esc(naechste ? naechste.name : '—')} <span class="dim">· ändern</span></button>
-      </div>`;
+    // ---- EINHEITEN-BIBLIOTHEK ----
+    html += `<p class="sheet-abschnitt zwischen">Einheiten · Bibliothek</p>`;
+    html += `<p class="dim klein-text bib-hinweis">Jede Einheit gibt es einmal. Änderst du hier ihre Übungen, wirkt das an allen Stellen im Zyklus — und in jedem anderen Plan, der sie nutzt.</p>`;
+    if (!bib.length) {
+      html += `<div class="karte leer anim"><p>Noch keine Einheiten — z.B. „Rücken · Bizeps" oder „Active Rest".</p></div>`;
+    } else {
+      html += bib.map(e => bibEinheitHtml(e)).join('');
     }
+    html += `<button class="knopf primaer voll" data-action="k.einheitPlus">+ Einheit anlegen</button>`;
     return html;
   }
 
-  function planEinheitHtml(einheit, istNaechste) {
+  function bibEinheitHtml(einheit) {
     const auf = planOffen.has(einheit.id);
+    const imZyklus = (planFuer(S(), MODUL)?.zyklus ?? []).filter(id => id === einheit.id).length;
     let html = `<div class="karte plan-einheit anim">
       <div class="seg-kopf">
         <button class="seg-titel" data-action="k.planAuf" data-einheit="${einheit.id}">
-          <strong>${istNaechste ? '<span class="punkt kraft"></span>' : ''}${esc(einheit.name)}</strong>
-          <small class="dim">${einheit.segmente.length} Übungen${istNaechste ? ' · als Nächstes dran' : ''}</small>
+          <strong>${esc(einheit.name)}</strong>
+          <small class="dim">${einheit.segmente.length} Übungen${imZyklus ? ` · ${imZyklus}× im Zyklus` : ' · nicht im Zyklus'}</small>
         </button>
         <span class="werkzeuge">
           <button data-action="k.einheitName" data-einheit="${einheit.id}">✎</button>
-          <button data-action="k.einheitSchieb" data-einheit="${einheit.id}" data-r="-1">▲</button>
-          <button data-action="k.einheitSchieb" data-einheit="${einheit.id}" data-r="1">▼</button>
           <button data-action="k.einheitWeg" data-einheit="${einheit.id}">✕</button>
         </span>
       </div>`;
@@ -479,23 +496,51 @@ export function erstelleKraftModul(ctx) {
           </span>
         </div>`;
       }).join('');
-      html += `<button class="knopf klein" data-action="k.planUebungPlus" data-einheit="${einheit.id}">+ Übung</button></div>`;
+      html += `<div class="knopf-zeile">
+        <button class="knopf klein" data-action="k.planUebungPlus" data-einheit="${einheit.id}">+ Übung</button>
+        <button class="knopf klein geist" data-action="k.zyklusPlusDirekt" data-einheit="${einheit.id}">In Zyklus einfügen</button>
+      </div></div>`;
     }
     return html + `</div>`;
   }
 
   function heuteWaehlenHtml() {
-    const plan = planFuer(S(), MODUL);
-    const naechste = naechsteEinheit(S(), MODUL);
-    const einheiten = plan?.einheiten ?? [];
-    return `<h3>Welche Einheit ist heute dran?</h3>
-      <p class="dim klein-text">Setzt den Zyklus auf diesen Tag — ab dort läuft er normal weiter.</p>
-      <div class="picker-liste">${einheiten.map((e, i) =>
-        `<button class="picker-zeile ${e === naechste ? 'aktiv' : ''}" data-action="k.heuteSetzen" data-einheit="${e.id}">
-          <span class="tag-nr">${i + 1}</span> ${esc(e.name)}${e === naechste ? ' <span class="dim">· aktuell</span>' : ''}
+    const zyklus = zyklusEinheiten(S(), MODUL);
+    const pos = planFuer(S(), MODUL)?.position ?? 0;
+    return `<h3>Welcher Tag ist heute dran?</h3>
+      <p class="dim klein-text">Setzt den Zyklus auf diese Stelle — ab dort läuft er normal weiter.</p>
+      <div class="picker-liste">${zyklus.map((e, i) =>
+        `<button class="picker-zeile ${i === pos ? 'aktiv' : ''}" data-action="k.heuteSetzen" data-i="${i}">
+          <span class="tag-nr">${i + 1}</span> ${esc(e.name)}${i === pos ? ' <span class="dim">· aktuell</span>' : ''}
         </button>`).join('')}
       </div>`;
   }
+
+  /** Sheet: neue Einheit anlegen (konsistent zum Übungen-Sheet). */
+  function einheitNeuHtml(suche = '') {
+    const bib = einheitenBibliothek(S(), MODUL);
+    const q = suche.trim().toLowerCase();
+    const doppelt = q && bib.some(e => e.name.toLowerCase() === q);
+    return `<h3>Neue Einheit</h3>
+      <p class="dim klein-text">Name der Einheit — z.B. „Rücken · Bizeps" oder „Active Rest".</p>
+      <input class="suche" type="text" placeholder="Name eingeben…" value="${esc(suche)}" data-change="k.einheitNeuSuche" autofocus>
+      ${doppelt ? '<p class="dim klein-text">Gibt es schon — trotzdem anlegbar, wird eine zweite mit gleichem Namen.</p>' : ''}
+      <button class="knopf primaer ${suche.trim() ? '' : 'aus'}" data-action="k.einheitNeuAnlegen">Anlegen</button>`;
+  }
+
+  /** Sheet: Einheit aus Bibliothek in den Zyklus wählen (oder neue anlegen). */
+  function zyklusPickerHtml(suche = '') {
+    const bib = einheitenBibliothek(S(), MODUL);
+    const q = suche.trim().toLowerCase();
+    const treffer = q ? bib.filter(e => e.name.toLowerCase().includes(q)) : bib;
+    return `<h3>Einheit in den Zyklus</h3>
+      <input class="suche" type="text" placeholder="Suchen oder neu benennen…" value="${esc(suche)}" data-change="k.zyklusSuche">
+      <div class="picker-liste">${treffer.map(e =>
+        `<button class="picker-zeile" data-action="k.zyklusWaehle" data-einheit="${e.id}"><span class="punkt kraft"></span>${esc(e.name)}</button>`).join('') || '<p class="dim">Keine Treffer.</p>'}
+      </div>
+      ${suche.trim() ? `<button class="knopf primaer" data-action="k.zyklusNeu">„${esc(suche.trim())}" neu anlegen & einfügen</button>` : ''}`;
+  }
+
 
 
   function pickerHtml() {
@@ -593,8 +638,8 @@ export function erstelleKraftModul(ctx) {
       s.abgeschlossen = false;
       if (s.hatWeitergeschaltet) {           // Zyklus einen Schritt zurück
         const plan = planFuer(S(), MODUL);
-        if (plan && plan.einheiten.length) {
-          plan.position = (plan.position - 1 + plan.einheiten.length) % plan.einheiten.length;
+        if (plan && plan.zyklus.length) {
+          plan.position = (plan.position - 1 + plan.zyklus.length) % plan.zyklus.length;
         }
         delete s.hatWeitergeschaltet;
       }
@@ -683,13 +728,17 @@ export function erstelleKraftModul(ctx) {
       await actions['k.waehle']({ akt: akt.id });
     },
 
-    // ---- Plan ----
+    // ---- Plan: Bibliothek ----
     'k.planAuf'(d) { planOffen.has(d.einheit) ? planOffen.delete(d.einheit) : planOffen.add(d.einheit); ctx.render(); },
-    async 'k.einheitPlus'() {
-      const name = prompt('Name der Einheit (z.B. „Push"):');
-      if (!name?.trim()) return;
+    'k.einheitPlus'() { picker = { ziel: 'einheit-neu', suche: '' }; sheet.oeffne(einheitNeuHtml('')); },
+    'k.einheitNeuSuche'(d, el) { sheet.aktualisiere(einheitNeuHtml(el.value)); },
+    async 'k.einheitNeuAnlegen'(d, el) {
+      const feld = document.querySelector('[data-change="k.einheitNeuSuche"]');
+      const name = (feld?.value ?? '').trim();
+      if (!name) return;
       const e = addEinheit(S(), MODUL, { name });
       planOffen.add(e.id);
+      sheet.schliesse();
       await speichernUndZeigen();
     },
     async 'k.einheitName'(d) {
@@ -699,26 +748,46 @@ export function erstelleKraftModul(ctx) {
       benenneEinheitUm(S(), MODUL, d.einheit, name);
       await speichernUndZeigen();
     },
-    async 'k.einheitSchieb'(d) { verschiebeEinheit(S(), MODUL, d.einheit, +d.r); await speichernUndZeigen(); },
     async 'k.einheitWeg'(d) {
       const e = findeEinheit(S(), MODUL, d.einheit);
-      if (!confirm(`„${e?.name}" aus dem Zyklus löschen? (Sessions bleiben erhalten)`)) return;
-      entferneEinheit(S(), MODUL, d.einheit);
+      const imZyklus = (planFuer(S(), MODUL)?.zyklus ?? []).filter(id => id === d.einheit).length;
+      const warnung = imZyklus
+        ? `„${e?.name}" löschen? Verschwindet ${imZyklus}× aus dem Zyklus. (Sessions bleiben erhalten.)`
+        : `„${e?.name}" löschen?`;
+      if (!confirm(warnung)) return;
+      loescheEinheit(S(), MODUL, d.einheit);
       await speichernUndZeigen();
     },
     async 'k.planUebungSchieb'(d) { verschiebeAktivitaetInEinheit(S(), MODUL, d.einheit, +d.i, +d.r); await speichernUndZeigen(); },
     async 'k.planUebungWeg'(d) { entferneAktivitaetAusEinheit(S(), MODUL, d.einheit, d.akt); await speichernUndZeigen(); },
 
-    // ---- Heute korrigieren (Zyklus-Zeiger setzen) ----
+    // ---- Plan: Zyklus (Ablauf) ----
+    async 'k.zyklusSchieb'(d) { verschiebeImZyklus(S(), MODUL, +d.i, +d.r); await speichernUndZeigen(); },
+    async 'k.zyklusWeg'(d) { entferneAusZyklus(S(), MODUL, +d.i); await speichernUndZeigen(); },
+    async 'k.zyklusPlusDirekt'(d) { addZuZyklus(S(), MODUL, d.einheit); await speichernUndZeigen(); },
+    'k.zyklusPlus'() { picker = { ziel: 'zyklus', suche: '' }; sheet.oeffne(zyklusPickerHtml()); },
+    'k.zyklusSuche'(d, el) { picker.suche = el.value; sheet.aktualisiere(zyklusPickerHtml(el.value)); },
+    async 'k.zyklusWaehle'(d) {
+      addZuZyklus(S(), MODUL, d.einheit);
+      picker = null; sheet.schliesse();
+      await speichernUndZeigen();
+    },
+    async 'k.zyklusNeu'() {
+      const name = picker?.suche.trim();
+      if (!name) return;
+      const e = addEinheit(S(), MODUL, { name });
+      addZuZyklus(S(), MODUL, e.id);
+      planOffen.add(e.id);
+      picker = null; sheet.schliesse();
+      await speichernUndZeigen();
+    },
+
+    // ---- Heute korrigieren (Zyklus-Zeiger per Stelle setzen) ----
     'k.heuteWaehlen'() { sheet.oeffne(heuteWaehlenHtml()); },
     async 'k.heuteSetzen'(d) {
-      const plan = planFuer(S(), MODUL);
-      const i = plan?.einheiten.findIndex(e => e.id === d.einheit) ?? -1;
-      if (i < 0) return;
-      plan.position = i;
-      // Eine noch offene, LEERE Session von heute verwerfen — damit man
-      // sauber mit der neu gewählten Einheit starten kann. Sessions mit
-      // echten Daten oder bereits abgeschlossene bleiben unangetastet.
+      setzePosition(S(), MODUL, +d.i);
+      // Noch offene, LEERE Session von heute verwerfen, damit man sauber
+      // mit der neu gewählten Einheit starten kann. Volle/abgeschlossene bleiben.
       const s = heutigeSession();
       if (s && !s.abgeschlossen && s.segmente.every(seg => !seg.erledigt && seg.eintraege.length === 0)) {
         S().sessions = S().sessions.filter(x => x !== s);
