@@ -22,8 +22,11 @@
 html{height:100%}
 body{
   /* App-Shell: Body füllt exakt den sichtbaren Viewport, Inhalt scrollt intern.
-     Dadurch wandert die Navi beim Ein-/Ausblenden der Browser-Adressleiste NICHT. */
-  height:100vh; height:100dvh;
+     Höhe in Stufen: vh (Fallback) → dvh → per JS gemessene --app-h (exakt,
+     browserübergreifend gleich; Firefox-Android rechnet dvh sonst falsch). */
+  height:100vh;
+  height:100dvh;
+  height:var(--app-h, 100dvh);
   display:flex; flex-direction:column;
   overflow:hidden;
   font-family:var(--font-body); font-size:15px; color:var(--text);
