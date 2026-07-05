@@ -23,6 +23,7 @@ import {
 import {
   addAktivitaet, aktivitaetenNachKategorie, sucheAktivitaet,
   addAlternative, entferneAlternative, vorschlagMesswerte,
+  benenneUm, setzeMesswerte, entferneAktivitaet, archiviere, wirdVerwendet,
 } from '../core/library.js';
 import {
   planFuer, erstellePlan, addEinheit, benenneEinheitUm, loescheEinheit,
@@ -571,6 +572,27 @@ export function erstelleKraftModul(ctx) {
 
     let html = `<h3>${esc(ziel.name)}</h3>`;
 
+    // Umbenennen (nur Hauptübung; Alternative behält ihren eigenen Bearbeiten-Weg)
+    if (!altId) {
+      html += `<p class="sheet-abschnitt">Name</p>
+        <div class="param-zeile">
+          <label class="feld breit" style="flex:1">
+            <input type="text" value="${esc(akt.name)}" data-change="k.aktName" data-akt="${aktId}">
+          </label>
+        </div>`;
+
+      // Messwerte an/abwählen — genau die Felder, die beim Loggen erscheinen
+      const auswahl = akt.kategorie === 'kraft'
+        ? ['gewicht', 'wdh', 'dauer']
+        : ['dauer', 'puls_avg', 'puls_max', 'distanz', 'hoehenmeter', 'kalorien'];
+      const aktiv = akt.messwerte ?? [];
+      html += `<p class="sheet-abschnitt">Messwerte beim Loggen</p>
+        <div class="chip-zeile">${auswahl.map(typ => {
+          const an = aktiv.includes(typ);
+          return `<button class="chip ${an ? 'aktiv' : ''}" data-action="k.mwToggle" data-akt="${aktId}" data-typ="${typ}">${esc(MESSWERTE[typ].label)}</button>`;
+        }).join('')}</div>`;
+    }
+
     if (akt.kategorie === 'kraft') {
       html += `<p class="sheet-abschnitt">Progression</p>
         <div class="chip-zeile">${chip('off', 'Aus')}${chip('double', 'Doppel-Prog.')}${chip('strength', 'Kraft')}${chip('technik', 'Technik/Reha')}</div>`;
@@ -595,6 +617,17 @@ export function erstelleKraftModul(ctx) {
         </span>
       </div>`).join('') || '<p class="dim">Noch keine.</p>';
       html += `<button class="knopf klein" data-action="k.altPlus" data-akt="${aktId}">+ Alternative</button>`;
+
+      // Übung löschen / archivieren
+      const genutzt = wirdVerwendet(S(), aktId);
+      html += `<p class="sheet-abschnitt">Übung entfernen</p>`;
+      if (genutzt > 0) {
+        html += `<p class="dim klein-text">Steckt in ${genutzt} Session(s). Löschen würde den Verlauf zerstören — stattdessen archivieren: verschwindet aus Auswahllisten, Verlauf bleibt.</p>
+          <button class="knopf" data-action="k.aktArchiv" data-akt="${aktId}">Archivieren</button>`;
+      } else {
+        html += `<p class="dim klein-text">Noch in keiner Session — kann gefahrlos gelöscht werden.</p>
+          <button class="knopf gefahr" data-action="k.aktWeg" data-akt="${aktId}">Übung löschen</button>`;
+      }
     }
     return html;
   }
@@ -785,13 +818,26 @@ export function erstelleKraftModul(ctx) {
     // ---- Heute korrigieren (Zyklus-Zeiger per Stelle setzen) ----
     'k.heuteWaehlen'() { sheet.oeffne(heuteWaehlenHtml()); },
     async 'k.heuteSetzen'(d) {
-      setzePosition(S(), MODUL, +d.i);
-      // Noch offene, LEERE Session von heute verwerfen, damit man sauber
-      // mit der neu gewählten Einheit starten kann. Volle/abgeschlossene bleiben.
+      const zielEinheit = zyklusEinheiten(S(), MODUL)[+d.i] ?? null;
+      // Bestehende heutige Session behandeln, damit die neu gewählte Einheit
+      // im Heute-Tab auch wirklich erscheint (nicht die alte „klebt").
       const s = heutigeSession();
-      if (s && !s.abgeschlossen && s.segmente.every(seg => !seg.erledigt && seg.eintraege.length === 0)) {
-        S().sessions = S().sessions.filter(x => x !== s);
+      if (s) {
+        const leer = !s.abgeschlossen && s.segmente.every(seg => !seg.erledigt && seg.eintraege.length === 0);
+        const gleicheEinheit = zielEinheit && s.ausPlan === zielEinheit.id;
+        if (leer) {
+          S().sessions = S().sessions.filter(x => x !== s);   // leere immer verwerfen
+        } else if (!gleicheEinheit) {
+          // Session mit Daten/abgeschlossen, aber ANDERE Einheit → nachfragen
+          const ok = confirm('Für heute liegt schon eine andere Einheit vor. Verwerfen und neu starten? (Abbrechen behält sie im Verlauf.)');
+          if (ok) {
+            S().sessions = S().sessions.filter(x => x !== s);
+          }
+          // Bei „Abbrechen" bleibt sie erhalten; da sie abgeschlossen/befüllt ist,
+          // zeigt der Heute-Tab sie weiter an — das ist dann bewusst so gewählt.
+        }
       }
+      setzePosition(S(), MODUL, +d.i);
       sheet.schliesse();
       tabWechsel('heute');
       await speichernUndZeigen();
@@ -799,6 +845,41 @@ export function erstelleKraftModul(ctx) {
 
     // ---- Einstellungen-Sheet ----
     'k.einstellungen'(d) { sheet.oeffne(einstellungenHtml(d.akt, d.alt || null)); },
+    async 'k.aktName'(d, el) {
+      const name = el.value.trim();
+      if (!name) return;
+      benenneUm(S(), d.akt, name);
+      await ctx.save(); ctx.render(); // Sheet-Titel nicht neu bauen (Fokus im Feld halten)
+    },
+    async 'k.mwToggle'(d) {
+      const akt = findeAktivitaet(S(), d.akt); if (!akt) return;
+      const hat = akt.messwerte.includes(d.typ);
+      // Mindestens ein Messwert muss bleiben
+      if (hat && akt.messwerte.length <= 1) { alert('Mindestens ein Messwert muss aktiv bleiben.'); return; }
+      const neu = hat ? akt.messwerte.filter(t => t !== d.typ) : [...akt.messwerte, d.typ];
+      setzeMesswerte(S(), d.akt, neu);
+      await ctx.save();
+      sheet.aktualisiere(einstellungenHtml(d.akt, null));
+      ctx.render();
+    },
+    async 'k.aktArchiv'(d) {
+      const akt = findeAktivitaet(S(), d.akt);
+      if (!confirm(`„${akt?.name}" archivieren? Verschwindet aus Auswahllisten, Verlauf bleibt erhalten.`)) return;
+      archiviere(S(), d.akt);
+      sheet.schliesse();
+      await speichernUndZeigen();
+    },
+    async 'k.aktWeg'(d) {
+      const akt = findeAktivitaet(S(), d.akt);
+      if (!confirm(`„${akt?.name}" endgültig löschen?`)) return;
+      try {
+        entferneAktivitaet(S(), d.akt);
+        sheet.schliesse();
+        await speichernUndZeigen();
+      } catch (err) {
+        alert(err.message);
+      }
+    },
     async 'k.progArt'(d) {
       const akt = findeAktivitaet(S(), d.akt); if (!akt) return;
       const ziel = d.alt ? akt.alternativen.find(a => a.id === d.alt) : akt;
