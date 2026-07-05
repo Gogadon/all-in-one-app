@@ -251,8 +251,9 @@ export function eintragInputsHtml(aktivitaet, segment, eintrag) {
 // ============================================================
 
 export function erstelleKraftModul(ctx) {
-  // ctx: { state, save(), render(), sheet, esc, formatDatum }
+  // ctx: { state, save(), render(), sheet, esc, formatDatum, tabWechsel? }
   const { sheet, esc, formatDatum } = ctx;
+  const tabWechsel = ctx.tabWechsel ?? (() => {});
 
   // UI-Zustand (nicht persistiert)
   const offen = new Set();          // aufgeklappte Segment-Karten
@@ -262,8 +263,15 @@ export function erstelleKraftModul(ctx) {
   let picker = null;                // { ziel:'session'|'einheit', einheitId?, suche:'' }
 
   const S = () => ctx.state;
-  const heutigeSession = () =>
-    S().sessions.find(s => s.datum === heuteIso() && s.modul === MODUL) ?? null;
+  // Heutige Kraft-Sessions; eine noch OFFENE hat Vorrang (die bearbeitet man
+  // gerade), sonst die zuletzt angelegte. So blockiert eine bereits
+  // abgeschlossene Einheit nicht das Starten einer zweiten am selben Tag.
+  const heutigeSessions = () =>
+    S().sessions.filter(s => s.datum === heuteIso() && s.modul === MODUL);
+  const heutigeSession = () => {
+    const alle = heutigeSessions();
+    return alle.find(s => !s.abgeschlossen) ?? alle.at(-1) ?? null;
+  };
 
   function effektiveEinstellungen(seg) {
     const { aktivitaet, alternative } = loeseSegmentAuf(S(), seg);
@@ -322,7 +330,10 @@ export function erstelleKraftModul(ctx) {
 
     html += `<button class="knopf geist voll" data-action="k.uebungPlus">+ Übung hinzufügen</button>`;
     html += fertig
-      ? `<div class="fertig-banner anim">Einheit abgeschlossen ✓</div>`
+      ? `<div class="fertig-banner anim">
+          <span>Einheit abgeschlossen ✓</span>
+          <button class="knopf klein" data-action="k.wiederOeffnen">Wieder öffnen</button>
+        </div>`
       : `<button class="knopf primaer gross voll" data-action="k.abschliessen">Einheit abschließen ✓</button>`;
     return html;
   }
@@ -425,6 +436,15 @@ export function erstelleKraftModul(ctx) {
       html += plan.einheiten.map(e => planEinheitHtml(e, e === naechste)).join('');
     }
     html += `<button class="knopf primaer voll" data-action="k.einheitPlus">+ Einheit</button>`;
+
+    // „Heute korrigieren" — Zyklus-Zeiger direkt auf eine Einheit setzen
+    if (plan && plan.einheiten.length) {
+      html += `<div class="karte korrektur anim">
+        <p class="sheet-abschnitt">Heute korrigieren</p>
+        <p class="dim klein-text">Falls die App den falschen Zyklustag zeigt (oder zum Ausprobieren): direkt auf eine Einheit setzen. Der Zyklus läuft ab dort weiter.</p>
+        <button class="knopf" data-action="k.heuteWaehlen">${esc(naechste ? naechste.name : '—')} <span class="dim">· ändern</span></button>
+      </div>`;
+    }
     return html;
   }
 
@@ -464,9 +484,19 @@ export function erstelleKraftModul(ctx) {
     return html + `</div>`;
   }
 
-  // ----------------------------------------------------------
-  // SHEETS: Übungs-Picker & Einstellungen
-  // ----------------------------------------------------------
+  function heuteWaehlenHtml() {
+    const plan = planFuer(S(), MODUL);
+    const naechste = naechsteEinheit(S(), MODUL);
+    const einheiten = plan?.einheiten ?? [];
+    return `<h3>Welche Einheit ist heute dran?</h3>
+      <p class="dim klein-text">Setzt den Zyklus auf diesen Tag — ab dort läuft er normal weiter.</p>
+      <div class="picker-liste">${einheiten.map((e, i) =>
+        `<button class="picker-zeile ${e === naechste ? 'aktiv' : ''}" data-action="k.heuteSetzen" data-einheit="${e.id}">
+          <span class="tag-nr">${i + 1}</span> ${esc(e.name)}${e === naechste ? ' <span class="dim">· aktuell</span>' : ''}
+        </button>`).join('')}
+      </div>`;
+  }
+
 
   function pickerHtml() {
     const q = picker.suche;
@@ -550,7 +580,24 @@ export function erstelleKraftModul(ctx) {
       const s = heutigeSession(); if (!s) return;
       s.abgeschlossen = true;
       const naechste = naechsteEinheit(S(), MODUL);
-      if (s.ausPlan && naechste && s.ausPlan === naechste.id) schalteWeiter(S(), MODUL);
+      // Nur weiterschalten, wenn diese Einheit die aktuell fällige war —
+      // und merken, dass wir es getan haben (für „Wieder öffnen").
+      if (s.ausPlan && naechste && s.ausPlan === naechste.id) {
+        schalteWeiter(S(), MODUL);
+        s.hatWeitergeschaltet = true;
+      }
+      await speichernUndZeigen();
+    },
+    async 'k.wiederOeffnen'() {
+      const s = heutigeSession(); if (!s) return;
+      s.abgeschlossen = false;
+      if (s.hatWeitergeschaltet) {           // Zyklus einen Schritt zurück
+        const plan = planFuer(S(), MODUL);
+        if (plan && plan.einheiten.length) {
+          plan.position = (plan.position - 1 + plan.einheiten.length) % plan.einheiten.length;
+        }
+        delete s.hatWeitergeschaltet;
+      }
       await speichernUndZeigen();
     },
 
@@ -568,8 +615,10 @@ export function erstelleKraftModul(ctx) {
           if (pf) addEintrag(seg, pf);
         }
         seg.erledigt = true;
+        offen.delete(seg.id);       // abgehakt → Karte fährt zu (wie Gym-App)
       } else {
         seg.erledigt = false;
+        offen.add(seg.id);          // wieder freigemacht → Karte öffnet sich
       }
       await speichernUndZeigen();
     },
@@ -659,6 +708,25 @@ export function erstelleKraftModul(ctx) {
     },
     async 'k.planUebungSchieb'(d) { verschiebeAktivitaetInEinheit(S(), MODUL, d.einheit, +d.i, +d.r); await speichernUndZeigen(); },
     async 'k.planUebungWeg'(d) { entferneAktivitaetAusEinheit(S(), MODUL, d.einheit, d.akt); await speichernUndZeigen(); },
+
+    // ---- Heute korrigieren (Zyklus-Zeiger setzen) ----
+    'k.heuteWaehlen'() { sheet.oeffne(heuteWaehlenHtml()); },
+    async 'k.heuteSetzen'(d) {
+      const plan = planFuer(S(), MODUL);
+      const i = plan?.einheiten.findIndex(e => e.id === d.einheit) ?? -1;
+      if (i < 0) return;
+      plan.position = i;
+      // Eine noch offene, LEERE Session von heute verwerfen — damit man
+      // sauber mit der neu gewählten Einheit starten kann. Sessions mit
+      // echten Daten oder bereits abgeschlossene bleiben unangetastet.
+      const s = heutigeSession();
+      if (s && !s.abgeschlossen && s.segmente.every(seg => !seg.erledigt && seg.eintraege.length === 0)) {
+        S().sessions = S().sessions.filter(x => x !== s);
+      }
+      sheet.schliesse();
+      tabWechsel('heute');
+      await speichernUndZeigen();
+    },
 
     // ---- Einstellungen-Sheet ----
     'k.einstellungen'(d) { sheet.oeffne(einstellungenHtml(d.akt, d.alt || null)); },
