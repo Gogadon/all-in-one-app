@@ -18,6 +18,11 @@ import {
 const main = document.getElementById('main');
 const nav = document.getElementById('nav');
 
+// Feste Grundstruktur im Scroll-Container: Reload-Indikator + Inhaltsbereich.
+main.innerHTML = `<div id="ptr" class="ptr"><span class="ptr-spinner"></span></div><div class="main-inner" id="mainInner"></div>`;
+const mainInner = document.getElementById('mainInner');
+const ptr = document.getElementById('ptr');
+
 let state = null;
 let tab = 'heute';
 
@@ -169,17 +174,58 @@ function importiereDatei(input) {
 function render() {
   nav.innerHTML = navHtml();
   switch (tab) {
-    case 'heute':   main.innerHTML = kraft.heuteHtml(); break;
-    case 'plan':    main.innerHTML = kraft.planHtml(); break;
-    case 'verlauf': main.innerHTML = verlaufHtml(); break;
-    case 'daten':   main.innerHTML = datenHtml(); break;
+    case 'heute':   mainInner.innerHTML = kraft.heuteHtml(); break;
+    case 'plan':    mainInner.innerHTML = kraft.planHtml(); break;
+    case 'verlauf': mainInner.innerHTML = verlaufHtml(); break;
+    case 'daten':   mainInner.innerHTML = datenHtml(); break;
   }
 }
+
+// ------------------------------------------------------------
+// Pull-to-Reload: am oberen Rand nach unten ziehen lädt die Seite neu.
+// Nötig, weil der native Browser-Reload durch den Scroll-Container wegfällt.
+// ------------------------------------------------------------
+(function pullToReload() {
+  const SCHWELLE = 70;      // px Zug bis Auslösen
+  const MAX = 110;          // maximale sichtbare Zugstrecke
+  let startY = null, zug = 0, aktiv = false;
+
+  main.addEventListener('touchstart', e => {
+    // Nur starten, wenn ganz oben und Sheet zu
+    if (main.scrollTop <= 0 && !document.body.classList.contains('sheet-auf')) {
+      startY = e.touches[0].clientY; aktiv = true; zug = 0;
+    } else { aktiv = false; }
+  }, { passive: true });
+
+  main.addEventListener('touchmove', e => {
+    if (!aktiv || startY == null) return;
+    const delta = e.touches[0].clientY - startY;
+    if (delta <= 0) { zug = 0; ptr.style.height = '0px'; ptr.classList.remove('bereit'); return; }
+    zug = Math.min(delta * 0.5, MAX);           // gedämpft
+    ptr.style.height = zug + 'px';
+    ptr.classList.toggle('bereit', zug >= SCHWELLE);
+  }, { passive: true });
+
+  const ende = () => {
+    if (!aktiv) return;
+    aktiv = false;
+    if (zug >= SCHWELLE) {
+      ptr.classList.add('laedt');
+      location.reload();
+    } else {
+      ptr.style.height = '0px';
+      ptr.classList.remove('bereit');
+    }
+    startY = null;
+  };
+  main.addEventListener('touchend', ende, { passive: true });
+  main.addEventListener('touchcancel', ende, { passive: true });
+})();
 
 try {
   state = await load();
   render();
 } catch (err) {
-  main.innerHTML = `<div class="karte leer"><h2>Da klemmt was.</h2><p class="dim">${esc(err.message)}</p></div>`;
+  mainInner.innerHTML = `<div class="karte leer"><h2>Da klemmt was.</h2><p class="dim">${esc(err.message)}</p></div>`;
   console.error(err);
 }
