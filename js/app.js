@@ -9,7 +9,7 @@ import { load, save, exportBackup, importBackup, leererZustand } from './core/st
 import { formatZahl } from './core/metrics.js';
 import { heuteIso, findeAktivitaet, sessionKategorien } from './core/model.js';
 import { findeEinheit } from './core/plan.js';
-import { esc, formatDatum, sheet } from './ui/components.js';
+import { esc, formatDatum, sheet, bestaetige, hinweis } from './ui/components.js';
 import {
   erstelleKraftModul, MODUL as KRAFT,
   sessionVolumenErledigt, segmentZusammenfassungKraft, segmentZusammenfassungWerte,
@@ -66,8 +66,12 @@ const actions = {
   },
   'daten.import'() { document.getElementById('importDatei')?.click(); },
   async 'daten.reset'() {
-    if (!confirm('Wirklich ALLES löschen? Ein Backup vorher wäre klug.')) return;
-    if (!confirm('Letzte Chance — alle Sessions, Pläne und Übungen werden entfernt.')) return;
+    if (!await bestaetige({ titel: 'Alles zurücksetzen?',
+      text: 'Sämtliche Sessions, Pläne und Übungen auf diesem Gerät werden gelöscht. Am besten vorher ein Backup exportieren.',
+      jaText: 'Weiter', gefahr: true })) return;
+    if (!await bestaetige({ titel: 'Wirklich alles löschen?',
+      text: 'Letzte Chance — das lässt sich nicht rückgängig machen.',
+      jaText: 'Alles löschen', gefahr: true })) return;
     state = leererZustand();
     await ctx.save(); render();
   },
@@ -183,10 +187,10 @@ function importiereDatei(input) {
     try {
       state = importBackup(String(leser.result));
       await ctx.save();
-      alert('Backup importiert. ✓');
+      await hinweis('Backup importiert ✓');
       render();
     } catch (err) {
-      alert(err.message);
+      await hinweis('Import fehlgeschlagen', err.message);
     }
   };
   leser.readAsText(datei);
