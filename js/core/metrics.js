@@ -28,6 +28,16 @@ export const MESSWERTE = Object.freeze({
     agg: 'summe', summierbar: true,
     schritt: 1, dezimal: 0,
   }),
+  wdh_l: Object.freeze({
+    label: 'Wdh. links', kurz: 'L', einheit: '',
+    agg: 'summe', summierbar: true,
+    schritt: 1, dezimal: 0,
+  }),
+  wdh_r: Object.freeze({
+    label: 'Wdh. rechts', kurz: 'R', einheit: '',
+    agg: 'summe', summierbar: true,
+    schritt: 1, dezimal: 0,
+  }),
   distanz: Object.freeze({
     label: 'Distanz', einheit: 'm',        // intern IMMER Meter
     agg: 'summe', summierbar: true,
