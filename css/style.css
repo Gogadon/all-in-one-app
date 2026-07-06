@@ -328,3 +328,20 @@ h1,h2,h3,.num{font-family:var(--font-display);letter-spacing:-.02em}
   border-bottom:7px solid var(--dim);vertical-align:middle}
 .pfeil-ico.runter{transform:rotate(180deg)}
 .werkzeuge button:active .pfeil-ico,.zyklus-zeile button:active .pfeil-ico{border-bottom-color:var(--text)}
+
+/* Bestätigungs-Dialog (confirm-Ersatz) */
+.dialog-backdrop{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.55);
+  -webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);
+  opacity:0;pointer-events:none;transition:opacity .2s}
+.dialog-backdrop.offen{opacity:1;pointer-events:auto}
+.dialog{position:fixed;left:50%;top:50%;z-index:61;
+  width:min(400px,calc(100vw - 48px));
+  transform:translate(-50%,-46%) scale(.96);opacity:0;pointer-events:none;
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r-hero);
+  padding:24px 22px;transition:opacity .2s,transform .2s cubic-bezier(.2,.7,.2,1)}
+.dialog.offen{opacity:1;pointer-events:auto;transform:translate(-50%,-50%) scale(1)}
+.dialog h3{font-size:20px;margin-bottom:8px}
+.dialog-text{color:var(--dim);font-size:14px;line-height:1.55;margin-bottom:20px}
+.dialog-knoepfe{display:flex;gap:10px;justify-content:flex-end}
+.dialog-knoepfe .knopf{flex:1}
+.knopf.gefahr-voll{background:#ff6b6b;border-color:#ff6b6b;color:#0C0D0E;font-weight:700}
