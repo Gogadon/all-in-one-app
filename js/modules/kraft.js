@@ -32,6 +32,7 @@ import {
   zyklusEinheiten, addZuZyklus, entferneAusZyklus, verschiebeImZyklus, setzePosition,
   naechsteEinheit, schalteWeiter, sessionAusEinheit,
 } from '../core/plan.js';
+import { sparkline, balken, trend } from '../ui/charts.js';
 
 export const MODUL = 'kraft';
 
@@ -274,6 +275,73 @@ export function fmtSatz(e) {
   return hatFlag(e, 'aufwaermsatz') ? `A ${kern}` : kern;
 }
 
+// --- Fortschritt (für den Progress-Bereich) ---
+
+/** Bestwerte eines erledigten Segments: Top-Gewicht, Wdh dabei, Volumen. */
+function segmentBestwerte(segment) {
+  let topKg = null, wdhBeiTop = null, vol = 0;
+  for (const e of segment.eintraege) {
+    if (!istArbeitssatz(e)) continue;
+    vol += satzVolumen(e);
+    const kg = e.messwerte.gewicht, w = effektiveWdh(e);
+    if (topKg == null || kg > topKg) { topKg = kg; wdhBeiTop = w; }
+    else if (kg === topKg && w != null && (wdhBeiTop == null || w > wdhBeiTop)) { wdhBeiTop = w; }
+  }
+  return { topKg, wdhBeiTop, vol };
+}
+
+/**
+ * Zeitreihe einer Übung (chronologisch, älteste zuerst) für den Fortschritt.
+ * Liefert je erledigter Session: { datum, topKg, wdhBeiTop, vol }.
+ */
+export function fortschrittsSerie(state, identId, { limit = 12 } = {}) {
+  const punkte = [];
+  const sessions = [...state.sessions]
+    .filter(s => s.segmente.some(seg => seg.erledigt === true && identVon(seg) === identId && seg.eintraege.length))
+    .sort((a, b) => a.datum.localeCompare(b.datum));
+  for (const s of sessions) {
+    for (const seg of s.segmente) {
+      if (seg.erledigt === true && identVon(seg) === identId && seg.eintraege.length) {
+        const b = segmentBestwerte(seg);
+        if (b.topKg != null || b.vol > 0) punkte.push({ datum: s.datum, ...b });
+      }
+    }
+  }
+  return limit ? punkte.slice(-limit) : punkte;
+}
+
+/** ISO-Wochenschlüssel "YYYY-Www" für Wochenvolumen-Gruppierung. */
+function isoWoche(iso) {
+  const [y, m, d] = iso.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  const tag = (dt.getUTCDay() + 6) % 7;          // Mo=0
+  dt.setUTCDate(dt.getUTCDate() - tag + 3);        // Donnerstag der Woche
+  const ersterDo = new Date(Date.UTC(dt.getUTCFullYear(), 0, 4));
+  const wo = 1 + Math.round(((dt - ersterDo) / 86400000 - 3 + ((ersterDo.getUTCDay() + 6) % 7)) / 7);
+  return `${dt.getUTCFullYear()}-W${String(wo).padStart(2, '0')}`;
+}
+
+/**
+ * Wochenvolumen der letzten n Wochen (gesamt über alle Kraft-Sessions).
+ * Liefert { wochen:[schluessel…], werte:[kg…] } chronologisch.
+ */
+export function wochenVolumen(state, { wochen = 6, modul = MODUL } = {}) {
+  const proWoche = new Map();
+  for (const s of state.sessions) {
+    if ((s.modul ?? MODUL) !== modul) continue;
+    const vol = s.segmente.filter(seg => seg.erledigt === true)
+      .flatMap(seg => seg.eintraege)
+      .filter(e => !hatFlag(e, 'aufwaermsatz'))
+      .reduce((sum, e) => sum + satzVolumen(e), 0);
+    if (vol <= 0) continue;
+    const wk = isoWoche(s.datum);
+    proWoche.set(wk, (proWoche.get(wk) ?? 0) + vol);
+  }
+  const sortiert = [...proWoche.keys()].sort();
+  const letzte = sortiert.slice(-wochen);
+  return { wochen: letzte, werte: letzte.map(w => Math.round(proWoche.get(w))) };
+}
+
 // ============================================================
 // 2) HTML-BAUSTEINE (reine Strings — auch in Node renderbar)
 // ============================================================
@@ -320,11 +388,13 @@ export function erstelleKraftModul(ctx) {
   const tabWechsel = ctx.tabWechsel ?? (() => {});
 
   // UI-Zustand (nicht persistiert)
-  const offen = new Set();          // aufgeklappte Segment-Karten
+  const offen = new Set();          // erledigte Karten, die manuell AUFgeklappt wurden
+  const zu = new Set();             // offene Karten, die manuell ZUgeklappt wurden
   const verlaufOffen = new Set();   // aufgeklappte Verläufe
   const altOffen = new Set();       // offene Alternativen-Umschalter
   const planOffen = new Set();      // aufgeklappte Plan-Einheiten
   let picker = null;                // { ziel:'session'|'einheit', einheitId?, suche:'' }
+  let progMetrik = 'gewicht';       // Fortschritt: 'gewicht' | 'volumen'
 
   const S = () => ctx.state;
   // Heutige Kraft-Sessions; eine noch OFFENE hat Vorrang (die bearbeitet man
@@ -406,8 +476,11 @@ export function erstelleKraftModul(ctx) {
     const { aktivitaet, anzeigeName } = loeseSegmentAuf(S(), seg);
     if (!aktivitaet) return '';
     const istKraft = aktivitaet.kategorie === 'kraft';
-    const auf = offen.has(seg.id);
+    // Offen-Regel überlebt Reloads: nicht-erledigte Übungen sind offen,
+    // sofern nicht manuell zugeklappt; erledigte sind zu, sofern nicht
+    // manuell aufgeklappt. (offen/zu-Sets sind nur die manuelle Übersteuerung.)
     const check = seg.erledigt === true;
+    const auf = check ? offen.has(seg.id) : !zu.has(seg.id);
     const zsf = istKraft ? segmentZusammenfassungKraft(seg) : segmentZusammenfassungWerte(aktivitaet, seg);
     const punktKlasse = aktivitaet.kategorie === 'kraft' ? 'kraft' : aktivitaet.kategorie;
 
@@ -756,6 +829,69 @@ export function erstelleKraftModul(ctx) {
   // AKTIONEN
   // ----------------------------------------------------------
 
+  // ----------------------------------------------------------
+  // FORTSCHRITT (Charts pro Übung + Wochenvolumen)
+  // ----------------------------------------------------------
+
+  function fortschrittHtml() {
+    let html = `<div class="tab-kopf anim"><span class="eyebrow"><span class="pip"></span>Kraft</span><h1>Fortschritt</h1></div>`;
+
+    // Wochenvolumen (gesamt)
+    const wv = wochenVolumen(S(), { wochen: 6 });
+    if (wv.werte.length) {
+      const t = trend(wv.werte, { einheit: 'kg', hoeherBesser: true });
+      const labels = wv.wochen.map(w => 'KW' + w.slice(-2));
+      html += `<div class="karte anim">
+        <div class="prog-kopf">
+          <div><small class="dim">Wochenvolumen</small>
+            <div class="prog-jetzt">${formatZahl(wv.werte.at(-1), 0)} <small>kg</small></div></div>
+          <span class="prog-trend ${t.richtung}">${esc(t.text)}</span>
+        </div>
+        ${balken(wv.werte, { farbe: '#CDFD34', labels, breite: 320, hoehe: 92 })}
+      </div>`;
+    }
+
+    // Metrik-Umschalter
+    html += `<div class="chip-zeile" style="margin:16px 2px 4px">
+      <button class="chip ${progMetrik === 'gewicht' ? 'aktiv' : ''}" data-action="k.progMetrik" data-m="gewicht">Top-Gewicht</button>
+      <button class="chip ${progMetrik === 'volumen' ? 'aktiv' : ''}" data-action="k.progMetrik" data-m="volumen">Volumen/Übung</button>
+    </div>`;
+
+    // Pro Übung eine Karte (nur solche mit ≥1 erledigter Session), alphabetisch
+    const uebungen = S().bibliothek
+      .filter(a => a.kategorie === 'kraft')
+      .sort((a, b) => a.name.localeCompare(b.name, 'de'));
+
+    let karten = '';
+    for (const akt of uebungen) {
+      const serie = fortschrittsSerie(S(), akt.id, { limit: 12 });
+      if (serie.length === 0) continue;
+      const assistiert = !!akt.einstellungen?.assist;
+      const werte = progMetrik === 'volumen'
+        ? serie.map(p => p.vol)
+        : serie.map(p => p.topKg);
+      const letzterP = serie.at(-1);
+      const jetztText = progMetrik === 'volumen'
+        ? `${formatZahl(letzterP.vol, 0)} kg`
+        : `${formatZahl(letzterP.topKg)} kg${letzterP.wdhBeiTop != null ? ` × ${formatZahl(letzterP.wdhBeiTop, 0)}` : ''}`;
+      // Bei assistiert ist „mehr" (Richtung 0) besser — trend rechnet über Differenz,
+      // und da −12,5 > −15, ergibt +Differenz automatisch „up". Passt.
+      const t = trend(werte, { einheit: progMetrik === 'volumen' ? 'kg' : 'kg', hoeherBesser: true });
+      karten += `<div class="karte prog-karte anim">
+        <div class="prog-kopf">
+          <div><strong>${esc(akt.name)}</strong>${assistiert ? ' <span class="dim">· assistiert</span>' : ''}
+            <div class="prog-jetzt">${esc(jetztText)}</div></div>
+          <span class="prog-trend ${t.richtung}">${serie.length > 1 ? esc(t.text) : 'erste Session'}</span>
+        </div>
+        ${sparkline(werte, { farbe: '#CDFD34', breite: 320, hoehe: 60 })}
+        <div class="prog-fuss dim">${serie.length} Session${serie.length > 1 ? 's' : ''} · seit ${esc(formatDatum(serie[0].datum))}</div>
+      </div>`;
+    }
+
+    html += karten || `<div class="karte leer anim"><p>Noch keine abgeschlossenen Kraft-Sessions. Sobald du Übungen abhakst, erscheint hier dein Verlauf.</p></div>`;
+    return html;
+  }
+
   const segFinden = id => heutigeSession()?.segmente.find(s => s.id === id) ?? null;
 
   async function speichernUndZeigen() { await ctx.save(); ctx.render(); }
@@ -818,7 +954,17 @@ export function erstelleKraftModul(ctx) {
       await speichernUndZeigen();
     },
 
-    'k.auf'(d) { offen.has(d.seg) ? offen.delete(d.seg) : offen.add(d.seg); ctx.render(); },
+    'k.progMetrik'(d) { progMetrik = d.m; ctx.render(); },
+
+    'k.auf'(d) {
+      const seg = segFinden(d.seg); if (!seg) { ctx.render(); return; }
+      if (seg.erledigt) {                         // erledigt: offen-Set steuert das Aufklappen
+        offen.has(d.seg) ? offen.delete(d.seg) : offen.add(d.seg);
+      } else {                                    // nicht erledigt: zu-Set steuert das Zuklappen
+        zu.has(d.seg) ? zu.delete(d.seg) : zu.add(d.seg);
+      }
+      ctx.render();
+    },
     'k.verlauf'(d) { verlaufOffen.has(d.seg) ? verlaufOffen.delete(d.seg) : verlaufOffen.add(d.seg); ctx.render(); },
     'k.altListe'(d) { altOffen.has(d.seg) ? altOffen.delete(d.seg) : altOffen.add(d.seg); ctx.render(); },
 
@@ -832,10 +978,10 @@ export function erstelleKraftModul(ctx) {
           if (pf) addEintrag(seg, pf);
         }
         seg.erledigt = true;
-        offen.delete(seg.id);       // abgehakt → Karte fährt zu (wie Gym-App)
+        offen.delete(seg.id); zu.delete(seg.id);   // abgehakt → zu (Übersteuerungen zurücksetzen)
       } else {
         seg.erledigt = false;
-        offen.add(seg.id);          // wieder freigemacht → Karte öffnet sich
+        offen.delete(seg.id); zu.delete(seg.id);   // wieder offen → Übersteuerungen zurücksetzen
       }
       await speichernUndZeigen();
     },
@@ -1110,5 +1256,5 @@ export function erstelleKraftModul(ctx) {
     },
   };
 
-  return { heuteHtml, planHtml, actions };
+  return { heuteHtml, planHtml, fortschrittHtml, actions };
 }
