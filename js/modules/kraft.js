@@ -365,22 +365,46 @@ export function dauerInputWert(sek) {
   return h > 0 ? `${h}:${String(m).padStart(2, '0')}` : String(m);
 }
 
+/** Anzeigewert fürs Distanz-Eingabefeld: 1930 m → "1,93" (km) bzw. "1930" (Schwimmen, m). */
+export function distanzInputWert(meter, kategorie) {
+  if (meter == null) return '';
+  if (kategorie === 'schwimmen') return formatZahl(Math.round(meter), 0);
+  return formatZahl(meter / 1000, 2);   // km, bis 2 Nachkommastellen
+}
+
+/** Eingabe-Distanz → Meter. "1,93" km → 1930 m; Schwimmen: Meter direkt. */
+export function distanzZuMeter(text, kategorie) {
+  const n = parseZahl(text);
+  if (n == null) return null;
+  return kategorie === 'schwimmen' ? Math.round(n) : Math.round(n * 1000);
+}
+
 /**
  * DER eine Eingabe-Renderer: baut für einen Eintrag die Felder aus
  * aktivitaet.messwerte + Registry. Wird für Kraftsätze UND
  * Cardio-Segmente benutzt — der Akzeptanztest hängt hieran.
  */
 export function eintragInputsHtml(aktivitaet, segment, eintrag) {
+  const kat = aktivitaet.kategorie;
   return aktivitaet.messwerte.map(typ => {
     const def = MESSWERTE[typ];
     const roh = eintrag.messwerte[typ];
-    const wert = roh == null ? ''
-      : (def.anzeige === 'zeit' ? dauerInputWert(roh) : formatZahl(roh, def.dezimal ?? 2));
-    const platzhalter = def.anzeige === 'zeit' ? 'min' : (def.kurz ?? def.label);
+    let wert;
+    if (roh == null) wert = '';
+    else if (def.anzeige === 'zeit') wert = dauerInputWert(roh);
+    else if (def.anzeige === 'distanz') wert = distanzInputWert(roh, kat);
+    else wert = formatZahl(roh, def.dezimal ?? 2);
+    // Feld-Label (Einheit): Distanz zeigt km bzw. m je nach Sportart
+    const einheitLabel = def.anzeige === 'zeit' ? 'min'
+      : def.anzeige === 'distanz' ? (kat === 'schwimmen' ? 'm' : 'km')
+      : (def.einheit || def.kurz || def.label);
+    const platzhalter = def.anzeige === 'zeit' ? 'min'
+      : def.anzeige === 'distanz' ? (kat === 'schwimmen' ? 'm' : 'km')
+      : (def.kurz ?? def.label);
     return `<label class="feld">
       <input type="text" inputmode="decimal" value="${escT(wert)}" placeholder="${escT(platzhalter)}"
         data-change="k.wert" data-seg="${segment.id}" data-eintrag="${eintrag.id}" data-typ="${typ}">
-      <span>${escT(def.einheit && def.anzeige !== 'zeit' && def.anzeige !== 'distanz' ? def.einheit : def.anzeige === 'zeit' ? 'min' : def.kurz ?? def.label)}</span>
+      <span>${escT(einheitLabel)}</span>
     </label>`;
   }).join('');
 }
@@ -866,11 +890,6 @@ export function erstelleKraftModul(ctx) {
       <button class="chip ${progMetrik === 'volumen' ? 'aktiv' : ''}" data-action="k.progMetrik" data-m="volumen">Volumen</button>
     </div>`;
 
-    // Pro Übung eine Karte (nur solche mit ≥1 erledigter Session), alphabetisch
-    const uebungen = S().bibliothek
-      .filter(a => a.kategorie === 'kraft')
-      .sort((a, b) => a.name.localeCompare(b.name, 'de'));
-
     // Wert + Anzeigetext je nach gewählter Metrik
     const wertVon = p => progMetrik === 'volumen' ? p.vol : progMetrik === 'avg' ? p.avgKg : p.topKg;
     const textVon = p => {
@@ -879,21 +898,15 @@ export function erstelleKraftModul(ctx) {
       return `${formatZahl(p.topKg)} kg${p.wdhBeiTop != null ? ` × ${formatZahl(p.wdhBeiTop, 0)}` : ''}`;
     };
 
-    let karten = '';
-    for (const akt of uebungen) {
+    // Eine Übungskarte bauen (oder '' wenn keine Historie).
+    const karteFuer = akt => {
       const serie = fortschrittsSerie(S(), akt.id, { limit: 999 });
-      if (serie.length === 0) continue;
+      if (serie.length === 0) return '';
       const assistiert = !!akt.einstellungen?.assist;
       const werte = serie.map(wertVon);
       const letzterP = serie.at(-1);
       const t = trend(werte, { einheit: 'kg', hoeherBesser: true });
-
-      // Verlaufsliste: neueste zuerst, 5 sichtbar, Rest aufklappbar.
-      // Steigerung = Wert höher als in der chronologisch davorliegenden Session.
-      const mitRauf = serie.map((p, idx) => ({
-        ...p,
-        rauf: idx > 0 && wertVon(p) > wertVon(serie[idx - 1]),
-      }));
+      const mitRauf = serie.map((p, idx) => ({ ...p, rauf: idx > 0 && wertVon(p) > wertVon(serie[idx - 1]) }));
       const rueck = [...mitRauf].reverse();
       const offen = progExpand.has(akt.id);
       const sichtbar = offen ? rueck : rueck.slice(0, 5);
@@ -905,8 +918,7 @@ export function erstelleKraftModul(ctx) {
       const mehr = rueck.length > 5
         ? `<button class="knopf klein geist voll" data-action="k.progExpand" data-akt="${akt.id}">${offen ? 'Weniger anzeigen ⌃' : `Alle ${rueck.length} anzeigen ⌄`}</button>`
         : '';
-
-      karten += `<div class="karte prog-karte anim">
+      return `<div class="karte prog-karte anim">
         <div class="prog-kopf">
           <div><strong>${esc(akt.name)}</strong>${assistiert ? ' <span class="dim">· assistiert</span>' : ''}
             <div class="prog-jetzt">${esc(textVon(letzterP))}</div></div>
@@ -916,9 +928,37 @@ export function erstelleKraftModul(ctx) {
         <div class="verlauf-liste2">${zeilen}</div>
         ${mehr}
       </div>`;
+    };
+
+    // Nach Einheiten gruppieren: jede Übung erscheint unter ihrer ersten Einheit.
+    // Reihenfolge der Einheiten = Bibliothek-Reihenfolge; Übungen in Einheiten-Reihenfolge.
+    const einheiten = einheitenBibliothek(S(), MODUL);
+    const schonGezeigt = new Set();
+    let gruppen = '';
+
+    for (const einheit of einheiten) {
+      let kartenInGruppe = '';
+      for (const vorlage of einheit.segmente) {
+        const akt = findeAktivitaet(S(), vorlage.aktivitaetId);
+        if (!akt || akt.kategorie !== 'kraft' || schonGezeigt.has(akt.id)) continue;
+        const karte = karteFuer(akt);
+        if (karte) { kartenInGruppe += karte; schonGezeigt.add(akt.id); }
+      }
+      if (kartenInGruppe) {
+        gruppen += `<p class="sheet-abschnitt zwischen gruppe-titel">${esc(einheit.name)}</p>${kartenInGruppe}`;
+      }
     }
 
-    html += karten || `<div class="karte leer anim"><p>Noch keine abgeschlossenen Kraft-Sessions. Sobald du Übungen abhakst, erscheint hier dein Verlauf.</p></div>`;
+    // Übungen ohne Einheit (z.B. archivierte Pläne, freie Übungen) → „Weitere"
+    let weitere = '';
+    for (const akt of S().bibliothek) {
+      if (akt.kategorie !== 'kraft' || schonGezeigt.has(akt.id)) continue;
+      const karte = karteFuer(akt);
+      if (karte) { weitere += karte; schonGezeigt.add(akt.id); }
+    }
+    if (weitere) gruppen += `<p class="sheet-abschnitt zwischen gruppe-titel">Weitere</p>${weitere}`;
+
+    html += gruppen || `<div class="karte leer anim"><p>Noch keine abgeschlossenen Kraft-Sessions. Sobald du Übungen abhakst, erscheint hier dein Verlauf.</p></div>`;
     return html;
   }
 
@@ -1041,13 +1081,16 @@ export function erstelleKraftModul(ctx) {
       const seg = segFinden(d.seg);
       const e = seg?.eintraege.find(x => x.id === d.eintrag); if (!e) return;
       const def = MESSWERTE[d.typ];
-      let wert = def.anzeige === 'zeit' ? parseDauer(el.value) : parseZahl(el.value);
+      const { aktivitaet } = loeseSegmentAuf(S(), seg);
+      let wert;
+      if (def.anzeige === 'zeit') wert = parseDauer(el.value);
+      else if (def.anzeige === 'distanz') wert = distanzZuMeter(el.value, aktivitaet?.kategorie);
+      else wert = parseZahl(el.value);
       if (wert == null) { delete e.messwerte[d.typ]; }
       else {
         // Beim Gewicht assistierter Übungen: eingegebener Betrag bekommt das
         // aktuelle Vorzeichen (Hilfe = negativ). Toggle steuert das Vorzeichen.
         if (d.typ === 'gewicht' && effektiveEinstellungen(seg).assist) {
-          // Vorzeichen: vorhandenes kg-Vorzeichen, sonst gemerkte Absicht (_plus), Default = Hilfe (−)
           const plus = e.messwerte.gewicht != null ? e.messwerte.gewicht >= 0 : (e._plus ?? false);
           wert = plus ? Math.abs(wert) : -Math.abs(wert);
           delete e._plus;
