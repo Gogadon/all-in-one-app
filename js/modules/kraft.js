@@ -34,6 +34,7 @@ import {
 } from '../core/plan.js';
 import { sparkline, balken, trend } from '../ui/charts.js';
 import { teileKarte } from '../ui/share.js';
+import { bestaetige, hinweis } from '../ui/components.js';
 
 export const MODUL = 'kraft';
 
@@ -1155,9 +1156,9 @@ export function erstelleKraftModul(ctx) {
       };
       try {
         const res = await teileKarte(daten, `gogadon-${s.datum}.png`);
-        if (res === 'heruntergeladen') alert('Bild gespeichert. ✓');
+        if (res === 'heruntergeladen') await hinweis('Bild gespeichert ✓');
       } catch (err) {
-        alert('Teilen nicht möglich: ' + err.message);
+        await hinweis('Teilen nicht möglich', err.message);
       }
     },
     async 'k.abschliessen'() {
@@ -1360,10 +1361,10 @@ export function erstelleKraftModul(ctx) {
     async 'k.einheitWeg'(d) {
       const e = findeEinheit(S(), MODUL, d.einheit);
       const imZyklus = (planFuer(S(), MODUL)?.zyklus ?? []).filter(id => id === d.einheit).length;
-      const warnung = imZyklus
-        ? `„${e?.name}" löschen? Verschwindet ${imZyklus}× aus dem Zyklus. (Sessions bleiben erhalten.)`
-        : `„${e?.name}" löschen?`;
-      if (!confirm(warnung)) return;
+      const text = imZyklus
+        ? `„${e?.name}" verschwindet ${imZyklus}× aus dem Zyklus. Deine Sessions bleiben erhalten.`
+        : `„${e?.name}" wird gelöscht.`;
+      if (!await bestaetige({ titel: 'Einheit löschen?', text, jaText: 'Löschen', gefahr: true })) return;
       loescheEinheit(S(), MODUL, d.einheit);
       await speichernUndZeigen();
     },
@@ -1405,7 +1406,11 @@ export function erstelleKraftModul(ctx) {
           S().sessions = S().sessions.filter(x => x !== s);   // leere immer verwerfen
         } else if (!gleicheEinheit) {
           // Session mit Daten/abgeschlossen, aber ANDERE Einheit → nachfragen
-          const ok = confirm('Für heute liegt schon eine andere Einheit vor. Verwerfen und neu starten? (Abbrechen behält sie im Verlauf.)');
+          const ok = await bestaetige({
+            titel: 'Andere Einheit heute?',
+            text: 'Für heute liegt schon eine andere Einheit vor. Verwerfen und neu starten? Bei Abbrechen bleibt sie im Verlauf.',
+            jaText: 'Verwerfen', gefahr: true,
+          });
           if (ok) {
             S().sessions = S().sessions.filter(x => x !== s);
           }
@@ -1437,7 +1442,7 @@ export function erstelleKraftModul(ctx) {
       const akt = findeAktivitaet(S(), d.akt); if (!akt) return;
       const hat = akt.messwerte.includes(d.typ);
       // Mindestens ein Messwert muss bleiben
-      if (hat && akt.messwerte.length <= 1) { alert('Mindestens ein Messwert muss aktiv bleiben.'); return; }
+      if (hat && akt.messwerte.length <= 1) { await hinweis('Mindestens ein Messwert muss aktiv bleiben.'); return; }
       const neu = hat ? akt.messwerte.filter(t => t !== d.typ) : [...akt.messwerte, d.typ];
       setzeMesswerte(S(), d.akt, neu);
       await ctx.save();
@@ -1446,20 +1451,23 @@ export function erstelleKraftModul(ctx) {
     },
     async 'k.aktArchiv'(d) {
       const akt = findeAktivitaet(S(), d.akt);
-      if (!confirm(`„${akt?.name}" archivieren? Verschwindet aus Auswahllisten, Verlauf bleibt erhalten.`)) return;
+      if (!await bestaetige({ titel: 'Übung archivieren?',
+        text: `„${akt?.name}" verschwindet aus Auswahllisten, dein Verlauf bleibt erhalten.`,
+        jaText: 'Archivieren' })) return;
       archiviere(S(), d.akt);
       sheet.schliesse();
       await speichernUndZeigen();
     },
     async 'k.aktWeg'(d) {
       const akt = findeAktivitaet(S(), d.akt);
-      if (!confirm(`„${akt?.name}" endgültig löschen?`)) return;
+      if (!await bestaetige({ titel: 'Übung löschen?',
+        text: `„${akt?.name}" wird endgültig gelöscht.`, jaText: 'Löschen', gefahr: true })) return;
       try {
         entferneAktivitaet(S(), d.akt);
         sheet.schliesse();
         await speichernUndZeigen();
       } catch (err) {
-        alert(err.message);
+        await hinweis('Nicht möglich', err.message);
       }
     },
     async 'k.flagEinarmig'(d) {
@@ -1510,12 +1518,12 @@ export function erstelleKraftModul(ctx) {
       sheet.oeffne(umbenennenHtml());
     },
     async 'k.altWeg'(d) {
-      if (!confirm('Alternative löschen?')) return;
+      if (!await bestaetige({ titel: 'Alternative löschen?', jaText: 'Löschen', gefahr: true })) return;
       try {
         entferneAlternative(S(), d.akt, d.alt);
         await ctx.save();
       } catch (err) {
-        alert(err.message); // steckt in Sessions → bleibt erhalten
+        await hinweis('Nicht möglich', err.message); // steckt in Sessions → bleibt erhalten
       }
       sheet.aktualisiere(einstellungenHtml(d.akt, null));
       ctx.render();
