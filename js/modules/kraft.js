@@ -744,8 +744,8 @@ export function erstelleKraftModul(ctx) {
           <span class="tag-nr">${i + 1}</span>
           <span class="name">${esc(e.name)}${i === pos ? ' <span class="dim">· heute</span>' : ''}</span>
           <span class="werkzeuge">
-            <button data-action="k.zyklusSchieb" data-i="${i}" data-r="-1">▲</button>
-            <button data-action="k.zyklusSchieb" data-i="${i}" data-r="1">▼</button>
+            <button data-action="k.zyklusSchieb" data-i="${i}" data-r="-1"><span class="pfeil-ico"></span></button>
+            <button data-action="k.zyklusSchieb" data-i="${i}" data-r="1"><span class="pfeil-ico runter"></span></button>
             <button data-action="k.zyklusWeg" data-i="${i}">✕</button>
           </span>
         </div>`).join('') + `</div>`;
@@ -789,8 +789,8 @@ export function erstelleKraftModul(ctx) {
           <span class="name">${esc(akt.name)}</span>
           <span class="werkzeuge">
             <button data-action="k.einstellungen" data-akt="${akt.id}">⚙️</button>
-            <button data-action="k.planUebungSchieb" data-einheit="${einheit.id}" data-i="${i}" data-r="-1">▲</button>
-            <button data-action="k.planUebungSchieb" data-einheit="${einheit.id}" data-i="${i}" data-r="1">▼</button>
+            <button data-action="k.planUebungSchieb" data-einheit="${einheit.id}" data-i="${i}" data-r="-1"><span class="pfeil-ico"></span></button>
+            <button data-action="k.planUebungSchieb" data-einheit="${einheit.id}" data-i="${i}" data-r="1"><span class="pfeil-ico runter"></span></button>
             <button data-action="k.planUebungWeg" data-einheit="${einheit.id}" data-akt="${akt.id}">✕</button>
           </span>
         </div>`;
@@ -825,6 +825,16 @@ export function erstelleKraftModul(ctx) {
       <input class="suche" type="text" placeholder="Name eingeben…" value="${esc(suche)}" data-change="k.einheitNeuSuche" autofocus>
       ${doppelt ? '<p class="dim klein-text">Gibt es schon — trotzdem anlegbar, wird eine zweite mit gleichem Namen.</p>' : ''}
       <button class="knopf primaer ${suche.trim() ? '' : 'aus'}" data-action="k.einheitNeuAnlegen">Anlegen</button>`;
+  }
+
+  /** Generisches Umbenennen-Sheet (statt prompt). typ steuert, was gespeichert wird. */
+  let umbenennen = null;   // { typ:'einheit'|'altName'|'altNeu', id?, altId?, wert }
+  function umbenennenHtml() {
+    const { titel, wert, hinweis } = umbenennen;
+    return `<h3>${esc(titel)}</h3>
+      ${hinweis ? `<p class="dim klein-text">${esc(hinweis)}</p>` : ''}
+      <input class="suche" type="text" placeholder="Name eingeben…" value="${esc(wert)}" data-change="k.umbennSuche" autofocus>
+      <button class="knopf primaer ${wert.trim() ? '' : 'aus'}" data-action="k.umbennOk">Speichern</button>`;
   }
 
   /** Sheet: Einheit aus Bibliothek in den Zyklus wählen (oder neue anlegen). */
@@ -1321,12 +1331,31 @@ export function erstelleKraftModul(ctx) {
       sheet.schliesse();
       await speichernUndZeigen();
     },
-    async 'k.einheitName'(d) {
+    'k.einheitName'(d) {
       const e = findeEinheit(S(), MODUL, d.einheit);
-      const name = prompt('Neuer Name:', e?.name ?? '');
-      if (!name?.trim()) return;
-      benenneEinheitUm(S(), MODUL, d.einheit, name);
-      await speichernUndZeigen();
+      umbenennen = { typ: 'einheit', id: d.einheit, titel: 'Einheit umbenennen', wert: e?.name ?? '' };
+      sheet.oeffne(umbenennenHtml());
+    },
+    'k.umbennSuche'(d, el) { if (umbenennen) { umbenennen.wert = el.value; sheet.aktualisiere(umbenennenHtml()); } },
+    async 'k.umbennOk'() {
+      if (!umbenennen) return;
+      const name = umbenennen.wert.trim();
+      if (!name) return;
+      if (umbenennen.typ === 'einheit') {
+        benenneEinheitUm(S(), MODUL, umbenennen.id, name);
+      } else if (umbenennen.typ === 'altName') {
+        const akt = findeAktivitaet(S(), umbenennen.id);
+        const alt = akt?.alternativen.find(a => a.id === umbenennen.altId);
+        if (alt) alt.name = name;
+      } else if (umbenennen.typ === 'altNeu') {
+        addAlternative(S(), umbenennen.id, { name });
+      }
+      const reopenAkt = (umbenennen.typ === 'altName' || umbenennen.typ === 'altNeu') ? umbenennen.id : null;
+      umbenennen = null;
+      sheet.schliesse();
+      await ctx.save();
+      if (reopenAkt) sheet.oeffne(einstellungenHtml(reopenAkt, null)); // zurück ins Übungs-Sheet
+      ctx.render();
     },
     async 'k.einheitWeg'(d) {
       const e = findeEinheit(S(), MODUL, d.einheit);
@@ -1469,23 +1498,16 @@ export function erstelleKraftModul(ctx) {
       if (n != null && n > 0) prog[d.param] = n;
       await ctx.save(); ctx.render();
     },
-    async 'k.altPlus'(d) {
-      const name = prompt('Name der Alternative:');
-      if (!name?.trim()) return;
-      addAlternative(S(), d.akt, { name });
-      await ctx.save();
-      sheet.aktualisiere(einstellungenHtml(d.akt, null));
-      ctx.render();
+    'k.altPlus'(d) {
+      umbenennen = { typ: 'altNeu', id: d.akt, titel: 'Neue Alternative',
+        hinweis: 'Name der Ersatzübung — z.B. „KH-Bankdrücken".', wert: '' };
+      sheet.oeffne(umbenennenHtml());
     },
-    async 'k.altName'(d) {
+    'k.altName'(d) {
       const akt = findeAktivitaet(S(), d.akt);
       const alt = akt?.alternativen.find(a => a.id === d.alt); if (!alt) return;
-      const name = prompt('Neuer Name:', alt.name);
-      if (!name?.trim()) return;
-      alt.name = name.trim();
-      await ctx.save();
-      sheet.aktualisiere(einstellungenHtml(d.akt, null));
-      ctx.render();
+      umbenennen = { typ: 'altName', id: d.akt, altId: d.alt, titel: 'Alternative umbenennen', wert: alt.name };
+      sheet.oeffne(umbenennenHtml());
     },
     async 'k.altWeg'(d) {
       if (!confirm('Alternative löschen?')) return;
