@@ -89,3 +89,56 @@ export const sheet = {
     return !!sheetEl && sheetEl.classList.contains('offen');
   },
 };
+
+// ------------------------------------------------------------
+// Bestätigungs-Dialog (schöner Ersatz für confirm()).
+// Nutzung:  if (await bestaetige({ titel, text, jaText, gefahr })) { … }
+// Gibt true bei Bestätigung, false bei Abbruch.
+// ------------------------------------------------------------
+let dialogEl = null, dialogBackdrop = null, dialogAufloesen = null;
+
+function stelleDialogBereit() {
+  if (dialogEl) return;
+  dialogBackdrop = document.createElement('div');
+  dialogBackdrop.className = 'dialog-backdrop';
+  dialogBackdrop.addEventListener('click', () => schliesseDialog(false));
+
+  dialogEl = document.createElement('div');
+  dialogEl.className = 'dialog';
+  document.body.append(dialogBackdrop, dialogEl);
+
+  dialogEl.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-dlg]');
+    if (!btn) return;
+    schliesseDialog(btn.dataset.dlg === 'ja');
+  });
+}
+
+function schliesseDialog(ergebnis) {
+  if (!dialogEl) return;
+  dialogBackdrop.classList.remove('offen');
+  dialogEl.classList.remove('offen');
+  const auf = dialogAufloesen; dialogAufloesen = null;
+  if (auf) auf(ergebnis);
+}
+
+export function bestaetige({ titel, text = '', jaText = 'OK', neinText = 'Abbrechen', gefahr = false } = {}) {
+  stelleDialogBereit();
+  dialogEl.innerHTML = `
+    <h3>${esc(titel)}</h3>
+    ${text ? `<p class="dialog-text">${esc(text)}</p>` : ''}
+    <div class="dialog-knoepfe">
+      ${neinText ? `<button class="knopf" data-dlg="nein">${esc(neinText)}</button>` : ''}
+      <button class="knopf ${gefahr ? 'gefahr-voll' : 'primaer'}" data-dlg="ja">${esc(jaText)}</button>
+    </div>`;
+  requestAnimationFrame(() => {
+    dialogBackdrop.classList.add('offen');
+    dialogEl.classList.add('offen');
+  });
+  return new Promise(res => { dialogAufloesen = res; });
+}
+
+/** Kurzer Info-Dialog (nur OK). */
+export function hinweis(titel, text = '') {
+  return bestaetige({ titel, text, jaText: 'OK', neinText: '' }).then(() => {});
+}
