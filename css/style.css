@@ -140,6 +140,15 @@ h1,h2,h3,.num{font-family:var(--font-display);letter-spacing:-.02em}
 .pr{font-size:12px;color:var(--kraft);white-space:nowrap}
 .weg{margin-left:auto;color:var(--dim-2);font-size:14px;padding:6px}
 
+/* Einarmig / Assistiert */
+.mal{color:var(--dim-2);font-size:13px;flex:none}
+.feld.schmal input{width:48px}
+.vz{flex:none;width:34px;height:38px;border-radius:var(--r-icon);
+  background:var(--surface-2);border:1px solid var(--line);
+  font-family:var(--font-display);font-weight:800;font-size:18px;line-height:1}
+.vz.minus{color:var(--wandern);border-color:rgba(252,180,75,.5)}
+.vz.plus{color:var(--kraft);border-color:rgba(205,253,52,.5)}
+
 /* --- Chips ---------------------------------------------------- */
 .chip-zeile{display:flex;flex-wrap:wrap;gap:6px}
 .chip{font-size:12.5px;padding:7px 12px;border-radius:999px;
