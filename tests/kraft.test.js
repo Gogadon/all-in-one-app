@@ -16,6 +16,7 @@ import {
   berechneVorschlag, bestVorTag, eintragPR, letzteSaetze, verlaufLetzte,
   prefillEintrag, identVon, segmentZusammenfassungKraft, segmentZusammenfassungWerte,
   sessionVolumenErledigt, fmtSatz, dauerInputWert, eintragInputsHtml, PROG_DEFAULTS,
+  effektiveWdh, istEinarmig, satzVolumen,
 } from '../js/modules/kraft.js';
 
 const HEUTE = '2026-07-05';
@@ -198,4 +199,77 @@ test('★ AKZEPTANZTEST: ein Eingabe-Pfad für Cardio solo und Cardio im Kraft-T
 test('PROG_DEFAULTS entsprechen der Gym-App (4 Sätze, 8–12, +2,5 / 4×12, +2,5)', () => {
   assert.deepEqual(PROG_DEFAULTS.double, { saetze: 4, wdhMin: 8, wdhMax: 12, schritt: 2.5 });
   assert.deepEqual(PROG_DEFAULTS.strength, { saetze: 4, wdh: 12, schritt: 2.5 });
+});
+
+// ==================================================================
+// 3b: EINARMIG (L/R) & ASSISTIERT (negatives Gewicht)
+// ==================================================================
+
+function sessMit(state, datum, aktId, saetze, { erledigt = true } = {}) {
+  const s = neueSession({ datum });
+  const seg = addSegment(s, neuesSegment(aktId)); seg.erledigt = erledigt;
+  for (const mw of saetze) addEintrag(seg, neuerEintrag(mw));
+  state.sessions.push(s); return s;
+}
+
+test('Einarmig: effektiveWdh = schwächere Seite, Volumen = L+R, fmtSatz L/R', () => {
+  const e = neuerEintrag({ gewicht: 32.5, wdh_l: 11, wdh_r: 12 });
+  assert.equal(istEinarmig(e), true);
+  assert.equal(effektiveWdh(e), 11);
+  assert.equal(satzVolumen(e), 32.5 * 23);
+  assert.equal(fmtSatz(e), '32,5×11/12');
+});
+
+test('Einarmig: steigern erst wenn BEIDE Seiten das Ziel schaffen', () => {
+  const state = leererZustand();
+  const r = addAktivitaet(state, { name: 'Rudern', kategorie: 'kraft', messwerte: ['gewicht', 'wdh_l', 'wdh_r'] });
+  sessMit(state, '2026-07-01', r.id, [
+    { gewicht: 32.5, wdh_l: 11, wdh_r: 12 }, { gewicht: 32.5, wdh_l: 11, wdh_r: 12 },
+    { gewicht: 32.5, wdh_l: 12, wdh_r: 12 }, { gewicht: 32.5, wdh_l: 12, wdh_r: 12 },
+  ]);
+  assert.equal(berechneVorschlag(state, r.id, { art: 'double' }, HEUTE).art, 'halten');
+
+  const s2 = leererZustand();
+  const r2 = addAktivitaet(s2, { name: 'R', kategorie: 'kraft', messwerte: ['gewicht', 'wdh_l', 'wdh_r'] });
+  sessMit(s2, '2026-07-01', r2.id, [
+    { gewicht: 32.5, wdh_l: 12, wdh_r: 12 }, { gewicht: 32.5, wdh_l: 12, wdh_r: 12 },
+    { gewicht: 32.5, wdh_l: 12, wdh_r: 13 }, { gewicht: 32.5, wdh_l: 12, wdh_r: 12 },
+  ]);
+  const v = berechneVorschlag(s2, r2.id, { art: 'double' }, HEUTE);
+  assert.equal(v.art, 'steigern');
+  assert.equal(v.nextKg, 35);
+});
+
+test('Einarmig: PR über schwächere Seite, Prefill übernimmt L/R', () => {
+  const state = leererZustand();
+  const r = addAktivitaet(state, { name: 'R', kategorie: 'kraft', messwerte: ['gewicht', 'wdh_l', 'wdh_r'] });
+  sessMit(state, '2026-06-20', r.id, [{ gewicht: 32.5, wdh_l: 10, wdh_r: 11 }]);
+  assert.deepEqual(bestVorTag(state, r.id, HEUTE), { maxKg: 32.5, wdhBeiMax: 10 });
+  assert.equal(eintragPR(state, r.id, neuerEintrag({ gewicht: 32.5, wdh_l: 11, wdh_r: 11 }), HEUTE), 'wdh');
+  assert.deepEqual(prefillEintrag(state, r.id, HEUTE).messwerte, { gewicht: 32.5, wdh_l: 10, wdh_r: 11 });
+});
+
+test('Assistiert: negatives Gewicht trägt 0 zum Volumen, weniger Hilfe = Fortschritt', () => {
+  const e = neuerEintrag({ gewicht: -15, wdh: 12 });
+  assert.equal(satzVolumen(e), 0);
+  assert.equal(fmtSatz(e), '-15×12');
+
+  const state = leererZustand();
+  const d = addAktivitaet(state, { name: 'Dips', kategorie: 'kraft', messwerte: ['gewicht', 'wdh'] });
+  sessMit(state, '2026-07-01', d.id, [
+    { gewicht: -15, wdh: 12 }, { gewicht: -15, wdh: 12 }, { gewicht: -15, wdh: 12 }, { gewicht: -15, wdh: 12 },
+  ]);
+  const v = berechneVorschlag(state, d.id, { art: 'double' }, HEUTE);
+  assert.equal(v.art, 'steigern');
+  assert.equal(v.nextKg, -12.5); // weniger Hilfe
+});
+
+test('Assistiert: weniger Hilfe und Übergang zu Zusatzgewicht sind PRs', () => {
+  const state = leererZustand();
+  const d = addAktivitaet(state, { name: 'D', kategorie: 'kraft', messwerte: ['gewicht', 'wdh'] });
+  sessMit(state, '2026-06-20', d.id, [{ gewicht: -15, wdh: 10 }]);
+  assert.equal(eintragPR(state, d.id, neuerEintrag({ gewicht: -12.5, wdh: 8 }), HEUTE), 'gewicht');
+  assert.equal(eintragPR(state, d.id, neuerEintrag({ gewicht: 5, wdh: 5 }), HEUTE), 'gewicht');
+  const s = sessMit(state, '2026-07-05', d.id, [{ gewicht: -12.5, wdh: 10 }]);
+  assert.equal(sessionVolumenErledigt(s), 0);
 });
