@@ -321,3 +321,10 @@ h1,h2,h3,.num{font-family:var(--font-display);letter-spacing:-.02em}
 
 /* Banner mit mehreren Knöpfen (Teilen + Wieder öffnen) */
 .banner-knoepfe{display:flex;gap:8px;flex:none}
+
+/* Einheitliche Pfeil-Icons (ein Dreieck, per Rotation gespiegelt) */
+.pfeil-ico{display:inline-block;width:0;height:0;
+  border-left:5px solid transparent;border-right:5px solid transparent;
+  border-bottom:7px solid var(--dim);vertical-align:middle}
+.pfeil-ico.runter{transform:rotate(180deg)}
+.werkzeuge button:active .pfeil-ico,.zyklus-zeile button:active .pfeil-ico{border-bottom-color:var(--text)}
