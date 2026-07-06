@@ -1,4 +1,4 @@
-// ============================================================ 
+// ============================================================
 // kraft.js — das Kraft-Modul (dünnes Modul auf dickem Kern)
 //
 // Aufbau:
@@ -55,6 +55,45 @@ function istArbeitssatz(e) {
   return !hatFlag(e, 'aufwaermsatz') && typeof e.messwerte.gewicht === 'number';
 }
 
+// --- Einarmig (L/R) & Assistiert (negatives Gewicht) ---
+
+/** Ist dieser Eintrag einarmig erfasst? (hat getrennte L/R-Wdh) */
+export function istEinarmig(e) {
+  return e?.messwerte?.wdh_l != null || e?.messwerte?.wdh_r != null;
+}
+
+/**
+ * Die für Progression/PR maßgebliche Wdh eines Satzes.
+ * Einarmig → die SCHWÄCHERE Seite (min L/R); normal → wdh.
+ * (Deine Regel: erst steigern, wenn beide Seiten das Ziel schaffen.)
+ */
+export function effektiveWdh(e) {
+  if (istEinarmig(e)) {
+    const l = e.messwerte.wdh_l, r = e.messwerte.wdh_r;
+    if (l == null) return r ?? null;
+    if (r == null) return l;
+    return Math.min(l, r);
+  }
+  return e.messwerte.wdh ?? null;
+}
+
+/** Gesamt-Wdh eines Satzes (einarmig: L+R, sonst wdh) — fürs Volumen-Zählen. */
+function gesamtWdh(e) {
+  if (istEinarmig(e)) return (e.messwerte.wdh_l ?? 0) + (e.messwerte.wdh_r ?? 0);
+  return e.messwerte.wdh ?? 0;
+}
+
+/**
+ * Volumenbeitrag eines Satzes in kg.
+ * Assistiert (negatives Gewicht = Hilfe) trägt 0 bei — Hilfe ist kein bewegtes
+ * Gewicht. Einarmig zählt beide Seiten (gleiche Last je Wdh).
+ */
+export function satzVolumen(e) {
+  const kg = e.messwerte.gewicht;
+  if (typeof kg !== 'number' || kg <= 0) return 0;
+  return kg * gesamtWdh(e);
+}
+
 /** Hat der Eintrag irgendeinen Wert? */
 export function eintragLeer(e) {
   return Object.keys(e.messwerte).length === 0;
@@ -93,13 +132,18 @@ export function verlaufLetzte(state, identId, n = 4, vorIso = heuteIso()) {
   return segmenteVor(state, identId, vorIso).slice(0, n);
 }
 
-/** Bestwert vor einem Tag: höchstes Gewicht + Wdh bei diesem Gewicht. */
+/**
+ * Bestwert vor einem Tag: „bestes" Gewicht + zugehörige (effektive) Wdh.
+ * Bei assistierten Übungen (negatives Gewicht) ist WENIGER Hilfe besser —
+ * also gilt das größere (näher an 0 / positivere) Gewicht als Rekord.
+ * Da −12,5 > −15, funktioniert der normale >-Vergleich hier von selbst.
+ */
 export function bestVorTag(state, identId, tagIso) {
   let maxKg = null, wdhBeiMax = null;
   for (const { segment } of segmenteVor(state, identId, tagIso)) {
     for (const e of segment.eintraege) {
       if (!istArbeitssatz(e)) continue;
-      const kg = e.messwerte.gewicht, w = e.messwerte.wdh ?? null;
+      const kg = e.messwerte.gewicht, w = effektiveWdh(e);
       if (maxKg == null || kg > maxKg) { maxKg = kg; wdhBeiMax = w; }
       else if (kg === maxKg && w != null && (wdhBeiMax == null || w > wdhBeiMax)) { wdhBeiMax = w; }
     }
@@ -110,11 +154,11 @@ export function bestVorTag(state, identId, tagIso) {
 /** Neuer Rekord? → null | 'gewicht' | 'wdh'. Erste Session zählt nicht. */
 export function eintragPR(state, identId, eintrag, tagIso = heuteIso()) {
   if (hatFlag(eintrag, 'aufwaermsatz')) return null;
-  const kg = eintrag.messwerte.gewicht, w = eintrag.messwerte.wdh;
+  const kg = eintrag.messwerte.gewicht, w = effektiveWdh(eintrag);
   if (typeof kg !== 'number' || typeof w !== 'number') return null;
   const { maxKg, wdhBeiMax } = bestVorTag(state, identId, tagIso);
   if (maxKg == null) return null;
-  if (kg > maxKg) return 'gewicht';
+  if (kg > maxKg) return 'gewicht';                       // mehr Last bzw. weniger Hilfe
   if (kg === maxKg && wdhBeiMax != null && w > wdhBeiMax) return 'wdh';
   return null;
 }
@@ -137,7 +181,7 @@ export function berechneVorschlag(state, identId, prog, vorIso = heuteIso()) {
   if (prog.art === 'double') {
     const p = { ...PROG_DEFAULTS.double, ...prog };
     const fertig = topSaetze.length >= p.saetze &&
-      topSaetze.every(e => (e.messwerte.wdh ?? -1) >= p.wdhMax);
+      topSaetze.every(e => (effektiveWdh(e) ?? -1) >= p.wdhMax);
     if (fertig) {
       const next = Math.round((topKg + p.schritt) * 100) / 100;
       return { text: `↗ Auf ${formatZahl(next)} kg steigern · Ziel ${p.wdhMin}×${p.saetze}`, art: 'steigern', nextKg: next };
@@ -147,7 +191,7 @@ export function berechneVorschlag(state, identId, prog, vorIso = heuteIso()) {
   if (prog.art === 'strength') {
     const p = { ...PROG_DEFAULTS.strength, ...prog };
     const fertig = topSaetze.length >= p.saetze &&
-      topSaetze.every(e => (e.messwerte.wdh ?? -1) >= p.wdh);
+      topSaetze.every(e => (effektiveWdh(e) ?? -1) >= p.wdh);
     if (fertig) {
       const next = Math.round((topKg + p.schritt) * 100) / 100;
       return { text: `↗ Auf ${formatZahl(next)} kg steigern · Ziel ${p.wdh} Wdh`, art: 'steigern', nextKg: next };
@@ -164,7 +208,12 @@ export function prefillEintrag(state, identId, vorIso = heuteIso()) {
   const e = last.eintraege[0];
   const mw = {};
   if (e.messwerte.gewicht != null) mw.gewicht = e.messwerte.gewicht;
-  if (e.messwerte.wdh != null) mw.wdh = e.messwerte.wdh;
+  if (istEinarmig(e)) {
+    if (e.messwerte.wdh_l != null) mw.wdh_l = e.messwerte.wdh_l;
+    if (e.messwerte.wdh_r != null) mw.wdh_r = e.messwerte.wdh_r;
+  } else if (e.messwerte.wdh != null) {
+    mw.wdh = e.messwerte.wdh;
+  }
   return Object.keys(mw).length ? neuerEintrag(mw, { quelle: 'prefill' }) : null;
 }
 
@@ -202,14 +251,26 @@ export function segmentZusammenfassungWerte(aktivitaet, segment) {
 
 /** Volumen einer Session — zählt NUR erledigte Segmente (Gym-App-Regel). */
 export function sessionVolumenErledigt(session) {
-  return session.segmente.filter(s => s.erledigt === true)
-    .reduce((sum, s) => sum + segmentVolumen(s), 0);
+  return session.segmente
+    .filter(s => s.erledigt === true)
+    .flatMap(s => s.eintraege)
+    .filter(e => !hatFlag(e, 'aufwaermsatz'))
+    .reduce((sum, e) => sum + satzVolumen(e), 0);
 }
 
-/** Ein Satz als Kurztext: "80×8" (Aufwärmsätze mit A-Präfix). */
+/** Ein Satz als Kurztext: "80×8" bzw. einarmig "80×12/11" · Aufwärmen mit A. */
 export function fmtSatz(e) {
-  const kg = e.messwerte.gewicht, w = e.messwerte.wdh;
-  const kern = `${kg != null ? formatZahl(kg) : '?'}×${w != null ? formatZahl(w, 0) : '?'}`;
+  const kg = e.messwerte.gewicht;
+  const kgTxt = kg != null ? formatZahl(kg) : '?';
+  let wTxt;
+  if (istEinarmig(e)) {
+    const l = e.messwerte.wdh_l, r = e.messwerte.wdh_r;
+    wTxt = `${l != null ? formatZahl(l, 0) : '?'}/${r != null ? formatZahl(r, 0) : '?'}`;
+  } else {
+    const w = e.messwerte.wdh;
+    wTxt = w != null ? formatZahl(w, 0) : '?';
+  }
+  const kern = `${kgTxt}×${wTxt}`;
   return hatFlag(e, 'aufwaermsatz') ? `A ${kern}` : kern;
 }
 
@@ -413,12 +474,55 @@ export function erstelleKraftModul(ctx) {
     return html + `</div>`;
   }
 
+  /** Felder eines Kraftsatzes: Gewicht (mit +/− bei assistiert), dann Wdh bzw. L/R. */
+  function kraftFelderHtml(aktivitaet, seg, e) {
+    const einst = effektiveEinstellungen(seg);
+    const assistiert = !!einst.assist;
+    const einarmig = !!einst.einarmig;
+    const kg = e.messwerte.gewicht;
+
+    // Gewicht: bei assistiert steht davor ein +/−-Umschalter.
+    // Intern ist Hilfe negativ; im Feld zeigen wir den Betrag, das Vorzeichen macht der Toggle.
+    const kgBetrag = kg == null ? '' : formatZahl(Math.abs(kg));
+    let html = '';
+    if (assistiert) {
+      const neg = kg != null ? kg < 0 : !(e._plus ?? false);   // Default: Hilfe (−)
+      html += `<button class="vz ${neg ? 'minus' : 'plus'}" data-action="k.vorzeichen"
+        data-seg="${seg.id}" data-eintrag="${e.id}" title="Hilfe (−) oder Zusatzgewicht (+)">${neg ? '−' : '+'}</button>`;
+    }
+    html += `<label class="feld">
+      <input type="text" inputmode="decimal" value="${escT(kgBetrag)}" placeholder="kg"
+        data-change="k.wert" data-seg="${seg.id}" data-eintrag="${e.id}" data-typ="gewicht">
+      <span>kg</span></label>
+      <span class="mal">×</span>`;
+
+    if (einarmig) {
+      const l = e.messwerte.wdh_l, r = e.messwerte.wdh_r;
+      html += `<label class="feld schmal">
+        <input type="text" inputmode="numeric" value="${l != null ? formatZahl(l, 0) : ''}" placeholder="L"
+          data-change="k.wert" data-seg="${seg.id}" data-eintrag="${e.id}" data-typ="wdh_l">
+        <span>L</span></label>
+        <span class="mal">/</span>
+        <label class="feld schmal">
+        <input type="text" inputmode="numeric" value="${r != null ? formatZahl(r, 0) : ''}" placeholder="R"
+          data-change="k.wert" data-seg="${seg.id}" data-eintrag="${e.id}" data-typ="wdh_r">
+        <span>R</span></label>`;
+    } else {
+      const w = e.messwerte.wdh;
+      html += `<label class="feld">
+        <input type="text" inputmode="numeric" value="${w != null ? formatZahl(w, 0) : ''}" placeholder="Wdh"
+          data-change="k.wert" data-seg="${seg.id}" data-eintrag="${e.id}" data-typ="wdh">
+        <span>Wdh</span></label>`;
+    }
+    return html;
+  }
+
   function satzZeileHtml(session, seg, aktivitaet, eintrag, idx) {
     const warm = hatFlag(eintrag, 'aufwaermsatz');
     const pr = eintragPR(S(), identVon(seg), eintrag, session.datum);
     return `<div class="satz ${warm ? 'warm' : ''}">
       <button class="satz-nr ${warm ? 'warm' : ''}" data-action="k.warmup" data-seg="${seg.id}" data-eintrag="${eintrag.id}" title="Aufwärmsatz umschalten">${warm ? 'A' : idx + 1}</button>
-      ${eintragInputsHtml(aktivitaet, seg, eintrag)}
+      ${kraftFelderHtml(aktivitaet, seg, eintrag)}
       ${pr ? `<span class="pr">🎉${pr === 'wdh' ? ' Wdh' : ''}</span>` : ''}
       <button class="weg" data-action="k.satzWeg" data-seg="${seg.id}" data-eintrag="${eintrag.id}">✕</button>
     </div>`;
@@ -581,16 +685,32 @@ export function erstelleKraftModul(ctx) {
           </label>
         </div>`;
 
-      // Messwerte an/abwählen — genau die Felder, die beim Loggen erscheinen
+      // Messwerte an/abwählen — bei Kraft steuern die Flags (Einarmig) die Wdh-Form,
+      // daher hier für Kraft nur die Cardio-Zusatzwerte anbieten.
       const auswahl = akt.kategorie === 'kraft'
-        ? ['gewicht', 'wdh', 'dauer']
+        ? []
         : ['dauer', 'puls_avg', 'puls_max', 'distanz', 'hoehenmeter', 'kalorien'];
       const aktiv = akt.messwerte ?? [];
-      html += `<p class="sheet-abschnitt">Messwerte beim Loggen</p>
-        <div class="chip-zeile">${auswahl.map(typ => {
-          const an = aktiv.includes(typ);
-          return `<button class="chip ${an ? 'aktiv' : ''}" data-action="k.mwToggle" data-akt="${aktId}" data-typ="${typ}">${esc(MESSWERTE[typ].label)}</button>`;
-        }).join('')}</div>`;
+      if (auswahl.length) {
+        html += `<p class="sheet-abschnitt">Messwerte beim Loggen</p>
+          <div class="chip-zeile">${auswahl.map(typ => {
+            const an = aktiv.includes(typ);
+            return `<button class="chip ${an ? 'aktiv' : ''}" data-action="k.mwToggle" data-akt="${aktId}" data-typ="${typ}">${esc(MESSWERTE[typ].label)}</button>`;
+          }).join('')}</div>`;
+      }
+
+      // Übungstyp (nur Kraft): einarmig / assistiert
+      if (akt.kategorie === 'kraft') {
+        const ein = !!ziel.einstellungen?.einarmig;
+        const ass = !!ziel.einstellungen?.assist;
+        html += `<p class="sheet-abschnitt">Übungstyp</p>
+          <div class="chip-zeile">
+            <button class="chip ${ein ? 'aktiv' : ''}" data-action="k.flagEinarmig" data-akt="${aktId}">Einarmig · L/R</button>
+            <button class="chip ${ass ? 'aktiv' : ''}" data-action="k.flagAssist" data-akt="${aktId}">Assistiert · −/+</button>
+          </div>
+          ${ein ? '<p class="dim klein-text">Wdh werden für links und rechts getrennt erfasst. Gesteigert wird erst, wenn beide Seiten das Ziel schaffen.</p>' : ''}
+          ${ass ? '<p class="dim klein-text">Gewicht als Hilfe (−) oder Zusatzgewicht (+). Weniger Hilfe = Fortschritt.</p>' : ''}`;
+      }
     }
 
     if (akt.kategorie === 'kraft') {
@@ -744,9 +864,32 @@ export function erstelleKraftModul(ctx) {
       const seg = segFinden(d.seg);
       const e = seg?.eintraege.find(x => x.id === d.eintrag); if (!e) return;
       const def = MESSWERTE[d.typ];
-      const wert = def.anzeige === 'zeit' ? parseDauer(el.value) : parseZahl(el.value);
-      if (wert == null) delete e.messwerte[d.typ]; else e.messwerte[d.typ] = wert;
+      let wert = def.anzeige === 'zeit' ? parseDauer(el.value) : parseZahl(el.value);
+      if (wert == null) { delete e.messwerte[d.typ]; }
+      else {
+        // Beim Gewicht assistierter Übungen: eingegebener Betrag bekommt das
+        // aktuelle Vorzeichen (Hilfe = negativ). Toggle steuert das Vorzeichen.
+        if (d.typ === 'gewicht' && effektiveEinstellungen(seg).assist) {
+          // Vorzeichen: vorhandenes kg-Vorzeichen, sonst gemerkte Absicht (_plus), Default = Hilfe (−)
+          const plus = e.messwerte.gewicht != null ? e.messwerte.gewicht >= 0 : (e._plus ?? false);
+          wert = plus ? Math.abs(wert) : -Math.abs(wert);
+          delete e._plus;
+        }
+        e.messwerte[d.typ] = wert;
+      }
       await ctx.save(); ctx.render();
+    },
+    async 'k.vorzeichen'(d) {
+      const seg = segFinden(d.seg);
+      const e = seg?.eintraege.find(x => x.id === d.eintrag); if (!e) return;
+      const kg = e.messwerte.gewicht;
+      if (typeof kg === 'number' && kg !== 0) {
+        e.messwerte.gewicht = -kg;               // Wert da → einfach spiegeln
+        delete e._plus;
+      } else {
+        e._plus = !(e._plus ?? false);           // noch kein Wert → Absicht merken
+      }
+      await speichernUndZeigen();
     },
     async 'k.altWahl'(d) {
       const seg = segFinden(d.seg); if (!seg) return;
@@ -899,6 +1042,24 @@ export function erstelleKraftModul(ctx) {
       } catch (err) {
         alert(err.message);
       }
+    },
+    async 'k.flagEinarmig'(d) {
+      const akt = findeAktivitaet(S(), d.akt); if (!akt) return;
+      akt.einstellungen ??= {};
+      if (akt.einstellungen.einarmig) delete akt.einstellungen.einarmig;
+      else akt.einstellungen.einarmig = true;
+      await ctx.save();
+      sheet.aktualisiere(einstellungenHtml(d.akt, null));
+      ctx.render();
+    },
+    async 'k.flagAssist'(d) {
+      const akt = findeAktivitaet(S(), d.akt); if (!akt) return;
+      akt.einstellungen ??= {};
+      if (akt.einstellungen.assist) delete akt.einstellungen.assist;
+      else akt.einstellungen.assist = true;
+      await ctx.save();
+      sheet.aktualisiere(einstellungenHtml(d.akt, null));
+      ctx.render();
     },
     async 'k.progArt'(d) {
       const akt = findeAktivitaet(S(), d.akt); if (!akt) return;
