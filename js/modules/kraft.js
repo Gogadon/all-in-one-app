@@ -427,6 +427,8 @@ export function erstelleKraftModul(ctx) {
   let picker = null;                // { ziel:'session'|'einheit', einheitId?, suche:'' }
   let progMetrik = 'gewicht';       // Fortschritt: 'gewicht' | 'avg' | 'volumen'
   const progExpand = new Set();     // Übungs-IDs mit vollständig ausgeklappter Verlaufsliste
+  const progGruppeAuf = new Set();  // manuell aufgeklappte Einheiten-Gruppen im Fortschritt
+  const progGruppeZu = new Set();   // manuell zugeklappte (übersteuert die heute-Automatik)
 
   const S = () => ctx.state;
   // Heutige Kraft-Sessions; eine noch OFFENE hat Vorrang (die bearbeitet man
@@ -931,32 +933,46 @@ export function erstelleKraftModul(ctx) {
     };
 
     // Nach Einheiten gruppieren: jede Übung erscheint unter ihrer ersten Einheit.
-    // Reihenfolge der Einheiten = Bibliothek-Reihenfolge; Übungen in Einheiten-Reihenfolge.
+    // Gruppen sind aufklappbar; die HEUTE fällige Einheit ist standardmäßig offen.
     const einheiten = einheitenBibliothek(S(), MODUL);
+    const heute = naechsteEinheit(S(), MODUL);
     const schonGezeigt = new Set();
-    let gruppen = '';
 
+    // Ist die Gruppe offen? Heute-Einheit offen, außer manuell zugeklappt;
+    // andere zu, außer manuell aufgeklappt.
+    const gruppeOffen = (eid) => eid === heute?.id
+      ? !progGruppeZu.has(eid)
+      : progGruppeAuf.has(eid);
+
+    const gruppeHtml = (id, titel, kartenInner, anzahl) => {
+      const offen = gruppeOffen(id);
+      const heuteMark = id === heute?.id ? ' <span class="dim">· heute</span>' : '';
+      return `<button class="prog-gruppe ${offen ? 'auf' : ''}" data-action="k.progGruppe" data-eid="${esc(id)}">
+          <span class="gruppe-titel2">${esc(titel)}${heuteMark}</span>
+          <span class="gruppe-meta">${anzahl} <span class="pfeil">${offen ? '⌃' : '⌄'}</span></span>
+        </button>${offen ? `<div class="gruppe-inhalt">${kartenInner}</div>` : ''}`;
+    };
+
+    let gruppen = '';
     for (const einheit of einheiten) {
-      let kartenInGruppe = '';
+      let kartenInGruppe = '', n = 0;
       for (const vorlage of einheit.segmente) {
         const akt = findeAktivitaet(S(), vorlage.aktivitaetId);
         if (!akt || akt.kategorie !== 'kraft' || schonGezeigt.has(akt.id)) continue;
         const karte = karteFuer(akt);
-        if (karte) { kartenInGruppe += karte; schonGezeigt.add(akt.id); }
+        if (karte) { kartenInGruppe += karte; schonGezeigt.add(akt.id); n++; }
       }
-      if (kartenInGruppe) {
-        gruppen += `<p class="sheet-abschnitt zwischen gruppe-titel">${esc(einheit.name)}</p>${kartenInGruppe}`;
-      }
+      if (kartenInGruppe) gruppen += gruppeHtml(einheit.id, einheit.name, kartenInGruppe, n);
     }
 
-    // Übungen ohne Einheit (z.B. archivierte Pläne, freie Übungen) → „Weitere"
-    let weitere = '';
+    // Übungen ohne Einheit → „Weitere" (immer aufklappbar, nie automatisch offen)
+    let weitere = '', wn = 0;
     for (const akt of S().bibliothek) {
       if (akt.kategorie !== 'kraft' || schonGezeigt.has(akt.id)) continue;
       const karte = karteFuer(akt);
-      if (karte) { weitere += karte; schonGezeigt.add(akt.id); }
+      if (karte) { weitere += karte; schonGezeigt.add(akt.id); wn++; }
     }
-    if (weitere) gruppen += `<p class="sheet-abschnitt zwischen gruppe-titel">Weitere</p>${weitere}`;
+    if (weitere) gruppen += gruppeHtml('__weitere__', 'Weitere', weitere, wn);
 
     html += gruppen || `<div class="karte leer anim"><p>Noch keine abgeschlossenen Kraft-Sessions. Sobald du Übungen abhakst, erscheint hier dein Verlauf.</p></div>`;
     return html;
@@ -1026,6 +1042,19 @@ export function erstelleKraftModul(ctx) {
 
     'k.progMetrik'(d) { progMetrik = d.m; ctx.render(); },
     'k.progExpand'(d) { progExpand.has(d.akt) ? progExpand.delete(d.akt) : progExpand.add(d.akt); ctx.render(); },
+    'k.progGruppe'(d) {
+      const eid = d.eid;
+      const heute = naechsteEinheit(S(), MODUL);
+      const istHeute = eid === heute?.id;
+      // aktuellen Offen-Zustand ermitteln und kippen
+      const offen = istHeute ? !progGruppeZu.has(eid) : progGruppeAuf.has(eid);
+      if (offen) {  // → zuklappen
+        if (istHeute) progGruppeZu.add(eid); else progGruppeAuf.delete(eid);
+      } else {      // → aufklappen
+        if (istHeute) progGruppeZu.delete(eid); else progGruppeAuf.add(eid);
+      }
+      ctx.render();
+    },
 
     'k.auf'(d) {
       const seg = segFinden(d.seg); if (!seg) { ctx.render(); return; }
