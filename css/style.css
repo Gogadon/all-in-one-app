@@ -302,3 +302,19 @@ h1,h2,h3,.num{font-family:var(--font-display);letter-spacing:-.02em}
   display:inline-flex;align-items:center;gap:6px}
 .prog-gruppe .pfeil{font-size:14px}
 .gruppe-inhalt{display:flex;flex-direction:column}
+
+/* Notizen: Geräte-Notiz (an Übung) + Session-Notiz (Tag) */
+.geraete-notiz{display:flex;gap:7px;align-items:flex-start;
+  margin:8px 0 2px;padding:8px 10px;font-size:12.5px;line-height:1.4;
+  background:rgba(55,215,244,.07);border:1px solid rgba(55,215,244,.2);
+  border-radius:var(--r-icon);color:var(--text)}
+.geraete-notiz .gn-icon{flex:none;opacity:.8}
+.notiz-karte{padding:14px 16px}
+.notiz-karte .sheet-abschnitt{margin-bottom:8px}
+.notiz-feld{width:100%;background:var(--surface-2);border:1px solid var(--line);
+  border-radius:var(--r-icon);padding:10px 12px;color:var(--text);
+  font-family:var(--font-body);font-size:13.5px;line-height:1.5;resize:vertical}
+.notiz-feld:focus{outline:none;border-color:var(--kraft)}
+.notiz-karte.ro{border-color:rgba(252,180,75,.25)}
+.notiz-text{font-size:13.5px;line-height:1.5;color:var(--text);white-space:pre-wrap}
+.segment.ro .seg-titel{cursor:default}
