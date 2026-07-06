@@ -496,7 +496,27 @@ export function erstelleKraftModul(ctx) {
 
     html += s.segmente.map(seg => segmentKarteHtml(s, seg)).join('');
 
-    html += `<button class="knopf geist voll" data-action="k.uebungPlus">+ Übung hinzufügen</button>`;
+    if (!fertig) {
+      html += `<button class="knopf geist voll" data-action="k.uebungPlus">+ Übung hinzufügen</button>`;
+    }
+
+    // Session-Notiz (Tagesnotiz): immer sichtbar. Bei abgeschlossen nur lesbar,
+    // sofern etwas drin steht.
+    const notiz = (s.notiz ?? '').trim();
+    if (!fertig) {
+      html += `<div class="karte notiz-karte">
+        <label class="sheet-abschnitt" for="sessionNotiz">Notiz zum Tag</label>
+        <textarea id="sessionNotiz" class="notiz-feld" rows="2"
+          placeholder="z.B. Schulter links hat gezwickt, Kopf war nicht ganz da…"
+          data-change="k.sessionNotiz">${esc(s.notiz ?? '')}</textarea>
+      </div>`;
+    } else if (notiz) {
+      html += `<div class="karte notiz-karte ro">
+        <span class="sheet-abschnitt">Notiz zum Tag</span>
+        <p class="notiz-text">${esc(notiz)}</p>
+      </div>`;
+    }
+
     html += fertig
       ? `<div class="fertig-banner anim">
           <span>Einheit abgeschlossen ✓</span>
@@ -510,23 +530,30 @@ export function erstelleKraftModul(ctx) {
     const { aktivitaet, anzeigeName } = loeseSegmentAuf(S(), seg);
     if (!aktivitaet) return '';
     const istKraft = aktivitaet.kategorie === 'kraft';
-    // Offen-Regel überlebt Reloads: nicht-erledigte Übungen sind offen,
-    // sofern nicht manuell zugeklappt; erledigte sind zu, sofern nicht
-    // manuell aufgeklappt. (offen/zu-Sets sind nur die manuelle Übersteuerung.)
+    const readonly = session.abgeschlossen === true;   // abgeschlossen → nur ansehen
     const check = seg.erledigt === true;
-    const auf = check ? offen.has(seg.id) : !zu.has(seg.id);
+    // Offen-Regel: bei abgeschlossen sind erledigte zu (nur Zusammenfassung),
+    // sonst wie gehabt. Manuelles Auf-/Zuklappen nur im offenen Zustand.
+    const auf = readonly ? false : (check ? offen.has(seg.id) : !zu.has(seg.id));
     const zsf = istKraft ? segmentZusammenfassungKraft(seg) : segmentZusammenfassungWerte(aktivitaet, seg);
     const punktKlasse = aktivitaet.kategorie === 'kraft' ? 'kraft' : aktivitaet.kategorie;
+    const geraeteNotiz = (aktivitaet.notiz ?? '').trim();
 
-    let html = `<div class="karte segment ${check ? 'erledigt' : ''} anim">
+    // Kopf: bei readonly kein ⚙️, Titel nicht klickbar, Check nur Anzeige
+    let html = `<div class="karte segment ${check ? 'erledigt' : ''} ${readonly ? 'ro' : ''} anim">
       <div class="seg-kopf">
-        <button class="check ${check ? 'an' : ''}" data-action="k.check" data-seg="${seg.id}" aria-label="abhaken"></button>
-        <button class="seg-titel" data-action="k.auf" data-seg="${seg.id}">
+        <${readonly ? 'span' : 'button'} class="check ${check ? 'an' : ''}" ${readonly ? '' : `data-action="k.check" data-seg="${seg.id}"`} aria-label="abhaken"></${readonly ? 'span' : 'button'}>
+        <${readonly ? 'div' : 'button'} class="seg-titel" ${readonly ? '' : `data-action="k.auf" data-seg="${seg.id}"`}>
           <strong><span class="punkt ${punktKlasse}"></span>${esc(anzeigeName)}</strong>
           <small class="dim">${esc(zsf)}</small>
-        </button>
-        <button class="zahn" data-action="k.einstellungen" data-akt="${aktivitaet.id}" ${seg.altOf ? `data-alt="${seg.altOf}"` : ''}>⚙️</button>
+        </${readonly ? 'div' : 'button'}>
+        ${readonly ? '' : `<button class="zahn" data-action="k.einstellungen" data-akt="${aktivitaet.id}" ${seg.altOf ? `data-alt="${seg.altOf}"` : ''}>⚙️</button>`}
       </div>`;
+
+    // Geräte-Notiz: immer sichtbar (auch readonly), wenn vorhanden
+    if (geraeteNotiz) {
+      html += `<div class="geraete-notiz"><span class="gn-icon">🔧</span>${esc(geraeteNotiz)}</div>`;
+    }
 
     if (auf) {
       html += `<div class="seg-inhalt">`;
@@ -570,9 +597,8 @@ export function erstelleKraftModul(ctx) {
         html += seg.eintraege.map((e, i) => satzZeileHtml(session, seg, aktivitaet, e, i)).join('');
         html += `<button class="knopf klein" data-action="k.satzPlus" data-seg="${seg.id}">+ Satz</button>`;
       } else {
-        // Cardio/Sonstiges: genau ein Eintrag → Felder direkt anzeigen.
         let e = seg.eintraege[0];
-        if (!e) { e = neuerEintrag({}); seg.eintraege.push(e); } // Altbestand absichern
+        if (!e) { e = neuerEintrag({}); seg.eintraege.push(e); }
         html += `<div class="satz cardio">${eintragInputsHtml(aktivitaet, seg, e)}</div>`;
       }
 
@@ -791,6 +817,14 @@ export function erstelleKraftModul(ctx) {
             <input type="text" value="${esc(akt.name)}" data-change="k.aktName" data-akt="${aktId}">
           </label>
         </div>`;
+
+      // Geräte-Notiz: session-übergreifend, immer sichtbar im Heute-Tab.
+      // Für Techno-Gym & Co.: Sitzhöhe, Polster-Position, Pin-Einstellung…
+      html += `<p class="sheet-abschnitt">Geräte-Notiz</p>
+        <textarea class="notiz-feld" rows="2"
+          placeholder="z.B. Sitz Stufe 4 · Polster 2. Loch · Pin auf 60"
+          data-change="k.geraeteNotiz" data-akt="${aktId}">${esc(akt.notiz ?? '')}</textarea>
+        <p class="dim klein-text">Bleibt dauerhaft an dieser Übung und erscheint beim Training.</p>`;
 
       // Messwerte an/abwählen — bei Kraft steuern die Flags (Einarmig) die Wdh-Form,
       // daher hier für Kraft nur die Cardio-Zusatzwerte anbieten.
@@ -1014,6 +1048,11 @@ export function erstelleKraftModul(ctx) {
       const s = neueSession(); s.modul = MODUL;
       S().sessions.push(s);
       await speichernUndZeigen();
+    },
+    async 'k.sessionNotiz'(d, el) {
+      const s = heutigeSession(); if (!s) return;
+      s.notiz = el.value;
+      await ctx.save();   // kein Re-Render → Cursor/Fokus im Textfeld bleibt
     },
     async 'k.abschliessen'() {
       const s = heutigeSession(); if (!s) return;
@@ -1262,6 +1301,12 @@ export function erstelleKraftModul(ctx) {
       if (!name) return;
       benenneUm(S(), d.akt, name);
       await ctx.save(); ctx.render(); // Sheet-Titel nicht neu bauen (Fokus im Feld halten)
+    },
+    async 'k.geraeteNotiz'(d, el) {
+      const akt = findeAktivitaet(S(), d.akt); if (!akt) return;
+      const t = el.value.trim();
+      if (t) akt.notiz = t; else delete akt.notiz;
+      await ctx.save(); ctx.render();   // Heute-Tab zeigt die Notiz dann sofort
     },
     async 'k.mwToggle'(d) {
       const akt = findeAktivitaet(S(), d.akt); if (!akt) return;
