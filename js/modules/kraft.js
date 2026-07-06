@@ -33,6 +33,7 @@ import {
   naechsteEinheit, schalteWeiter, sessionAusEinheit,
 } from '../core/plan.js';
 import { sparkline, balken, trend } from '../ui/charts.js';
+import { teileKarte } from '../ui/share.js';
 
 export const MODUL = 'kraft';
 
@@ -317,6 +318,63 @@ export function fortschrittsSerie(state, identId, { limit = 12 } = {}) {
   return limit ? punkte.slice(-limit) : punkte;
 }
 
+/**
+ * Highlights einer Session für die Teilen-Karte:
+ * PRs (Gewicht/Wdh) und Steigerungen ggü. der letzten Session derselben Übung.
+ * Gibt Liste von { name, art:'pr-gewicht'|'pr-wdh'|'up', text } zurück.
+ */
+export function sessionHighlights(state, session) {
+  const out = [];
+  for (const seg of session.segmente) {
+    if (seg.erledigt !== true) continue;
+    const { aktivitaet, anzeigeName } = loeseSegmentAuf(state, seg);
+    if (!aktivitaet || aktivitaet.kategorie !== 'kraft') continue;
+    const ident = identVon(seg);
+
+    // PR prüfen: bester Arbeitssatz dieser Session vs. Historie davor
+    let prArt = null;
+    for (const e of seg.eintraege) {
+      const pr = eintragPR(state, ident, e, session.datum);
+      if (pr === 'gewicht') { prArt = 'gewicht'; break; }
+      if (pr === 'wdh' && !prArt) prArt = 'wdh';
+    }
+    if (prArt) {
+      out.push({ name: anzeigeName, art: 'pr-' + prArt,
+        text: prArt === 'gewicht' ? 'Neues Top-Gewicht' : 'Wdh-Rekord' });
+      continue; // PR schlägt Steigerung — nicht doppelt melden
+    }
+
+    // Steigerung ggü. der LETZTEN Session (Top-Gewicht bzw. dessen Wdh)
+    const jetzt = (() => {
+      let topKg = null, wdh = null;
+      for (const e of seg.eintraege) {
+        if (hatFlag(e, 'aufwaermsatz') || typeof e.messwerte.gewicht !== 'number') continue;
+        const kg = e.messwerte.gewicht, w = effektiveWdh(e);
+        if (topKg == null || kg > topKg) { topKg = kg; wdh = w; }
+        else if (kg === topKg && w != null && (wdh == null || w > wdh)) wdh = w;
+      }
+      return { topKg, wdh };
+    })();
+    const last = letzteSaetze(state, ident, session.datum);
+    if (jetzt.topKg != null && last) {
+      let vorKg = null, vorWdh = null;
+      for (const e of last.eintraege) {
+        const kg = e.messwerte.gewicht, w = effektiveWdh(e);
+        if (vorKg == null || kg > vorKg) { vorKg = kg; vorWdh = w; }
+        else if (kg === vorKg && w != null && (vorWdh == null || w > vorWdh)) vorWdh = w;
+      }
+      if (vorKg != null) {
+        if (jetzt.topKg > vorKg) {
+          out.push({ name: anzeigeName, art: 'up', text: `+${formatZahl(jetzt.topKg - vorKg)} kg` });
+        } else if (jetzt.topKg === vorKg && jetzt.wdh != null && vorWdh != null && jetzt.wdh > vorWdh) {
+          out.push({ name: anzeigeName, art: 'up', text: `+${jetzt.wdh - vorWdh} Wdh` });
+        }
+      }
+    }
+  }
+  return out;
+}
+
 /** ISO-Wochenschlüssel "YYYY-Www" für Wochenvolumen-Gruppierung. */
 function isoWoche(iso) {
   const [y, m, d] = iso.split('-').map(Number);
@@ -520,7 +578,10 @@ export function erstelleKraftModul(ctx) {
     html += fertig
       ? `<div class="fertig-banner anim">
           <span>Einheit abgeschlossen ✓</span>
-          <button class="knopf klein" data-action="k.wiederOeffnen">Wieder öffnen</button>
+          <span class="banner-knoepfe">
+            <button class="knopf klein" data-action="k.teilen">Teilen</button>
+            <button class="knopf klein" data-action="k.wiederOeffnen">Wieder öffnen</button>
+          </span>
         </div>`
       : `<button class="knopf primaer gross voll" data-action="k.abschliessen">Einheit abschließen ✓</button>`;
     return html;
@@ -1053,6 +1114,41 @@ export function erstelleKraftModul(ctx) {
       const s = heutigeSession(); if (!s) return;
       s.notiz = el.value;
       await ctx.save();   // kein Re-Render → Cursor/Fokus im Textfeld bleibt
+    },
+    async 'k.teilen'(d) {
+      // Session finden: aus Heute oder per Datum aus dem Verlauf
+      const s = d.datum
+        ? S().sessions.find(x => x.id === d.sid)
+        : heutigeSession();
+      if (!s) return;
+      const einheit = s.ausPlan ? findeEinheit(S(), MODUL, s.ausPlan) : null;
+      const zeilen = [];
+      for (const seg of s.segmente) {
+        if (seg.erledigt !== true) continue;
+        const { aktivitaet, anzeigeName } = loeseSegmentAuf(S(), seg);
+        if (!aktivitaet) continue;
+        const detail = aktivitaet.kategorie === 'kraft'
+          ? seg.eintraege.map(fmtSatz).join(', ')
+          : segmentZusammenfassungWerte(aktivitaet, seg);
+        zeilen.push({ name: anzeigeName, detail });
+      }
+      const hl = sessionHighlights(S(), s).map(h => ({
+        name: h.name, text: h.text, pr: h.art.startsWith('pr'),
+      }));
+      const daten = {
+        titel: einheit ? einheit.name : 'Training',
+        datum: formatDatum(s.datum),
+        volumenText: `${formatZahl(sessionVolumenErledigt(s), 0)} kg`,
+        zeilen,
+        highlights: hl,
+        notiz: (s.notiz ?? '').trim() || null,
+      };
+      try {
+        const res = await teileKarte(daten, `gogadon-${s.datum}.png`);
+        if (res === 'heruntergeladen') alert('Bild gespeichert. ✓');
+      } catch (err) {
+        alert('Teilen nicht möglich: ' + err.message);
+      }
     },
     async 'k.abschliessen'() {
       const s = heutigeSession(); if (!s) return;
