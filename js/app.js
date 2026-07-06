@@ -54,6 +54,7 @@ const kraft = erstelleKraftModul(ctx);
 // ------------------------------------------------------------
 const actions = {
   'tab'(d) { tab = d.tab; sheet.schliesse(); render(); window.scrollTo(0, 0); },
+  'verlaufSub'(d) { verlaufSub = d.s; render(); mainInner.parentElement.scrollTo(0, 0); },
 
   'daten.export'() {
     const blob = new Blob([exportBackup(state)], { type: 'application/json' });
@@ -111,9 +112,20 @@ function navHtml() {
 // ------------------------------------------------------------
 // Verlauf-Tab (modulübergreifender Feed — Phase 1: nur Kraft da)
 // ------------------------------------------------------------
+let verlaufSub = 'feed';   // 'feed' | 'fortschritt'
+
 function verlaufHtml() {
+  const umschalter = `<div class="chip-zeile" style="margin:0 2px 14px">
+    <button class="chip ${verlaufSub === 'feed' ? 'aktiv' : ''}" data-action="verlaufSub" data-s="feed">Verlauf</button>
+    <button class="chip ${verlaufSub === 'fortschritt' ? 'aktiv' : ''}" data-action="verlaufSub" data-s="fortschritt">Fortschritt</button>
+  </div>`;
+
+  if (verlaufSub === 'fortschritt') {
+    return umschalter + kraft.fortschrittHtml();
+  }
+
   const sessions = [...state.sessions].sort((a, b) => b.datum.localeCompare(a.datum));
-  let html = `<div class="tab-kopf anim"><span class="eyebrow"><span class="pip"></span>Alle Aktivitäten</span><h1>Verlauf</h1></div>`;
+  let html = umschalter + `<div class="tab-kopf anim" style="margin-top:0"><span class="eyebrow"><span class="pip"></span>Alle Aktivitäten</span><h1>Verlauf</h1></div>`;
   if (!sessions.length) {
     return html + `<div class="karte leer anim"><p>Noch keine Sessions. Deine erste startest du im Heute-Tab.</p></div>`;
   }
