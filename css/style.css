@@ -318,3 +318,6 @@ h1,h2,h3,.num{font-family:var(--font-display);letter-spacing:-.02em}
 .notiz-karte.ro{border-color:rgba(252,180,75,.25)}
 .notiz-text{font-size:13.5px;line-height:1.5;color:var(--text);white-space:pre-wrap}
 .segment.ro .seg-titel{cursor:default}
+
+/* Banner mit mehreren Knöpfen (Teilen + Wieder öffnen) */
+.banner-knoepfe{display:flex;gap:8px;flex:none}
