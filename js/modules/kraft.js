@@ -277,17 +277,22 @@ export function fmtSatz(e) {
 
 // --- Fortschritt (für den Progress-Bereich) ---
 
-/** Bestwerte eines erledigten Segments: Top-Gewicht, Wdh dabei, Volumen. */
+/** Bestwerte eines erledigten Segments: Top-Gewicht, Wdh dabei, Volumen, Ø-Gewicht. */
 function segmentBestwerte(segment) {
   let topKg = null, wdhBeiTop = null, vol = 0;
+  let gewichtWdhSumme = 0, wdhSumme = 0;   // für Ø-Gewicht (nach Wdh gewichtet)
   for (const e of segment.eintraege) {
     if (!istArbeitssatz(e)) continue;
     vol += satzVolumen(e);
     const kg = e.messwerte.gewicht, w = effektiveWdh(e);
     if (topKg == null || kg > topKg) { topKg = kg; wdhBeiTop = w; }
     else if (kg === topKg && w != null && (wdhBeiTop == null || w > wdhBeiTop)) { wdhBeiTop = w; }
+    // Ø-Gewicht: jeder Arbeitssatz mit seinen (Gesamt-)Wdh gewichtet
+    const gw = gesamtWdh(e);
+    if (gw > 0) { gewichtWdhSumme += kg * gw; wdhSumme += gw; }
   }
-  return { topKg, wdhBeiTop, vol };
+  const avgKg = wdhSumme > 0 ? Math.round((gewichtWdhSumme / wdhSumme) * 100) / 100 : topKg;
+  return { topKg, wdhBeiTop, vol, avgKg };
 }
 
 /**
@@ -303,7 +308,9 @@ export function fortschrittsSerie(state, identId, { limit = 12 } = {}) {
     for (const seg of s.segmente) {
       if (seg.erledigt === true && identVon(seg) === identId && seg.eintraege.length) {
         const b = segmentBestwerte(seg);
-        if (b.topKg != null || b.vol > 0) punkte.push({ datum: s.datum, ...b });
+        if (b.topKg != null || b.vol > 0) {
+          punkte.push({ datum: s.datum, ...b, saetze: seg.eintraege.map(fmtSatz) });
+        }
       }
     }
   }
@@ -394,7 +401,8 @@ export function erstelleKraftModul(ctx) {
   const altOffen = new Set();       // offene Alternativen-Umschalter
   const planOffen = new Set();      // aufgeklappte Plan-Einheiten
   let picker = null;                // { ziel:'session'|'einheit', einheitId?, suche:'' }
-  let progMetrik = 'gewicht';       // Fortschritt: 'gewicht' | 'volumen'
+  let progMetrik = 'gewicht';       // Fortschritt: 'gewicht' | 'avg' | 'volumen'
+  const progExpand = new Set();     // Übungs-IDs mit vollständig ausgeklappter Verlaufsliste
 
   const S = () => ctx.state;
   // Heutige Kraft-Sessions; eine noch OFFENE hat Vorrang (die bearbeitet man
@@ -851,10 +859,11 @@ export function erstelleKraftModul(ctx) {
       </div>`;
     }
 
-    // Metrik-Umschalter
+    // Metrik-Umschalter (3 Metriken)
     html += `<div class="chip-zeile" style="margin:16px 2px 4px">
       <button class="chip ${progMetrik === 'gewicht' ? 'aktiv' : ''}" data-action="k.progMetrik" data-m="gewicht">Top-Gewicht</button>
-      <button class="chip ${progMetrik === 'volumen' ? 'aktiv' : ''}" data-action="k.progMetrik" data-m="volumen">Volumen/Übung</button>
+      <button class="chip ${progMetrik === 'avg' ? 'aktiv' : ''}" data-action="k.progMetrik" data-m="avg">Ø-Gewicht</button>
+      <button class="chip ${progMetrik === 'volumen' ? 'aktiv' : ''}" data-action="k.progMetrik" data-m="volumen">Volumen</button>
     </div>`;
 
     // Pro Übung eine Karte (nur solche mit ≥1 erledigter Session), alphabetisch
@@ -862,29 +871,50 @@ export function erstelleKraftModul(ctx) {
       .filter(a => a.kategorie === 'kraft')
       .sort((a, b) => a.name.localeCompare(b.name, 'de'));
 
+    // Wert + Anzeigetext je nach gewählter Metrik
+    const wertVon = p => progMetrik === 'volumen' ? p.vol : progMetrik === 'avg' ? p.avgKg : p.topKg;
+    const textVon = p => {
+      if (progMetrik === 'volumen') return `${formatZahl(p.vol, 0)} kg`;
+      if (progMetrik === 'avg') return `${formatZahl(p.avgKg)} kg`;
+      return `${formatZahl(p.topKg)} kg${p.wdhBeiTop != null ? ` × ${formatZahl(p.wdhBeiTop, 0)}` : ''}`;
+    };
+
     let karten = '';
     for (const akt of uebungen) {
-      const serie = fortschrittsSerie(S(), akt.id, { limit: 12 });
+      const serie = fortschrittsSerie(S(), akt.id, { limit: 999 });
       if (serie.length === 0) continue;
       const assistiert = !!akt.einstellungen?.assist;
-      const werte = progMetrik === 'volumen'
-        ? serie.map(p => p.vol)
-        : serie.map(p => p.topKg);
+      const werte = serie.map(wertVon);
       const letzterP = serie.at(-1);
-      const jetztText = progMetrik === 'volumen'
-        ? `${formatZahl(letzterP.vol, 0)} kg`
-        : `${formatZahl(letzterP.topKg)} kg${letzterP.wdhBeiTop != null ? ` × ${formatZahl(letzterP.wdhBeiTop, 0)}` : ''}`;
-      // Bei assistiert ist „mehr" (Richtung 0) besser — trend rechnet über Differenz,
-      // und da −12,5 > −15, ergibt +Differenz automatisch „up". Passt.
-      const t = trend(werte, { einheit: progMetrik === 'volumen' ? 'kg' : 'kg', hoeherBesser: true });
+      const t = trend(werte, { einheit: 'kg', hoeherBesser: true });
+
+      // Verlaufsliste: neueste zuerst, 5 sichtbar, Rest aufklappbar.
+      // Steigerung = Wert höher als in der chronologisch davorliegenden Session.
+      const mitRauf = serie.map((p, idx) => ({
+        ...p,
+        rauf: idx > 0 && wertVon(p) > wertVon(serie[idx - 1]),
+      }));
+      const rueck = [...mitRauf].reverse();
+      const offen = progExpand.has(akt.id);
+      const sichtbar = offen ? rueck : rueck.slice(0, 5);
+      const zeilen = sichtbar.map(p => `<div class="verlauf-zeile2">
+          <span class="dim datum">${esc(formatDatum(p.datum))}</span>
+          <span class="wert ${p.rauf ? 'rauf' : ''}">${esc(textVon(p))}${p.rauf ? ' ↑' : ''}</span>
+          <span class="dim saetze">${esc(p.saetze.join(', '))}</span>
+        </div>`).join('');
+      const mehr = rueck.length > 5
+        ? `<button class="knopf klein geist voll" data-action="k.progExpand" data-akt="${akt.id}">${offen ? 'Weniger anzeigen ⌃' : `Alle ${rueck.length} anzeigen ⌄`}</button>`
+        : '';
+
       karten += `<div class="karte prog-karte anim">
         <div class="prog-kopf">
           <div><strong>${esc(akt.name)}</strong>${assistiert ? ' <span class="dim">· assistiert</span>' : ''}
-            <div class="prog-jetzt">${esc(jetztText)}</div></div>
+            <div class="prog-jetzt">${esc(textVon(letzterP))}</div></div>
           <span class="prog-trend ${t.richtung}">${serie.length > 1 ? esc(t.text) : 'erste Session'}</span>
         </div>
         ${sparkline(werte, { farbe: '#CDFD34', breite: 320, hoehe: 60 })}
-        <div class="prog-fuss dim">${serie.length} Session${serie.length > 1 ? 's' : ''} · seit ${esc(formatDatum(serie[0].datum))}</div>
+        <div class="verlauf-liste2">${zeilen}</div>
+        ${mehr}
       </div>`;
     }
 
@@ -955,6 +985,7 @@ export function erstelleKraftModul(ctx) {
     },
 
     'k.progMetrik'(d) { progMetrik = d.m; ctx.render(); },
+    'k.progExpand'(d) { progExpand.has(d.akt) ? progExpand.delete(d.akt) : progExpand.add(d.akt); ctx.render(); },
 
     'k.auf'(d) {
       const seg = segFinden(d.seg); if (!seg) { ctx.render(); return; }
