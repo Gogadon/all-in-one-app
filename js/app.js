@@ -15,6 +15,7 @@ import {
   sessionVolumenErledigt, segmentZusammenfassungKraft, segmentZusammenfassungWerte,
 } from './modules/kraft.js';
 import { erstelleRadModul, MODUL as RAD, alleTouren, tourStatistik } from './modules/rad.js';
+import { erstelleChallengeModul, MODUL as CHALLENGE, fortschritt, GROESSEN } from './modules/challenge.js';
 
 const main = document.getElementById('main');
 const nav = document.getElementById('nav');
@@ -51,6 +52,7 @@ const ctx = {
 };
 const kraft = erstelleKraftModul(ctx);
 const rad = erstelleRadModul(ctx);
+const challenge = erstelleChallengeModul(ctx);
 
 // Welches Modul zeigt der Heute-/Verlauf-Tab gerade? (Plan bleibt Kraft.)
 let aktivesModul = KRAFT;
@@ -88,6 +90,7 @@ const actions = {
 
   ...kraft.actions,
   ...rad.actions,
+  ...challenge.actions,
 };
 
 // Klicks: nächstes Element mit data-action suchen und ausführen
@@ -131,10 +134,15 @@ function navHtml() {
   // Im Dashboard gibt es KEINE untere Navi — die Modul-Kacheln sind der Einstieg.
   if (tab === 'dashboard') return '';
 
-  // Im Modul: Start (führt heim) + die Tabs, die zum aktiven Modul passen.
-  // Plan nur bei Kraft (Rad hat keinen Zyklus).
-  const sichtbar = TABS.filter(t =>
-    t.id === 'dashboard' || t.id !== 'plan' || aktivesModul === KRAFT);
+  // Welche Tabs hat das aktive Modul? Start führt immer heim.
+  // Kraft: alle. Rad: kein Plan. Challenge: nur Heute (kein Plan/Verlauf).
+  const modulTabs = {
+    [KRAFT]:     ['dashboard', 'heute', 'plan', 'verlauf'],
+    [RAD]:       ['dashboard', 'heute', 'verlauf'],
+    [CHALLENGE]: ['dashboard', 'heute'],
+  };
+  const erlaubt = modulTabs[aktivesModul] ?? ['dashboard', 'heute'];
+  const sichtbar = TABS.filter(t => erlaubt.includes(t.id));
   return sichtbar.map(t =>
     `<button class="nav-tab ${tab === t.id ? 'aktiv' : ''}" data-action="tab" data-tab="${t.id}">
       ${t.icon}<span>${t.label}</span>
@@ -295,6 +303,12 @@ function dashboardHtml() {
   })();
   const radStat = tourStatistik(state);
   const radStatus = radStat.anzahl > 0 ? `${radStat.anzahl} Touren · ${Math.round(radStat.distanz / 1000)} km` : 'Noch keine Tour';
+  const chStatus = (() => {
+    const ziele = state.challenges ?? [];
+    if (!ziele.length) return 'Keine Ziele';
+    const offen = ziele.filter(z => !fortschritt(state, z).fertig).length;
+    return offen > 0 ? `${ziele.length} Ziele · ${offen} offen` : `${ziele.length} Ziele · alle geschafft ✓`;
+  })();
 
   html += `<div class="dash-module">
     <button class="modul-kachel kraft" data-action="modulOeffne" data-m="${KRAFT}">
@@ -304,6 +318,10 @@ function dashboardHtml() {
     <button class="modul-kachel rad" data-action="modulOeffne" data-m="${RAD}">
       <span class="mk-label">Rad</span>
       <span class="mk-status">${esc(radStatus)}</span>
+    </button>
+    <button class="modul-kachel challenge" data-action="modulOeffne" data-m="${CHALLENGE}">
+      <span class="mk-label">Challenge</span>
+      <span class="mk-status">${esc(chStatus)}</span>
     </button>
   </div>`;
 
@@ -341,7 +359,10 @@ function render() {
       mainInner.innerHTML = dashboardHtml();
       break;
     case 'heute':
-      mainInner.innerHTML = (aktivesModul === RAD ? rad.heuteHtml() : kraft.heuteHtml());
+      mainInner.innerHTML =
+        aktivesModul === RAD ? rad.heuteHtml()
+        : aktivesModul === CHALLENGE ? challenge.heuteHtml()
+        : kraft.heuteHtml();
       break;
     case 'plan':
       // Plan ist Kraft-spezifisch (Rad hat keinen Zyklus)
