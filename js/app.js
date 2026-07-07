@@ -142,10 +142,20 @@ function navHtml() {
     [CHALLENGE]: ['dashboard', 'heute'],
   };
   const erlaubt = modulTabs[aktivesModul] ?? ['dashboard', 'heute'];
+
+  // Manche Tabs heißen je Modul anders (Challenge: „Heute" → „Ziele").
+  const labelFuer = (t) =>
+    (t.id === 'heute' && aktivesModul === CHALLENGE) ? 'Ziele' : t.label;
+
+  // Challenge nutzt fürs „Heute" ein Zielscheiben-Icon statt der Hantel.
+  const zielIcon = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/></svg>';
+  const iconFuer = (t) =>
+    (t.id === 'heute' && aktivesModul === CHALLENGE) ? zielIcon : t.icon;
+
   const sichtbar = TABS.filter(t => erlaubt.includes(t.id));
   return sichtbar.map(t =>
     `<button class="nav-tab ${tab === t.id ? 'aktiv' : ''}" data-action="tab" data-tab="${t.id}">
-      ${t.icon}<span>${t.label}</span>
+      ${iconFuer(t)}<span>${labelFuer(t)}</span>
     </button>`).join('');
 }
 
