@@ -83,6 +83,7 @@ const actions = {
   },
 
   ...kraft.actions,
+  ...rad.actions,
 };
 
 // Klicks: nächstes Element mit data-action suchen und ausführen
