@@ -68,6 +68,26 @@ export const MESSWERTE = Object.freeze({
     agg: 'summe', summierbar: true,
     schritt: 10, dezimal: 0, optional: true,  // versteckt-Standard; Auto-Schätzung ab Etappe 2
   }),
+  tempo_avg: Object.freeze({
+    label: 'Ø-Geschw.', kurz: 'km/h', einheit: 'km/h',
+    agg: 'mittel', summierbar: false,
+    schritt: 0.1, dezimal: 1, optional: true,
+  }),
+  tempo_max: Object.freeze({
+    label: 'Max-Geschw.', kurz: 'km/h', einheit: 'km/h',
+    agg: 'max', summierbar: false,
+    schritt: 0.1, dezimal: 1, optional: true,
+  }),
+  watt_avg: Object.freeze({
+    label: 'Ø-Leistung', kurz: 'W', einheit: 'W',
+    agg: 'mittel', summierbar: false,
+    schritt: 1, dezimal: 0, optional: true,
+  }),
+  trittfrequenz: Object.freeze({
+    label: 'Ø-Trittfrequenz', kurz: '1/min', einheit: '1/min',
+    agg: 'mittel', summierbar: false,
+    schritt: 1, dezimal: 0, optional: true,
+  }),
 });
 
 /** Gibt es diesen Messwert-Typ? */
