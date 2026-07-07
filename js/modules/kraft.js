@@ -1115,7 +1115,27 @@ export function erstelleKraftModul(ctx) {
       s.segmente.forEach(seg => { offen.add(seg.id); bereiteSegmentVor(s, seg); });
       await speichernUndZeigen();
     },
-    async 'k.ueberspringen'() { schalteWeiter(S(), MODUL); await speichernUndZeigen(); },
+    async 'k.ueberspringen'() {
+      const naechste = naechsteEinheit(S(), MODUL);
+      const name = naechste?.name ?? 'Einheit';
+      const antwort = await bestaetige({
+        titel: 'Tag überspringen?',
+        text: `„${name}" wird übersprungen und der Zyklus rückt eine Position weiter.`,
+        jaText: 'Überspringen',
+        schalter: { label: 'Im Verlauf vermerken', an: false },
+      });
+      if (!antwort.ok) return;
+      if (antwort.schalter) {
+        // Schlanke Markierungs-Session: taucht als graue Zeile im Verlauf auf.
+        const s = neueSession(); s.modul = MODUL;
+        s.uebersprungen = true;
+        s.ausPlan = naechste?.id ?? null;
+        s.uebersprungenName = name;
+        S().sessions.push(s);
+      }
+      schalteWeiter(S(), MODUL);
+      await speichernUndZeigen();
+    },
     async 'k.frei'() {
       const s = neueSession(); s.modul = MODUL;
       S().sessions.push(s);
