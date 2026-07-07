@@ -134,6 +134,16 @@ function verlaufHtml() {
     return html + `<div class="karte leer anim"><p>Noch keine Sessions. Deine erste startest du im Heute-Tab.</p></div>`;
   }
   html += sessions.map(s => {
+    // Übersprungener Tag: schlichte graue Zeile, keine volle Karte.
+    if (s.uebersprungen) {
+      return `<div class="karte anim uebersprungen-karte">
+        <div class="verlauf-kopf">
+          <div><span class="dim">${esc(s.uebersprungenName ?? 'Einheit')} · übersprungen</span><br>
+            <small class="dim">${formatDatum(s.datum)}</small></div>
+          <span class="skip-ico">›</span>
+        </div>
+      </div>`;
+    }
     const einheit = s.ausPlan ? findeEinheit(state, s.modul ?? KRAFT, s.ausPlan) : null;
     const titel = einheit ? einheit.name : 'Freie Session';
     const vol = sessionVolumenErledigt(s);
