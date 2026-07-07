@@ -494,7 +494,7 @@ export function erstelleKraftModul(ctx) {
   // gerade), sonst die zuletzt angelegte. So blockiert eine bereits
   // abgeschlossene Einheit nicht das Starten einer zweiten am selben Tag.
   const heutigeSessions = () =>
-    S().sessions.filter(s => s.datum === heuteIso() && s.modul === MODUL);
+    S().sessions.filter(s => s.datum === heuteIso() && s.modul === MODUL && !s.uebersprungen);
   const heutigeSession = () => {
     const alle = heutigeSessions();
     return alle.find(s => !s.abgeschlossen) ?? alle.at(-1) ?? null;
