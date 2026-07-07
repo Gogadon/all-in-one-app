@@ -345,3 +345,21 @@ h1,h2,h3,.num{font-family:var(--font-display);letter-spacing:-.02em}
 .dialog-knoepfe{display:flex;gap:10px;justify-content:flex-end}
 .dialog-knoepfe .knopf{flex:1}
 .knopf.gefahr-voll{background:#ff6b6b;border-color:#ff6b6b;color:#0C0D0E;font-weight:700}
+
+/* Schalter im Dialog (Toggle) */
+.dlg-schalter{display:flex;align-items:center;justify-content:space-between;
+  width:100%;gap:12px;margin:4px 0 20px;padding:12px 14px;
+  background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-icon);
+  text-align:left}
+.dlg-schalter-text{font-size:14px;color:var(--text)}
+.dlg-schalter-knopf{flex:none;width:44px;height:26px;border-radius:13px;
+  background:var(--line);position:relative;transition:background .2s}
+.dlg-schalter-knopf::after{content:"";position:absolute;top:3px;left:3px;
+  width:20px;height:20px;border-radius:50%;background:var(--dim);
+  transition:transform .2s,background .2s}
+.dlg-schalter.an .dlg-schalter-knopf{background:var(--kraft)}
+.dlg-schalter.an .dlg-schalter-knopf::after{transform:translateX(18px);background:#0C0D0E}
+
+/* Übersprungener Tag im Verlauf */
+.uebersprungen-karte{opacity:.7;padding:12px 16px}
+.uebersprungen-karte .skip-ico{color:var(--dim);font-size:20px;font-weight:700}
