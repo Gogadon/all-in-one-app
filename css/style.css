@@ -442,3 +442,27 @@ h1,h2,h3,.num{font-family:var(--font-display);letter-spacing:-.02em}
 /* Dashboard: keine untere Navi → voller Platz, kein Navi-Padding */
 body.ohne-navi main{padding-bottom:16px}
 body.ohne-navi .nav{display:none}
+
+/* ===== Challenge-Modul ===== */
+.modul-kachel.challenge::before{background:var(--challenge)}
+.modul-kachel.challenge .mk-label{color:var(--challenge)}
+.eyebrow .pip.challenge{background:var(--challenge);box-shadow:0 0 10px var(--challenge)}
+.ch-karte{padding:16px}
+.ch-karte.fertig{border-color:rgba(205,253,52,.35)}
+.ch-kopf{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px}
+.ch-kopf strong{display:block;font-size:15px}
+.ch-kopf small{font-size:12px}
+.ch-weg{flex:none;color:var(--dim-2);font-size:14px;padding:2px 6px}
+.ch-zahlen{display:flex;align-items:baseline;gap:4px;margin-bottom:10px;flex-wrap:wrap}
+.ch-ist{font-family:var(--font-display);font-weight:800;font-size:26px;color:var(--challenge)}
+.ch-karte.fertig .ch-ist{color:var(--kraft)}
+.ch-fertig{margin-left:auto;color:var(--kraft);font-weight:600;font-size:13px}
+.ch-ablauf{margin-left:auto;color:#ff8a8a;font-weight:600;font-size:13px}
+.ch-balken{height:8px;border-radius:4px;background:var(--surface-2);overflow:hidden}
+.ch-fuell{height:100%;border-radius:4px;background:var(--challenge);transition:width .4s cubic-bezier(.2,.7,.2,1)}
+.ch-karte.fertig .ch-fuell{background:var(--kraft)}
+.ch-prozent{font-size:11px;margin-top:5px;text-align:right}
+.ch-ziel-feld{width:100%;background:var(--surface-2);border:1px solid var(--line);
+  border-radius:var(--r-icon);padding:11px 13px;color:var(--text);
+  font-family:var(--font-body);font-size:15px}
+.ch-ziel-feld:focus{outline:none;border-color:var(--challenge)}
