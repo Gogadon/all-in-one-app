@@ -438,3 +438,7 @@ h1,h2,h3,.num{font-family:var(--font-display);letter-spacing:-.02em}
 .dash-stat{display:flex;flex-direction:column;gap:3px;flex:1}
 .ds-zahl{font-family:var(--font-display);font-weight:800;font-size:22px;color:var(--text)}
 .dash-stat .dim{font-size:10.5px;line-height:1.2}
+
+/* Dashboard: keine untere Navi → voller Platz, kein Navi-Padding */
+body.ohne-navi main{padding-bottom:16px}
+body.ohne-navi .nav{display:none}
