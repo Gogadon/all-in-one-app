@@ -62,11 +62,6 @@ const actions = {
   'tab'(d) { tab = d.tab; unterseite = null; sheet.schliesse(); render(); window.scrollTo(0, 0); },
   'unterseiteAuf'(d) { unterseite = d.seite; render(); mainInner.parentElement.scrollTo(0, 0); },
   'unterseiteZu'() { unterseite = null; render(); mainInner.parentElement.scrollTo(0, 0); },
-  'modulWechsel'(d) {
-    aktivesModul = d.m;
-    if (tab === 'plan' && aktivesModul !== KRAFT) tab = 'heute';
-    render(); mainInner.parentElement.scrollTo(0, 0);
-  },
   'modulOeffne'(d) { aktivesModul = d.m; tab = 'heute'; unterseite = null; render(); window.scrollTo(0, 0); },
   'verlaufSub'(d) { verlaufSub = d.s; render(); mainInner.parentElement.scrollTo(0, 0); },
 
@@ -133,8 +128,13 @@ const TABS = [
 ];
 
 function navHtml() {
-  // Plan-Tab nur zeigen, wenn das aktive Modul einen Plan hat (nur Kraft).
-  const sichtbar = TABS.filter(t => t.id !== 'plan' || aktivesModul === KRAFT);
+  // Im Dashboard gibt es KEINE untere Navi — die Modul-Kacheln sind der Einstieg.
+  if (tab === 'dashboard') return '';
+
+  // Im Modul: Start (führt heim) + die Tabs, die zum aktiven Modul passen.
+  // Plan nur bei Kraft (Rad hat keinen Zyklus).
+  const sichtbar = TABS.filter(t =>
+    t.id === 'dashboard' || t.id !== 'plan' || aktivesModul === KRAFT);
   return sichtbar.map(t =>
     `<button class="nav-tab ${tab === t.id ? 'aktiv' : ''}" data-action="tab" data-tab="${t.id}">
       ${t.icon}<span>${t.label}</span>
@@ -147,11 +147,9 @@ function navHtml() {
 let verlaufSub = 'feed';   // 'feed' | 'fortschritt'
 
 function verlaufHtml() {
-  const modulWechsler = modulUmschalterHtml();
-
   // Rad: eigener Touren-Verlauf (kein Fortschritt-Tab)
   if (aktivesModul === RAD) {
-    return modulWechsler + rad.verlaufHtml();
+    return rad.verlaufHtml();
   }
 
   // Kraft: Feed + Fortschritt wie gehabt
@@ -161,14 +159,14 @@ function verlaufHtml() {
   </div>`;
 
   if (verlaufSub === 'fortschritt') {
-    return modulWechsler + umschalter + kraft.fortschrittHtml();
+    return umschalter + kraft.fortschrittHtml();
   }
 
   // Kraft-Feed: nur Kraft-Sessions (Rad hat eigenen Verlauf)
   const sessions = [...state.sessions]
     .filter(s => (s.modul ?? KRAFT) === KRAFT)
     .sort((a, b) => b.datum.localeCompare(a.datum));
-  let html = modulWechsler + umschalter + `<div class="tab-kopf anim" style="margin-top:0"><span class="eyebrow"><span class="pip"></span>Kraft</span><h1>Verlauf</h1></div>`;
+  let html = umschalter + `<div class="tab-kopf anim" style="margin-top:0"><span class="eyebrow"><span class="pip"></span>Kraft</span><h1>Verlauf</h1></div>`;
   if (!sessions.length) {
     return html + `<div class="karte leer anim"><p>Noch keine Sessions. Deine erste startest du im Heute-Tab.</p></div>`;
   }
@@ -250,16 +248,9 @@ function importiereDatei(input) {
 // ------------------------------------------------------------
 // Render & Start
 // ------------------------------------------------------------
-// Modul-Umschalter (Kraft ⇄ Rad) — oben im Heute- und Verlauf-Tab.
-function modulUmschalterHtml() {
-  const module = [
-    { id: KRAFT, label: 'Kraft' },
-    { id: RAD, label: 'Rad' },
-  ];
-  return `<div class="modul-wechsler">${module.map(m =>
-    `<button class="modul-tab ${aktivesModul === m.id ? 'aktiv ' + m.id : ''}" data-action="modulWechsel" data-m="${m.id}">${m.label}</button>`
-  ).join('')}</div>`;
-}
+// ------------------------------------------------------------
+// Verlauf-Tab
+// ------------------------------------------------------------
 
 // ------------------------------------------------------------
 // Dashboard (Start-Tab): Module wählen + Wochen-Übersicht
@@ -334,7 +325,10 @@ function formatZahl0(n) {
 }
 
 function render() {
-  nav.innerHTML = navHtml();
+  const navInhalt = navHtml();
+  nav.innerHTML = navInhalt;
+  // Ohne untere Navi (Dashboard) den Platz voll nutzen.
+  document.body.classList.toggle('ohne-navi', navInhalt === '');
 
   // Unterseite (z.B. Daten) liegt über den Tabs, mit Zurück-Pfeil.
   if (unterseite === 'daten') {
@@ -347,8 +341,7 @@ function render() {
       mainInner.innerHTML = dashboardHtml();
       break;
     case 'heute':
-      mainInner.innerHTML = modulUmschalterHtml() +
-        (aktivesModul === RAD ? rad.heuteHtml() : kraft.heuteHtml());
+      mainInner.innerHTML = (aktivesModul === RAD ? rad.heuteHtml() : kraft.heuteHtml());
       break;
     case 'plan':
       // Plan ist Kraft-spezifisch (Rad hat keinen Zyklus)
