@@ -14,6 +14,7 @@ import {
   erstelleKraftModul, MODUL as KRAFT,
   sessionVolumenErledigt, segmentZusammenfassungKraft, segmentZusammenfassungWerte,
 } from './modules/kraft.js';
+import { erstelleRadModul, MODUL as RAD } from './modules/rad.js';
 
 const main = document.getElementById('main');
 const nav = document.getElementById('nav');
@@ -48,12 +49,17 @@ const ctx = {
   tabWechsel: (t) => { tab = t; },
 };
 const kraft = erstelleKraftModul(ctx);
+const rad = erstelleRadModul(ctx);
+
+// Welches Modul zeigt der Heute-/Verlauf-Tab gerade? (Plan bleibt Kraft.)
+let aktivesModul = KRAFT;
 
 // ------------------------------------------------------------
 // Aktionen: App-eigene + Modul-Aktionen in einem Register
 // ------------------------------------------------------------
 const actions = {
   'tab'(d) { tab = d.tab; sheet.schliesse(); render(); window.scrollTo(0, 0); },
+  'modulWechsel'(d) { aktivesModul = d.m; render(); mainInner.parentElement.scrollTo(0, 0); },
   'verlaufSub'(d) { verlaufSub = d.s; render(); mainInner.parentElement.scrollTo(0, 0); },
 
   'daten.export'() {
@@ -129,17 +135,28 @@ function navHtml() {
 let verlaufSub = 'feed';   // 'feed' | 'fortschritt'
 
 function verlaufHtml() {
+  const modulWechsler = modulUmschalterHtml();
+
+  // Rad: eigener Touren-Verlauf (kein Fortschritt-Tab)
+  if (aktivesModul === RAD) {
+    return modulWechsler + rad.verlaufHtml();
+  }
+
+  // Kraft: Feed + Fortschritt wie gehabt
   const umschalter = `<div class="chip-zeile" style="margin:0 2px 14px">
     <button class="chip ${verlaufSub === 'feed' ? 'aktiv' : ''}" data-action="verlaufSub" data-s="feed">Verlauf</button>
     <button class="chip ${verlaufSub === 'fortschritt' ? 'aktiv' : ''}" data-action="verlaufSub" data-s="fortschritt">Fortschritt</button>
   </div>`;
 
   if (verlaufSub === 'fortschritt') {
-    return umschalter + kraft.fortschrittHtml();
+    return modulWechsler + umschalter + kraft.fortschrittHtml();
   }
 
-  const sessions = [...state.sessions].sort((a, b) => b.datum.localeCompare(a.datum));
-  let html = umschalter + `<div class="tab-kopf anim" style="margin-top:0"><span class="eyebrow"><span class="pip"></span>Alle Aktivitäten</span><h1>Verlauf</h1></div>`;
+  // Kraft-Feed: nur Kraft-Sessions (Rad hat eigenen Verlauf)
+  const sessions = [...state.sessions]
+    .filter(s => (s.modul ?? KRAFT) === KRAFT)
+    .sort((a, b) => b.datum.localeCompare(a.datum));
+  let html = modulWechsler + umschalter + `<div class="tab-kopf anim" style="margin-top:0"><span class="eyebrow"><span class="pip"></span>Kraft</span><h1>Verlauf</h1></div>`;
   if (!sessions.length) {
     return html + `<div class="karte leer anim"><p>Noch keine Sessions. Deine erste startest du im Heute-Tab.</p></div>`;
   }
@@ -220,13 +237,34 @@ function importiereDatei(input) {
 // ------------------------------------------------------------
 // Render & Start
 // ------------------------------------------------------------
+// Modul-Umschalter (Kraft ⇄ Rad) — oben im Heute- und Verlauf-Tab.
+function modulUmschalterHtml() {
+  const module = [
+    { id: KRAFT, label: 'Kraft' },
+    { id: RAD, label: 'Rad' },
+  ];
+  return `<div class="modul-wechsler">${module.map(m =>
+    `<button class="modul-tab ${aktivesModul === m.id ? 'aktiv ' + m.id : ''}" data-action="modulWechsel" data-m="${m.id}">${m.label}</button>`
+  ).join('')}</div>`;
+}
+
 function render() {
   nav.innerHTML = navHtml();
   switch (tab) {
-    case 'heute':   mainInner.innerHTML = kraft.heuteHtml(); break;
-    case 'plan':    mainInner.innerHTML = kraft.planHtml(); break;
-    case 'verlauf': mainInner.innerHTML = verlaufHtml(); break;
-    case 'daten':   mainInner.innerHTML = datenHtml(); break;
+    case 'heute':
+      mainInner.innerHTML = modulUmschalterHtml() +
+        (aktivesModul === RAD ? rad.heuteHtml() : kraft.heuteHtml());
+      break;
+    case 'plan':
+      // Plan ist Kraft-spezifisch (Rad hat keinen Zyklus)
+      mainInner.innerHTML = kraft.planHtml();
+      break;
+    case 'verlauf':
+      mainInner.innerHTML = verlaufHtml();
+      break;
+    case 'daten':
+      mainInner.innerHTML = datenHtml();
+      break;
   }
 }
 
