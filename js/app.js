@@ -8,13 +8,13 @@
 import { load, save, exportBackup, importBackup, leererZustand } from './core/storage.js';
 import { formatZahl } from './core/metrics.js';
 import { heuteIso, findeAktivitaet, sessionKategorien } from './core/model.js';
-import { findeEinheit } from './core/plan.js';
+import { findeEinheit, naechsteEinheit } from './core/plan.js';
 import { esc, formatDatum, sheet, bestaetige, hinweis } from './ui/components.js';
 import {
   erstelleKraftModul, MODUL as KRAFT,
   sessionVolumenErledigt, segmentZusammenfassungKraft, segmentZusammenfassungWerte,
 } from './modules/kraft.js';
-import { erstelleRadModul, MODUL as RAD } from './modules/rad.js';
+import { erstelleRadModul, MODUL as RAD, alleTouren, tourStatistik } from './modules/rad.js';
 
 const main = document.getElementById('main');
 const nav = document.getElementById('nav');
@@ -37,7 +37,7 @@ const mainInner = document.getElementById('mainInner');
 const ptr = document.getElementById('ptr');
 
 let state = null;
-let tab = 'heute';
+let tab = 'dashboard';
 let unterseite = null;   // null | 'daten' — Overlay-Unterseite (übers Zahnrad)
 
 // ------------------------------------------------------------
@@ -62,7 +62,12 @@ const actions = {
   'tab'(d) { tab = d.tab; unterseite = null; sheet.schliesse(); render(); window.scrollTo(0, 0); },
   'unterseiteAuf'(d) { unterseite = d.seite; render(); mainInner.parentElement.scrollTo(0, 0); },
   'unterseiteZu'() { unterseite = null; render(); mainInner.parentElement.scrollTo(0, 0); },
-  'modulWechsel'(d) { aktivesModul = d.m; render(); mainInner.parentElement.scrollTo(0, 0); },
+  'modulWechsel'(d) {
+    aktivesModul = d.m;
+    if (tab === 'plan' && aktivesModul !== KRAFT) tab = 'heute';
+    render(); mainInner.parentElement.scrollTo(0, 0);
+  },
+  'modulOeffne'(d) { aktivesModul = d.m; tab = 'heute'; unterseite = null; render(); window.scrollTo(0, 0); },
   'verlaufSub'(d) { verlaufSub = d.s; render(); mainInner.parentElement.scrollTo(0, 0); },
 
   'daten.export'() {
@@ -121,13 +126,16 @@ document.addEventListener('focusin', e => {
 // Tabs
 // ------------------------------------------------------------
 const TABS = [
+  { id: 'dashboard', label: 'Start', icon: '<svg viewBox="0 0 24 24"><path d="M4 13h7V4H4v9zM13 20h7V4h-7v16zM4 20h7v-5H4v5z"/></svg>' },
   { id: 'heute',   label: 'Heute',   icon: '<svg viewBox="0 0 24 24"><path d="M6.5 6.5v11M17.5 6.5v11M2.5 9.5v5M21.5 9.5v5M6.5 12h11"/></svg>' },
   { id: 'plan',    label: 'Plan',    icon: '<svg viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg>' },
   { id: 'verlauf', label: 'Verlauf', icon: '<svg viewBox="0 0 24 24"><path d="M12 8v5l3 2M21 12a9 9 0 1 1-9-9 9 9 0 0 1 9 9z"/></svg>' },
 ];
 
 function navHtml() {
-  return TABS.map(t =>
+  // Plan-Tab nur zeigen, wenn das aktive Modul einen Plan hat (nur Kraft).
+  const sichtbar = TABS.filter(t => t.id !== 'plan' || aktivesModul === KRAFT);
+  return sichtbar.map(t =>
     `<button class="nav-tab ${tab === t.id ? 'aktiv' : ''}" data-action="tab" data-tab="${t.id}">
       ${t.icon}<span>${t.label}</span>
     </button>`).join('');
@@ -248,12 +256,81 @@ function modulUmschalterHtml() {
     { id: KRAFT, label: 'Kraft' },
     { id: RAD, label: 'Rad' },
   ];
-  return `<div class="modul-zeile">
-    <div class="modul-wechsler">${module.map(m =>
-      `<button class="modul-tab ${aktivesModul === m.id ? 'aktiv ' + m.id : ''}" data-action="modulWechsel" data-m="${m.id}">${m.label}</button>`
-    ).join('')}</div>
+  return `<div class="modul-wechsler">${module.map(m =>
+    `<button class="modul-tab ${aktivesModul === m.id ? 'aktiv ' + m.id : ''}" data-action="modulWechsel" data-m="${m.id}">${m.label}</button>`
+  ).join('')}</div>`;
+}
+
+// ------------------------------------------------------------
+// Dashboard (Start-Tab): Module wählen + Wochen-Übersicht
+// ------------------------------------------------------------
+
+/** Montag der aktuellen Woche als ISO. */
+function wochenStart() {
+  const d = new Date();
+  const tag = (d.getDay() + 6) % 7;   // Mo=0
+  d.setDate(d.getDate() - tag);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Wochen-Statistik (diese Woche, modulübergreifend). */
+function wochenStatistik() {
+  const abMo = wochenStart();
+  let einheiten = 0, touren = 0, km = 0, volumen = 0;
+  for (const s of state.sessions) {
+    if (s.datum < abMo || s.uebersprungen) continue;
+    if ((s.modul ?? KRAFT) === KRAFT) {
+      if (s.abgeschlossen) einheiten++;
+      volumen += sessionVolumenErledigt(s);
+    } else if (s.modul === RAD) {
+      touren++;
+      const mw = s.segmente[0]?.eintraege[0]?.messwerte ?? {};
+      km += (mw.distanz ?? 0) / 1000;
+    }
+  }
+  return { einheiten, touren, km, volumen };
+}
+
+function dashboardHtml() {
+  let html = `<div class="dash-kopf">
+    <div><span class="eyebrow"><span class="pip"></span>gogadon</span><h1>Start</h1></div>
     <button class="zahnrad" data-action="unterseiteAuf" data-seite="daten" aria-label="Daten & Einstellungen">⚙️</button>
   </div>`;
+
+  // Modul-Kacheln
+  const kraftStatus = (() => {
+    const e = naechsteEinheit(state, KRAFT);
+    return e ? e.name : 'Kein Plan';
+  })();
+  const radStat = tourStatistik(state);
+  const radStatus = radStat.anzahl > 0 ? `${radStat.anzahl} Touren · ${Math.round(radStat.distanz / 1000)} km` : 'Noch keine Tour';
+
+  html += `<div class="dash-module">
+    <button class="modul-kachel kraft" data-action="modulOeffne" data-m="${KRAFT}">
+      <span class="mk-label">Kraft</span>
+      <span class="mk-status">${esc(kraftStatus)}</span>
+    </button>
+    <button class="modul-kachel rad" data-action="modulOeffne" data-m="${RAD}">
+      <span class="mk-label">Rad</span>
+      <span class="mk-status">${esc(radStatus)}</span>
+    </button>
+  </div>`;
+
+  // Wochen-Statistik
+  const w = wochenStatistik();
+  html += `<p class="sheet-abschnitt zwischen">Diese Woche</p>
+    <div class="karte dash-stats">
+      <div class="dash-stat"><span class="ds-zahl">${w.einheiten}</span><span class="dim">Einheiten</span></div>
+      <div class="dash-stat"><span class="ds-zahl">${w.touren}</span><span class="dim">Touren</span></div>
+      <div class="dash-stat"><span class="ds-zahl">${formatZahl0(w.km)}</span><span class="dim">km</span></div>
+      <div class="dash-stat"><span class="ds-zahl">${formatZahl0(w.volumen)}</span><span class="dim">kg bewegt</span></div>
+    </div>`;
+
+  return html;
+}
+
+function formatZahl0(n) {
+  return Math.round(n).toLocaleString('de-DE');
 }
 
 function render() {
@@ -266,6 +343,9 @@ function render() {
   }
 
   switch (tab) {
+    case 'dashboard':
+      mainInner.innerHTML = dashboardHtml();
+      break;
     case 'heute':
       mainInner.innerHTML = modulUmschalterHtml() +
         (aktivesModul === RAD ? rad.heuteHtml() : kraft.heuteHtml());
