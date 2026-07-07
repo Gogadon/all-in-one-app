@@ -419,3 +419,22 @@ h1,h2,h3,.num{font-family:var(--font-display);letter-spacing:-.02em}
   display:flex;align-items:center;justify-content:center}
 .zurueck-pfeil{width:11px;height:11px;border-left:2px solid var(--text);
   border-bottom:2px solid var(--text);transform:rotate(45deg);margin-left:3px}
+
+/* ===== Dashboard ===== */
+.dash-kopf{display:flex;align-items:flex-start;justify-content:space-between;margin:0 0 22px}
+.dash-kopf h1{font-size:32px;margin-top:2px}
+.dash-module{display:flex;flex-direction:column;gap:12px}
+.modul-kachel{display:flex;flex-direction:column;align-items:flex-start;gap:6px;
+  padding:20px;border-radius:var(--r-hero);text-align:left;
+  border:1px solid var(--line);background:var(--surface);position:relative;overflow:hidden}
+.modul-kachel::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px}
+.modul-kachel.kraft::before{background:var(--kraft)}
+.modul-kachel.rad::before{background:var(--rad)}
+.modul-kachel .mk-label{font-family:var(--font-display);font-weight:800;font-size:22px}
+.modul-kachel.kraft .mk-label{color:var(--kraft)}
+.modul-kachel.rad .mk-label{color:var(--rad)}
+.modul-kachel .mk-status{font-size:13px;color:var(--dim)}
+.dash-stats{display:flex;justify-content:space-between;padding:18px 16px;text-align:center}
+.dash-stat{display:flex;flex-direction:column;gap:3px;flex:1}
+.ds-zahl{font-family:var(--font-display);font-weight:800;font-size:22px;color:var(--text)}
+.dash-stat .dim{font-size:10.5px;line-height:1.2}
