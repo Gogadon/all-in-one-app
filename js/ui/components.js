@@ -108,25 +108,37 @@ function stelleDialogBereit() {
   document.body.append(dialogBackdrop, dialogEl);
 
   dialogEl.addEventListener('click', (e) => {
+    // Schalter umschalten (nicht schließen)
+    const sw = e.target.closest('.dlg-schalter');
+    if (sw) { sw.classList.toggle('an'); return; }
     const btn = e.target.closest('[data-dlg]');
     if (!btn) return;
-    schliesseDialog(btn.dataset.dlg === 'ja');
+    const jaGeklickt = btn.dataset.dlg === 'ja';
+    const schalterEl = dialogEl.querySelector('.dlg-schalter');
+    const schalterAn = schalterEl ? schalterEl.classList.contains('an') : null;
+    schliesseDialog(jaGeklickt, schalterAn);
   });
 }
 
-function schliesseDialog(ergebnis) {
+function schliesseDialog(ergebnis, schalterAn = null) {
   if (!dialogEl) return;
   dialogBackdrop.classList.remove('offen');
   dialogEl.classList.remove('offen');
   const auf = dialogAufloesen; dialogAufloesen = null;
-  if (auf) auf(ergebnis);
+  // Ohne Schalter: schlichtes true/false (Kompatibilität mit bestehenden Aufrufen).
+  // Mit Schalter: { ok, schalter } als Objekt.
+  if (auf) auf(schalterAn === null ? ergebnis : { ok: ergebnis, schalter: schalterAn });
 }
 
-export function bestaetige({ titel, text = '', jaText = 'OK', neinText = 'Abbrechen', gefahr = false } = {}) {
+export function bestaetige({ titel, text = '', jaText = 'OK', neinText = 'Abbrechen', gefahr = false, schalter = null } = {}) {
   stelleDialogBereit();
   dialogEl.innerHTML = `
     <h3>${esc(titel)}</h3>
     ${text ? `<p class="dialog-text">${esc(text)}</p>` : ''}
+    ${schalter ? `<button class="dlg-schalter ${schalter.an ? 'an' : ''}" type="button">
+      <span class="dlg-schalter-text">${esc(schalter.label)}</span>
+      <span class="dlg-schalter-knopf"></span>
+    </button>` : ''}
     <div class="dialog-knoepfe">
       ${neinText ? `<button class="knopf" data-dlg="nein">${esc(neinText)}</button>` : ''}
       <button class="knopf ${gefahr ? 'gefahr-voll' : 'primaer'}" data-dlg="ja">${esc(jaText)}</button>
