@@ -96,6 +96,16 @@ document.addEventListener('change', e => {
   if (fn) fn(el.dataset, el, e);
 });
 
+// Komfort: beim Antippen eines Zahlen-/Wertfelds den Inhalt sofort markieren,
+// damit man direkt die neue Zahl tippt, statt erst die alte zu löschen.
+document.addEventListener('focusin', e => {
+  const el = e.target;
+  if (el.tagName === 'INPUT' && el.dataset.change === 'k.wert') {
+    // kurz warten, bis der Cursor gesetzt ist, dann alles markieren
+    requestAnimationFrame(() => { try { el.select(); } catch {} });
+  }
+});
+
 // ------------------------------------------------------------
 // Tabs
 // ------------------------------------------------------------
