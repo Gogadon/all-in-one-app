@@ -403,3 +403,19 @@ h1,h2,h3,.num{font-family:var(--font-display);letter-spacing:-.02em}
 .detail-zeile{display:flex;justify-content:space-between;padding:7px 0;
   border-top:1px solid var(--line);font-size:14px}
 .detail-zeile:first-child{border-top:none}
+
+/* ===== Modul-Zeile mit Zahnrad ===== */
+.modul-zeile{display:flex;align-items:center;gap:10px;margin:0 0 18px}
+.modul-zeile .modul-wechsler{flex:1;margin:0}
+.zahnrad{flex:none;width:44px;height:44px;border-radius:var(--r-icon);
+  background:var(--surface-2);border:1px solid var(--line);
+  font-size:18px;display:flex;align-items:center;justify-content:center}
+
+/* ===== Unterseite (Daten hinterm Zahnrad) ===== */
+.unterseite-kopf{display:flex;align-items:center;gap:12px;margin:0 0 20px}
+.unterseite-kopf h2{font-size:22px}
+.zurueck{flex:none;width:40px;height:40px;border-radius:var(--r-icon);
+  background:var(--surface-2);border:1px solid var(--line);
+  display:flex;align-items:center;justify-content:center}
+.zurueck-pfeil{width:11px;height:11px;border-left:2px solid var(--text);
+  border-bottom:2px solid var(--text);transform:rotate(45deg);margin-left:3px}
