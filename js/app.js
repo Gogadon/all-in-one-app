@@ -38,6 +38,7 @@ const ptr = document.getElementById('ptr');
 
 let state = null;
 let tab = 'heute';
+let unterseite = null;   // null | 'daten' — Overlay-Unterseite (übers Zahnrad)
 
 // ------------------------------------------------------------
 // Kontext für Module
@@ -58,7 +59,9 @@ let aktivesModul = KRAFT;
 // Aktionen: App-eigene + Modul-Aktionen in einem Register
 // ------------------------------------------------------------
 const actions = {
-  'tab'(d) { tab = d.tab; sheet.schliesse(); render(); window.scrollTo(0, 0); },
+  'tab'(d) { tab = d.tab; unterseite = null; sheet.schliesse(); render(); window.scrollTo(0, 0); },
+  'unterseiteAuf'(d) { unterseite = d.seite; render(); mainInner.parentElement.scrollTo(0, 0); },
+  'unterseiteZu'() { unterseite = null; render(); mainInner.parentElement.scrollTo(0, 0); },
   'modulWechsel'(d) { aktivesModul = d.m; render(); mainInner.parentElement.scrollTo(0, 0); },
   'verlaufSub'(d) { verlaufSub = d.s; render(); mainInner.parentElement.scrollTo(0, 0); },
 
@@ -79,6 +82,7 @@ const actions = {
       text: 'Letzte Chance — das lässt sich nicht rückgängig machen.',
       jaText: 'Alles löschen', gefahr: true })) return;
     state = leererZustand();
+    unterseite = null; tab = 'heute';
     await ctx.save(); render();
   },
 
@@ -120,7 +124,6 @@ const TABS = [
   { id: 'heute',   label: 'Heute',   icon: '<svg viewBox="0 0 24 24"><path d="M6.5 6.5v11M17.5 6.5v11M2.5 9.5v5M21.5 9.5v5M6.5 12h11"/></svg>' },
   { id: 'plan',    label: 'Plan',    icon: '<svg viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg>' },
   { id: 'verlauf', label: 'Verlauf', icon: '<svg viewBox="0 0 24 24"><path d="M12 8v5l3 2M21 12a9 9 0 1 1-9-9 9 9 0 0 1 9 9z"/></svg>' },
-  { id: 'daten',   label: 'Daten',   icon: '<svg viewBox="0 0 24 24"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.7 3.6 3 8 3s8-1.3 8-3v-13M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>' },
 ];
 
 function navHtml() {
@@ -226,6 +229,7 @@ function importiereDatei(input) {
       state = importBackup(String(leser.result));
       await ctx.save();
       await hinweis('Backup importiert ✓');
+      unterseite = null; tab = 'heute';
       render();
     } catch (err) {
       await hinweis('Import fehlgeschlagen', err.message);
@@ -244,13 +248,23 @@ function modulUmschalterHtml() {
     { id: KRAFT, label: 'Kraft' },
     { id: RAD, label: 'Rad' },
   ];
-  return `<div class="modul-wechsler">${module.map(m =>
-    `<button class="modul-tab ${aktivesModul === m.id ? 'aktiv ' + m.id : ''}" data-action="modulWechsel" data-m="${m.id}">${m.label}</button>`
-  ).join('')}</div>`;
+  return `<div class="modul-zeile">
+    <div class="modul-wechsler">${module.map(m =>
+      `<button class="modul-tab ${aktivesModul === m.id ? 'aktiv ' + m.id : ''}" data-action="modulWechsel" data-m="${m.id}">${m.label}</button>`
+    ).join('')}</div>
+    <button class="zahnrad" data-action="unterseiteAuf" data-seite="daten" aria-label="Daten & Einstellungen">⚙️</button>
+  </div>`;
 }
 
 function render() {
   nav.innerHTML = navHtml();
+
+  // Unterseite (z.B. Daten) liegt über den Tabs, mit Zurück-Pfeil.
+  if (unterseite === 'daten') {
+    mainInner.innerHTML = unterseiteHtml('Daten & Backup', datenHtml());
+    return;
+  }
+
   switch (tab) {
     case 'heute':
       mainInner.innerHTML = modulUmschalterHtml() +
@@ -263,10 +277,17 @@ function render() {
     case 'verlauf':
       mainInner.innerHTML = verlaufHtml();
       break;
-    case 'daten':
-      mainInner.innerHTML = datenHtml();
-      break;
   }
+}
+
+/** Rahmen für eine Unterseite: Zurück-Pfeil + Titel + Inhalt. */
+function unterseiteHtml(titel, inhalt) {
+  return `<div class="unterseite-kopf">
+      <button class="zurueck" data-action="unterseiteZu" aria-label="Zurück">
+        <span class="zurueck-pfeil"></span>
+      </button>
+      <h2>${esc(titel)}</h2>
+    </div>${inhalt}`;
 }
 
 // ------------------------------------------------------------
