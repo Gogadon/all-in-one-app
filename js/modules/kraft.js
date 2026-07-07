@@ -514,6 +514,16 @@ export function erstelleKraftModul(ctx) {
     return s ? sessionHtml(s) : startHtml();
   }
 
+  /** Aktualisiert nur die „kg bewegt"-Zahl im Heute-Tab, ohne Neu-Rendern.
+   *  So bleibt beim Werte-Eintragen der Tastatur-Fokus im Eingabefeld. */
+  function aktualisiereVolumenAnzeige() {
+    const el = document.getElementById('volZahl');
+    if (!el) return;
+    const s = heutigeSession();
+    if (!s) return;
+    el.textContent = formatZahl(sessionVolumenErledigt(s), 0);
+  }
+
   function startHtml() {
     const naechste = naechsteEinheit(S(), MODUL);
     if (!naechste) {
@@ -550,7 +560,7 @@ export function erstelleKraftModul(ctx) {
         <h1>${esc(titel)}</h1>
         <p class="dim">${formatDatum(s.datum)}</p>
       </div>
-      <div class="vol"><span class="num">${formatZahl(vol, 0)}</span><span class="dim">kg bewegt</span></div>
+      <div class="vol"><span class="num" id="volZahl">${formatZahl(vol, 0)}</span><span class="dim">kg bewegt</span></div>
     </div>`;
 
     html += s.segmente.map(seg => segmentKarteHtml(s, seg)).join('');
@@ -1283,8 +1293,6 @@ export function erstelleKraftModul(ctx) {
       else wert = parseZahl(el.value);
       if (wert == null) { delete e.messwerte[d.typ]; }
       else {
-        // Beim Gewicht assistierter Übungen: eingegebener Betrag bekommt das
-        // aktuelle Vorzeichen (Hilfe = negativ). Toggle steuert das Vorzeichen.
         if (d.typ === 'gewicht' && effektiveEinstellungen(seg).assist) {
           const plus = e.messwerte.gewicht != null ? e.messwerte.gewicht >= 0 : (e._plus ?? false);
           wert = plus ? Math.abs(wert) : -Math.abs(wert);
@@ -1292,7 +1300,13 @@ export function erstelleKraftModul(ctx) {
         }
         e.messwerte[d.typ] = wert;
       }
-      await ctx.save(); ctx.render();
+      // WICHTIG: nur speichern, NICHT neu rendern. Sonst wird das Eingabefeld neu
+      // erzeugt, der Tastatur-Fokus geht verloren und der „Weiter"-Button springt
+      // ins Leere. Volumen/PR/Progression aktualisieren sich beim nächsten Render
+      // (Feld verlassen → Karte auf/zu, Abschließen, Tab-Wechsel). Nur die
+      // Volumen-Anzeige oben frischen wir direkt und schonend auf.
+      await ctx.save();
+      aktualisiereVolumenAnzeige();
     },
     async 'k.vorzeichen'(d) {
       const seg = segFinden(d.seg);
