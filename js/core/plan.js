@@ -165,6 +165,20 @@ export function setzePosition(state, modul, index) {
   plan.position = ((index % plan.zyklus.length) + plan.zyklus.length) % plan.zyklus.length;
 }
 
+/**
+ * „Heute korrigieren": verankert den gewählten Zyklus-Index auf HEUTE.
+ * Ab heute rechnet die dynamische Berechnung von diesem Anker weiter —
+ * dadurch bleibt die manuelle Korrektur bestehen (im Gegensatz zu
+ * setzePosition, das von der Berechnung wieder überschrieben würde).
+ */
+export function setzeAnker(state, modul, index, heute = heuteIso()) {
+  const plan = mussPlan(state, modul);
+  if (plan.zyklus.length === 0) return;
+  const idx = ((index % plan.zyklus.length) + plan.zyklus.length) % plan.zyklus.length;
+  plan.anker = { iso: heute, index: idx };
+  plan.position = idx;
+}
+
 // ------------------------------------------------------------
 // Zyklus: nächste Einheit, weiterschalten, Plan → Session
 // ------------------------------------------------------------
