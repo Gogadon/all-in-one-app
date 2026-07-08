@@ -180,9 +180,11 @@ function verlaufHtml() {
     return umschalter + kraft.fortschrittHtml();
   }
 
-  // Kraft-Feed: nur Kraft-Sessions (Rad hat eigenen Verlauf)
+  // Kraft-Feed: nur Kraft-Sessions (Rad hat eigenen Verlauf).
+  // Übersprungene Tage nur, wenn beim Überspringen „im Verlauf vermerken" an war.
   const sessions = [...state.sessions]
     .filter(s => (s.modul ?? KRAFT) === KRAFT)
+    .filter(s => !s.uebersprungen || s.imVerlauf === true)
     .sort((a, b) => b.datum.localeCompare(a.datum));
   let html = umschalter + `<div class="tab-kopf anim" style="margin-top:0"><span class="eyebrow"><span class="pip"></span>Kraft</span><h1>Verlauf</h1></div>`;
   if (!sessions.length) {
