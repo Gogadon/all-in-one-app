@@ -30,7 +30,7 @@ import {
   einheitenBibliothek, findeEinheit,
   addAktivitaetZuEinheit, entferneAktivitaetAusEinheit, verschiebeAktivitaetInEinheit,
   zyklusEinheiten, addZuZyklus, entferneAusZyklus, verschiebeImZyklus, setzePosition,
-  naechsteEinheit, schalteWeiter, sessionAusEinheit,
+  naechsteEinheit, schalteWeiter, sessionAusEinheit, aktuelleEinheit,
 } from '../core/plan.js';
 import { sparkline, balken, trend } from '../ui/charts.js';
 import { teileKarte } from '../ui/share.js';
@@ -741,7 +741,13 @@ export function erstelleKraftModul(ctx) {
     const plan = planFuer(S(), MODUL);
     const zyklus = zyklusEinheiten(S(), MODUL);
     const bib = einheitenBibliothek(S(), MODUL);
+    // Aktuelle Position dynamisch berechnen (spiegelt in plan.position).
+    aktuelleEinheit(S(), MODUL);
     const pos = plan?.position ?? 0;
+
+    // Ist die heutige Einheit schon abgeschlossen?
+    const heuteSession = heutigeSession();
+    const heuteErledigt = heuteSession?.abgeschlossen === true;
 
     let html = `<div class="tab-kopf anim"><span class="eyebrow"><span class="pip"></span>Kraft</span><h1>Plan</h1></div>`;
 
@@ -753,13 +759,17 @@ export function erstelleKraftModul(ctx) {
       html += `<div class="karte zyklus-karte anim">` + zyklus.map((e, i) => `
         <div class="zyklus-zeile ${i === pos ? 'aktuell' : ''}">
           <span class="tag-nr">${i + 1}</span>
-          <span class="name">${esc(e.name)}${i === pos ? ' <span class="dim">· heute</span>' : ''}</span>
+          <span class="name">${esc(e.name)}${i === pos ? (heuteErledigt ? ' <span class="dim">· heute ✓</span>' : ' <span class="dim">· heute</span>') : ''}</span>
           <span class="werkzeuge">
             <button data-action="k.zyklusSchieb" data-i="${i}" data-r="-1"><span class="pfeil-ico"></span></button>
             <button data-action="k.zyklusSchieb" data-i="${i}" data-r="1"><span class="pfeil-ico runter"></span></button>
             <button data-action="k.zyklusWeg" data-i="${i}">✕</button>
           </span>
         </div>`).join('') + `</div>`;
+      // Hinweis: heute erledigt → nächster Tag startet morgen (Zeiger springt nicht vor)
+      if (heuteErledigt) {
+        html += `<p class="dim klein-text plan-hinweis">Heute erledigt ✓ — der nächste Zyklustag startet morgen.</p>`;
+      }
       html += `<div class="knopf-zeile"><button class="knopf" data-action="k.zyklusPlus">+ Einheit in den Zyklus</button>
         <button class="knopf geist" data-action="k.heuteWaehlen">Heute korrigieren</button></div>`;
     }
@@ -1135,15 +1145,15 @@ export function erstelleKraftModul(ctx) {
         schalter: { label: 'Im Verlauf vermerken', an: false },
       });
       if (!antwort.ok) return;
-      if (antwort.schalter) {
-        // Schlanke Markierungs-Session: taucht als graue Zeile im Verlauf auf.
-        const s = neueSession(); s.modul = MODUL;
-        s.uebersprungen = true;
-        s.ausPlan = naechste?.id ?? null;
-        s.uebersprungenName = name;
-        S().sessions.push(s);
-      }
-      schalteWeiter(S(), MODUL);
+      // Neue Logik: Überspringen legt IMMER eine uebersprungen-Session für heute
+      // an. Die dynamische Positionsberechnung rückt dadurch weiter (auch für
+      // heute). Der Schalter steuert nur, ob der Tag im Verlauf sichtbar wird.
+      const s = neueSession(); s.modul = MODUL;
+      s.uebersprungen = true;
+      s.ausPlan = naechste?.id ?? null;
+      s.uebersprungenName = name;
+      s.imVerlauf = antwort.schalter === true;   // Sichtbarkeit im Verlauf
+      S().sessions.push(s);
       await speichernUndZeigen();
     },
     async 'k.frei'() {
@@ -1194,25 +1204,15 @@ export function erstelleKraftModul(ctx) {
     async 'k.abschliessen'() {
       const s = heutigeSession(); if (!s) return;
       s.abgeschlossen = true;
-      const naechste = naechsteEinheit(S(), MODUL);
-      // Nur weiterschalten, wenn diese Einheit die aktuell fällige war —
-      // und merken, dass wir es getan haben (für „Wieder öffnen").
-      if (s.ausPlan && naechste && s.ausPlan === naechste.id) {
-        schalteWeiter(S(), MODUL);
-        s.hatWeitergeschaltet = true;
-      }
+      // Neue Zyklus-Logik: Abschließen markiert den Tag nur als erledigt.
+      // Der Zeiger wird NICHT mehr sofort gerückt — die Position wird
+      // dynamisch berechnet und springt erst zum nächsten Kalendertag.
+      // So zeigen Heute- und Plan-Tab am selben Tag immer denselben Tag.
       await speichernUndZeigen();
     },
     async 'k.wiederOeffnen'() {
       const s = heutigeSession(); if (!s) return;
       s.abgeschlossen = false;
-      if (s.hatWeitergeschaltet) {           // Zyklus einen Schritt zurück
-        const plan = planFuer(S(), MODUL);
-        if (plan && plan.zyklus.length) {
-          plan.position = (plan.position - 1 + plan.zyklus.length) % plan.zyklus.length;
-        }
-        delete s.hatWeitergeschaltet;
-      }
       await speichernUndZeigen();
     },
 
