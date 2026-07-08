@@ -1183,15 +1183,41 @@ export function erstelleKraftModul(ctx) {
           : segmentZusammenfassungWerte(aktivitaet, seg);
         zeilen.push({ name: anzeigeName, detail });
       }
-      const hl = sessionHighlights(S(), s).map(h => ({
+      const highlightRoh = sessionHighlights(S(), s);
+      const hl = highlightRoh.map(h => ({
         name: h.name, text: h.text, pr: h.art.startsWith('pr'),
       }));
+
+      // Tagesrückblick: gebündelte Kennzahlen der Session.
+      const prAnzahl = highlightRoh.filter(h => h.art.startsWith('pr')).length;
+      const verbessert = highlightRoh.filter(h => !h.art.startsWith('pr')).length;
+      let cardioMin = 0, kraftSaetze = 0;
+      for (const seg of s.segmente) {
+        if (seg.erledigt !== true) continue;
+        const { aktivitaet } = loeseSegmentAuf(S(), seg);
+        if (!aktivitaet) continue;
+        if (aktivitaet.cardio || aktivitaet.kategorie !== 'kraft') {
+          for (const e of seg.eintraege) {
+            const sek = e.messwerte?.dauer ?? 0;
+            cardioMin += Math.round(sek / 60);
+          }
+        } else {
+          kraftSaetze += seg.eintraege.length;
+        }
+      }
+      const rueckblick = [];
+      if (prAnzahl > 0) rueckblick.push({ icon: '🎉', text: `${prAnzahl} neue${prAnzahl === 1 ? 's' : ''} Top-Gewicht${prAnzahl === 1 ? '' : 'e'}` });
+      if (verbessert > 0) rueckblick.push({ icon: '💪', text: `${verbessert} Übung${verbessert === 1 ? '' : 'en'} verbessert` });
+      if (kraftSaetze > 0) rueckblick.push({ icon: '🏋️', text: `${kraftSaetze} Sätze` });
+      if (cardioMin > 0) rueckblick.push({ icon: '🔥', text: `${cardioMin} Min Cardio` });
+
       const daten = {
         titel: einheit ? einheit.name : 'Training',
         datum: formatDatum(s.datum),
         volumenText: `${formatZahl(sessionVolumenErledigt(s), 0)} kg`,
         zeilen,
         highlights: hl,
+        rueckblick,
         notiz: (s.notiz ?? '').trim() || null,
       };
       try {
