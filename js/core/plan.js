@@ -21,7 +21,7 @@
 // zur Info auf die Einheit.
 // ============================================================
 
-import { KATEGORIEN, neueId, neueSession, neuesSegment, findeAktivitaet } from './model.js';
+import { KATEGORIEN, neueId, neueSession, neuesSegment, findeAktivitaet, heuteIso } from './model.js';
 
 // ------------------------------------------------------------
 // Plan holen / anlegen
@@ -171,10 +171,8 @@ export function setzePosition(state, modul, index) {
 
 /** Die als Nächstes anstehende Einheit — null ohne Plan/Zyklus. */
 export function naechsteEinheit(state, modul) {
-  const plan = planFuer(state, modul);
-  if (!plan || plan.zyklus.length === 0) return null;
-  const id = plan.zyklus[plan.position % plan.zyklus.length];
-  return plan.einheiten.find(e => e.id === id) ?? null;
+  // Nutzt jetzt die dynamische Positionsberechnung (Anker + Verlauf).
+  return aktuelleEinheit(state, modul);
 }
 
 /** Zyklus eins vorschalten (nach absolvierter ODER übersprungener Einheit). */
@@ -216,4 +214,128 @@ function reparierePosition(plan, zeigerId) {
   if (plan.zyklus.length === 0) { plan.position = 0; return; }
   const i = plan.zyklus.indexOf(zeigerId);
   plan.position = i === -1 ? plan.position % plan.zyklus.length : i;
+}
+
+// ============================================================
+// DYNAMISCHE ZYKLUS-POSITION (Teil 1)
+//
+// Statt einer festen `position` wird die Position aus einem ANKER
+// (Datum + Zyklus-Index an dem Tag) und dem Trainingsverlauf berechnet.
+// Läuft vom Anker bis heute und rückt pro vergangenem Kalendertag:
+//   - Ruhetag:            immer weiter (auch ohne Aktion)
+//   - Krafttag erledigt:  weiter
+//   - Krafttag offen:     bleibt stehen (wartet)
+//   - übersprungen:       weiter (egal ob Kraft/Ruhe)
+// Heute selbst rückt NICHT — der Tag ist ja noch nicht vorbei.
+// Dadurch zeigen Heute- und Plan-Tab am selben Tag immer dasselbe,
+// und ein Import kann nie „veralten".
+// ============================================================
+
+/** Ist diese Einheit ein Ruhetag? (keine Kraftübungen enthalten) */
+export function istRuhetag(einheit) {
+  if (!einheit) return false;
+  if (einheit.typ === 'rest') return true;
+  const segs = einheit.segmente ?? [];
+  if (segs.length === 0) return true;
+  // Ruhetag, wenn keine der Aktivitäten eine Kraftübung ist. Da wir hier die
+  // Aktivitätstypen nicht auflösen, gilt die Konvention: leere/als rest
+  // markierte Einheiten sind Ruhetage. Feinere Erkennung macht der Aufrufer.
+  return false;
+}
+
+/**
+ * Tages-Status für die Positionsberechnung.
+ * Gibt für einen ISO-Tag zurück: 'erledigt' | 'uebersprungen' | 'offen'.
+ * Nutzt die Kraft-Sessions des Tages.
+ */
+export function tagesStatus(state, modul, iso) {
+  const sessions = (state.sessions ?? []).filter(
+    s => s.datum === iso && (s.modul ?? 'kraft') === modul);
+  // Erledigt hat Vorrang: erst übersprungen, dann doch trainiert → erledigt.
+  if (sessions.some(s => s.abgeschlossen && !s.uebersprungen)) return 'erledigt';
+  if (sessions.some(s => s.uebersprungen)) return 'uebersprungen';
+  return 'offen';
+}
+
+/**
+ * Berechnet die heutige Zyklus-Position dynamisch.
+ * @param anker { iso, index }  — an `iso` galt Zyklus-Index `index`.
+ * @param istRuhe (einheit)=>bool — erlaubt dem Aufrufer feinere Ruhetag-Erkennung.
+ */
+export function berechnePositionHeute(state, modul, anker, heute = heuteIso(), istRuhe = istRuhetag) {
+  const plan = planFuer(state, modul);
+  if (!plan || plan.zyklus.length === 0) return 0;
+  const len = plan.zyklus.length;
+  if (!anker) return plan.position % len;
+
+  let pos = ((anker.index % len) + len) % len;
+  let d = anker.iso;
+  // von Anker bis (ausschließlich) heute
+  while (d < heute) {
+    const einheitId = plan.zyklus[pos % len];
+    const einheit = plan.einheiten.find(e => e.id === einheitId);
+    const status = tagesStatus(state, modul, d);
+    if (status === 'uebersprungen') {
+      pos = (pos + 1) % len;
+    } else if (istRuhe(einheit)) {
+      pos = (pos + 1) % len;           // Ruhetag rückt immer
+    } else if (status === 'erledigt') {
+      pos = (pos + 1) % len;           // Krafttag nur wenn erledigt
+    }
+    // sonst: offener Krafttag → bleibt stehen
+    d = naechsterTag(d);
+  }
+  // Heute selbst: ein ÜBERSPRUNGENER Tag ist sofort „durch" und rückt weiter
+  // (im Gegensatz zu erledigt/offen, die erst morgen wirken).
+  if (tagesStatus(state, modul, heute) === 'uebersprungen') {
+    pos = (pos + 1) % len;
+  }
+  return pos;
+}
+
+/** ISO-Tag + 1 (kalendertagsicher). */
+function naechsterTag(iso) {
+  const [y, m, t] = iso.split('-').map(Number);
+  const d = new Date(Date.UTC(y, m - 1, t + 1));
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Robuster Ruhetag-Erkenner: löst die Aktivitäten der Einheit auf.
+ * Ruhetag = keine Übungen ODER alle Übungen sind Cardio (Active Rest).
+ */
+export function einheitIstRuhetag(state, einheit) {
+  if (!einheit) return false;
+  if (einheit.typ === 'rest') return true;
+  const segs = einheit.segmente ?? [];
+  if (segs.length === 0) return false;   // leere Einheit ist kein sicherer Ruhetag
+  const aktivitaeten = segs.map(s => findeAktivitaet(state, s.aktivitaetId)).filter(Boolean);
+  if (aktivitaeten.length === 0) return false;
+  return aktivitaeten.every(a => a.cardio === true);   // alle Übungen Cardio → Active Rest
+}
+
+/**
+ * Anker holen oder initialisieren. Bis zur Migration (die einen echten
+ * Anker aus dem Verlauf setzt) leiten wir ihn aus der aktuellen festen
+ * position + heute ab — so bleibt das Verhalten für Bestandsdaten stabil.
+ */
+function holeAnker(plan, heute) {
+  if (plan.anker && plan.anker.iso && Number.isInteger(plan.anker.index)) return plan.anker;
+  plan.anker = { iso: heute, index: (plan.position ?? 0) % Math.max(1, plan.zyklus.length) };
+  return plan.anker;
+}
+
+/**
+ * Die HEUTE fällige Einheit — über die dynamische Position berechnet.
+ * Ersetzt die alte feste-position-Logik von naechsteEinheit.
+ */
+export function aktuelleEinheit(state, modul, heute = heuteIso()) {
+  const plan = planFuer(state, modul);
+  if (!plan || plan.zyklus.length === 0) return null;
+  const anker = holeAnker(plan, heute);
+  const pos = berechnePositionHeute(state, modul, anker, heute,
+    (e) => einheitIstRuhetag(state, e));
+  plan.position = pos;   // Spiegel für Anzeige/Abwärtskompatibilität
+  const id = plan.zyklus[pos % plan.zyklus.length];
+  return plan.einheiten.find(e => e.id === id) ?? null;
 }
