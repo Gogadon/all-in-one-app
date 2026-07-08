@@ -25,6 +25,7 @@ export function zeichneKarte(daten) {
   // Höhe dynamisch grob schätzen
   let h = 200 + daten.zeilen.length * 46
     + (daten.highlights?.length ? 30 + daten.highlights.length * 26 : 0)
+    + (daten.rueckblick?.length ? 30 + daten.rueckblick.length * 26 : 0)
     + (daten.notiz ? 60 : 0) + 60;
   const hoehe = h;
 
@@ -57,9 +58,11 @@ export function zeichneKarte(daten) {
   // Datum
   x.fillStyle = FARBE.dim; x.font = '400 14px Sora, sans-serif';
   x.fillText(daten.datum, pad + 6, y);
-  // Volumen rechts
-  x.fillStyle = FARBE.akzent; x.font = '800 26px "Bricolage Grotesque", sans-serif';
+  // Volumen rechts, mit Label darüber
   x.textAlign = 'right';
+  x.fillStyle = FARBE.dim; x.font = '600 10px Sora, sans-serif';
+  x.fillText('TRAININGSVOLUMEN', breite - pad - 6, y - 16);
+  x.fillStyle = FARBE.akzent; x.font = '800 26px "Bricolage Grotesque", sans-serif';
   x.fillText(daten.volumenText, breite - pad - 6, y);
   x.textAlign = 'left';
   y += 28;
@@ -92,6 +95,18 @@ export function zeichneKarte(daten) {
       x.font = '600 14px Sora, sans-serif';
       x.fillText(hl.text, breite - pad - 6, y);
       x.textAlign = 'left';
+      y += 26;
+    }
+  }
+
+  // Tagesrückblick (gebündelte Kennzahlen)
+  if (daten.rueckblick?.length) {
+    y += 6; linie(x, pad, y, breite - pad, y); y += 24;
+    x.fillStyle = FARBE.akzent; x.font = '600 12px Sora, sans-serif';
+    x.fillText('TAGESRÜCKBLICK', pad + 4, y); y += 24;
+    for (const r of daten.rueckblick) {
+      x.fillStyle = FARBE.text; x.font = '15px Sora, sans-serif';
+      x.fillText(kurz(`${r.icon}  ${r.text}`, 40), pad + 4, y);
       y += 26;
     }
   }
