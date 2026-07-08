@@ -45,27 +45,28 @@ export function zeichneKarte(daten) {
   x.fillStyle = grad; x.fillRect(12, 12, breite - 24, 180);
 
   let y = pad + 22;
-  // Eyebrow
+  // Eyebrow links + Datum rechts auf einer Zeile (wie Gym-App)
   x.fillStyle = FARBE.akzent;
   x.font = '600 12px Sora, sans-serif';
   x.fillText('GOGADON · TRAINING', pad + 6, y);
-  y += 30;
-  // Titel
+  x.textAlign = 'right';
+  x.fillStyle = FARBE.dim; x.font = '400 13px Sora, sans-serif';
+  x.fillText(daten.datum, breite - pad - 6, y);
+  x.textAlign = 'left';
+  y += 32;
+  // Titel — volle Breite, keine Kollision mehr
   x.fillStyle = FARBE.text;
   x.font = '800 30px "Bricolage Grotesque", sans-serif';
   x.fillText(daten.titel, pad + 4, y);
-  y += 24;
-  // Datum
-  x.fillStyle = FARBE.dim; x.font = '400 14px Sora, sans-serif';
-  x.fillText(daten.datum, pad + 6, y);
-  // Volumen rechts, mit Label darüber
+  y += 30;
+  // Trainingsvolumen als eigene Zeile: Label + Wert nebeneinander
+  x.fillStyle = FARBE.dim; x.font = '600 11px Sora, sans-serif';
+  x.fillText('TRAININGSVOLUMEN', pad + 6, y);
   x.textAlign = 'right';
-  x.fillStyle = FARBE.dim; x.font = '600 10px Sora, sans-serif';
-  x.fillText('TRAININGSVOLUMEN', breite - pad - 6, y - 16);
-  x.fillStyle = FARBE.akzent; x.font = '800 26px "Bricolage Grotesque", sans-serif';
-  x.fillText(daten.volumenText, breite - pad - 6, y);
+  x.fillStyle = FARBE.akzent; x.font = '800 24px "Bricolage Grotesque", sans-serif';
+  x.fillText(daten.volumenText, breite - pad - 6, y + 2);
   x.textAlign = 'left';
-  y += 28;
+  y += 24;
 
   // Trennlinie
   linie(x, pad, y, breite - pad, y); y += 24;
