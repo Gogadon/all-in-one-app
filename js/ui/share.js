@@ -39,10 +39,15 @@ export function zeichneKarte(daten) {
   // Karte
   rundRect(x, 12, 12, breite - 24, hoehe - 24, 22);
   x.fillStyle = FARBE.karte; x.fill();
-  // Akzent-Schimmer oben rechts
+  // Akzent-Schimmer oben rechts — auf die runde Kartenform geclippt,
+  // damit er der Rundung folgt und nicht als hartes Rechteck übersteht.
+  x.save();
+  rundRect(x, 12, 12, breite - 24, hoehe - 24, 22);
+  x.clip();
   const grad = x.createRadialGradient(breite - 60, 10, 10, breite - 60, 10, 260);
   grad.addColorStop(0, 'rgba(205,253,52,0.16)'); grad.addColorStop(1, 'rgba(205,253,52,0)');
-  x.fillStyle = grad; x.fillRect(12, 12, breite - 24, 180);
+  x.fillStyle = grad; x.fillRect(12, 12, breite - 24, 260);
+  x.restore();
 
   let y = pad + 22;
   // Eyebrow links + Datum rechts auf einer Zeile (wie Gym-App)
