@@ -29,7 +29,7 @@ import {
   planFuer, erstellePlan, addEinheit, benenneEinheitUm, loescheEinheit,
   einheitenBibliothek, findeEinheit,
   addAktivitaetZuEinheit, entferneAktivitaetAusEinheit, verschiebeAktivitaetInEinheit,
-  zyklusEinheiten, addZuZyklus, entferneAusZyklus, verschiebeImZyklus, setzePosition,
+  zyklusEinheiten, addZuZyklus, entferneAusZyklus, verschiebeImZyklus, setzePosition, setzeAnker,
   naechsteEinheit, schalteWeiter, sessionAusEinheit, aktuelleEinheit,
 } from '../core/plan.js';
 import { sparkline, balken, trend } from '../ui/charts.js';
@@ -1452,7 +1452,7 @@ export function erstelleKraftModul(ctx) {
           // zeigt der Heute-Tab sie weiter an — das ist dann bewusst so gewählt.
         }
       }
-      setzePosition(S(), MODUL, +d.i);
+      setzeAnker(S(), MODUL, +d.i);
       sheet.schliesse();
       tabWechsel('heute');
       await speichernUndZeigen();
