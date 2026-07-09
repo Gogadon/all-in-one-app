@@ -65,8 +65,10 @@ export function zeichneKarte(daten) {
   x.fillText(daten.titel, pad + 4, y);
   y += 30;
   // Trainingsvolumen als eigene Zeile: Label + Wert nebeneinander
-  x.fillStyle = FARBE.dim; x.font = '600 11px Sora, sans-serif';
+  x.fillStyle = FARBE.text; x.font = '600 13px Sora, sans-serif';
+  x.globalAlpha = 0.7;
   x.fillText('TRAININGSVOLUMEN', pad + 6, y);
+  x.globalAlpha = 1;
   x.textAlign = 'right';
   x.fillStyle = FARBE.akzent; x.font = '800 24px "Bricolage Grotesque", sans-serif';
   x.fillText(daten.volumenText, breite - pad - 6, y + 2);
@@ -95,7 +97,7 @@ export function zeichneKarte(daten) {
     for (const hl of daten.highlights) {
       x.font = '15px Sora, sans-serif';
       x.fillStyle = FARBE.text;
-      const icon = hl.pr ? '🎉 ' : '↑ ';
+      const icon = hl.pr ? '🏆 ' : '↑ ';
       x.fillText(kurz(icon + hl.name, 30), pad + 4, y);
       x.fillStyle = FARBE.akzent; x.textAlign = 'right';
       x.font = '600 14px Sora, sans-serif';
