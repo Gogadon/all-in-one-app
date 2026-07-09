@@ -152,31 +152,26 @@ test('Bibliothek vs. Zyklus: dieselbe Einheit mehrfach, Übungen & Historie gete
   assert.equal(z[3].segmente.length, 2);
 });
 
-test('Plan: Zyklus läuft rund inkl. Wrap-around', () => {
+test('Plan: Zyklus-Struktur und Wrap-around (dynamische Position)', () => {
   const { state } = baueKraftWelt();
-  const namen = [];
-  for (let i = 0; i < 6; i++) { namen.push(naechsteEinheit(state, 'kraft').name); schalteWeiter(state, 'kraft'); }
-  assert.deepEqual(namen, ['Push', 'Beine · Nacken', 'Active Rest', 'Push', 'Active Rest', 'Push']);
+  // Die Position wird jetzt dynamisch aus Anker + Verlauf berechnet.
+  // Ohne Verlauf steht der Zeiger am Anker (Position 0 = Push).
+  assert.equal(naechsteEinheit(state, 'kraft').name, 'Push');
+  // Der Zyklus selbst ist rund (5 Stellen, wrap-around über Modulo):
+  const namen = zyklusEinheiten(state, 'kraft').map(e => e.name);
+  assert.deepEqual(namen, ['Push', 'Beine · Nacken', 'Active Rest', 'Push', 'Active Rest']);
 });
 
-test('Zyklus: Stelle verschieben/entfernen — Zeiger folgt „seiner" Stelle', () => {
-  const { state, beine } = baueKraftWelt();
-  schalteWeiter(state, 'kraft'); // Zeiger auf Stelle 1 (Beine)
-  assert.equal(naechsteEinheit(state, 'kraft').name, 'Beine · Nacken');
-
-  // Beine (Stelle 1) nach unten → Zeiger wandert mit auf Stelle 2
+test('Zyklus: Stelle verschieben/entfernen — Struktur bleibt korrekt', () => {
+  const { state } = baueKraftWelt();
+  // Beine (Stelle 1) nach unten
   verschiebeImZyklus(state, 'kraft', 1, +1);
-  assert.equal(naechsteEinheit(state, 'kraft').name, 'Beine · Nacken');
   assert.deepEqual(zyklusEinheiten(state, 'kraft').map(e => e.name),
     ['Push', 'Active Rest', 'Beine · Nacken', 'Push', 'Active Rest']);
-
-  // Stelle VOR dem Zeiger entfernen → Zeiger rückt nach, zeigt weiter auf Beine
+  // Stelle entfernen
   entferneAusZyklus(state, 'kraft', 0);
-  assert.equal(naechsteEinheit(state, 'kraft').name, 'Beine · Nacken');
-
-  // setzePosition direkt (Heute korrigieren)
-  setzePosition(state, 'kraft', 0);
-  assert.equal(naechsteEinheit(state, 'kraft').name, 'Active Rest');
+  assert.deepEqual(zyklusEinheiten(state, 'kraft').map(e => e.name),
+    ['Active Rest', 'Beine · Nacken', 'Push', 'Active Rest']);
 });
 
 test('Einheit löschen entfernt ALLE Zyklus-Vorkommen', () => {
@@ -225,4 +220,103 @@ test('Plan + Bibliothek überleben die Backup-Runde', () => {
   assert.equal(zurueck.plaene.kraft.zyklus.length, 5);
   assert.equal(zurueck.plaene.kraft.zyklus[0], push.id);
   assert.equal(zurueck.bibliothek.length, 3);
+});
+
+test('Dynamische Position: erledigte Krafttage + automatische Ruhetage', async () => {
+  const { addEinheit, addZuZyklus, addAktivitaetZuEinheit, aktuelleEinheit } = await import('../js/core/plan.js');
+  const { neueSession } = await import('../js/core/model.js');
+  const { addAktivitaet } = await import('../js/core/library.js');
+  const { leererZustand } = await import('../js/core/storage.js');
+  const state = leererZustand();
+  // Kraftübungen + eine Cardio-Übung für den Ruhetag
+  const bank = addAktivitaet(state, { name: 'Bank', kategorie: 'kraft', messwerte: ['gewicht', 'wdh'] });
+  const laufen = addAktivitaet(state, { name: 'Laufband', kategorie: 'kraft', messwerte: ['dauer'] });
+  laufen.cardio = true;   // als Cardio markieren (→ Active Rest = Ruhetag)
+  // Mini-Zyklus: Push(Kraft) → Rest(Cardio) → Pull(Kraft)
+  const push = addEinheit(state, 'kraft', { name: 'Push' });
+  const rest = addEinheit(state, 'kraft', { name: 'Active Rest' });
+  const pull = addEinheit(state, 'kraft', { name: 'Pull' });
+  addAktivitaetZuEinheit(state, 'kraft', push.id, bank.id);
+  addAktivitaetZuEinheit(state, 'kraft', rest.id, laufen.id);   // nur Cardio → Ruhetag
+  addAktivitaetZuEinheit(state, 'kraft', pull.id, bank.id);
+  [push, rest, pull].forEach(e => addZuZyklus(state, 'kraft', e.id));
+  state.plaene.kraft.anker = { iso: '2026-07-01', index: 0 };
+
+  // Am 01.07. Push abgeschlossen
+  const s = neueSession({ datum: '2026-07-01' }); s.modul = 'kraft'; s.abgeschlossen = true;
+  state.sessions.push(s);
+
+  // 02.07.: Push war erledigt → Rest ist dran
+  assert.equal(aktuelleEinheit(state, 'kraft', '2026-07-02').name, 'Active Rest');
+  // 03.07.: Rest rückt automatisch (kein Abschließen nötig) → Pull
+  assert.equal(aktuelleEinheit(state, 'kraft', '2026-07-03').name, 'Pull');
+  // Pull nicht abgeschlossen → bleibt am 04. und 05. auf Pull
+  assert.equal(aktuelleEinheit(state, 'kraft', '2026-07-04').name, 'Pull');
+  assert.equal(aktuelleEinheit(state, 'kraft', '2026-07-05').name, 'Pull');
+});
+
+test('Dynamische Position: Abschließen rückt NICHT am selben Tag', async () => {
+  const { addEinheit, addZuZyklus, aktuelleEinheit } = await import('../js/core/plan.js');
+  const { neueSession } = await import('../js/core/model.js');
+  const { leererZustand } = await import('../js/core/storage.js');
+  const state = leererZustand();
+  const push = addEinheit(state, 'kraft', { name: 'Push' });
+  const pull = addEinheit(state, 'kraft', { name: 'Pull' });
+  [push, pull].forEach(e => addZuZyklus(state, 'kraft', e.id));
+  state.plaene.kraft.anker = { iso: '2026-07-01', index: 0 };
+  // Heute (01.07.) Push abschließen
+  const s = neueSession({ datum: '2026-07-01' }); s.modul = 'kraft'; s.abgeschlossen = true;
+  state.sessions.push(s);
+  // Am SELBEN Tag zeigt es weiterhin Push (rückt nicht sofort)
+  assert.equal(aktuelleEinheit(state, 'kraft', '2026-07-01').name, 'Push');
+  // Erst am nächsten Tag Pull
+  assert.equal(aktuelleEinheit(state, 'kraft', '2026-07-02').name, 'Pull');
+});
+
+test('Überspringen: mehrfach am selben Tag möglich (Variante A)', async () => {
+  const { addEinheit, addZuZyklus, addAktivitaetZuEinheit, aktuelleEinheit } = await import('../js/core/plan.js');
+  const { addAktivitaet } = await import('../js/core/library.js');
+  const { neueSession } = await import('../js/core/model.js');
+  const { leererZustand } = await import('../js/core/storage.js');
+  const state = leererZustand();
+  const bank = addAktivitaet(state, { name: 'Bank', kategorie: 'kraft', messwerte: ['gewicht'] });
+  const lauf = addAktivitaet(state, { name: 'Laufband', kategorie: 'kraft', messwerte: ['dauer'] });
+  lauf.cardio = true;
+  const namen = ['Rücken', 'Brust', 'Rest', 'Beine'];
+  namen.forEach(n => {
+    const e = addEinheit(state, 'kraft', { name: n });
+    addAktivitaetZuEinheit(state, 'kraft', e.id, n === 'Rest' ? lauf.id : bank.id);
+    addZuZyklus(state, 'kraft', e.id);
+  });
+  state.plaene.kraft.anker = { iso: '2026-07-09', index: 0 };
+  const skip = () => {
+    const s = neueSession({ datum: '2026-07-09' }); s.modul = 'kraft'; s.uebersprungen = true;
+    state.sessions.push(s);
+  };
+  assert.equal(aktuelleEinheit(state, 'kraft', '2026-07-09').name, 'Rücken');
+  skip(); assert.equal(aktuelleEinheit(state, 'kraft', '2026-07-09').name, 'Brust');
+  skip(); assert.equal(aktuelleEinheit(state, 'kraft', '2026-07-09').name, 'Rest');
+  skip(); assert.equal(aktuelleEinheit(state, 'kraft', '2026-07-09').name, 'Beine');
+});
+
+test('Überspringen: geskippter Ruhetag rückt nicht doppelt', async () => {
+  const { addEinheit, addZuZyklus, addAktivitaetZuEinheit, aktuelleEinheit } = await import('../js/core/plan.js');
+  const { addAktivitaet } = await import('../js/core/library.js');
+  const { neueSession } = await import('../js/core/model.js');
+  const { leererZustand } = await import('../js/core/storage.js');
+  const state = leererZustand();
+  const bank = addAktivitaet(state, { name: 'Bank', kategorie: 'kraft', messwerte: ['gewicht'] });
+  const lauf = addAktivitaet(state, { name: 'Laufband', kategorie: 'kraft', messwerte: ['dauer'] });
+  lauf.cardio = true;
+  const rest = addEinheit(state, 'kraft', { name: 'Rest' });
+  addAktivitaetZuEinheit(state, 'kraft', rest.id, lauf.id);
+  const r = addEinheit(state, 'kraft', { name: 'Rücken' });
+  addAktivitaetZuEinheit(state, 'kraft', r.id, bank.id);
+  [rest, r].forEach(e => addZuZyklus(state, 'kraft', e.id));
+  state.plaene.kraft.anker = { iso: '2026-07-09', index: 0 };
+  const s = neueSession({ datum: '2026-07-09' }); s.modul = 'kraft'; s.uebersprungen = true;
+  state.sessions.push(s);
+  assert.equal(aktuelleEinheit(state, 'kraft', '2026-07-09').name, 'Rücken');
+  // Morgen: der geskippte Ruhetag darf nicht nochmal automatisch rücken
+  assert.equal(aktuelleEinheit(state, 'kraft', '2026-07-10').name, 'Rücken');
 });
