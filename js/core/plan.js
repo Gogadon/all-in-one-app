@@ -272,6 +272,16 @@ export function tagesStatus(state, modul, iso) {
 }
 
 /**
+ * Wie viele Einheiten wurden an diesem Tag übersprungen?
+ * Jeder Skip rückt den Zyklus um eins vor — man darf so oft überspringen,
+ * wie man will (keine Bevormunding). Der Kalendertag bleibt derselbe.
+ */
+export function skipsAmTag(state, modul, iso) {
+  return (state.sessions ?? []).filter(
+    s => s.datum === iso && (s.modul ?? 'kraft') === modul && s.uebersprungen).length;
+}
+
+/**
  * Berechnet die heutige Zyklus-Position dynamisch.
  * @param anker { iso, index }  — an `iso` galt Zyklus-Index `index`.
  * @param istRuhe (einheit)=>bool — erlaubt dem Aufrufer feinere Ruhetag-Erkennung.
@@ -286,24 +296,29 @@ export function berechnePositionHeute(state, modul, anker, heute = heuteIso(), i
   let d = anker.iso;
   // von Anker bis (ausschließlich) heute
   while (d < heute) {
-    const einheitId = plan.zyklus[pos % len];
-    const einheit = plan.einheiten.find(e => e.id === einheitId);
-    const status = tagesStatus(state, modul, d);
-    if (status === 'uebersprungen') {
-      pos = (pos + 1) % len;
-    } else if (istRuhe(einheit)) {
-      pos = (pos + 1) % len;           // Ruhetag rückt immer
-    } else if (status === 'erledigt') {
-      pos = (pos + 1) % len;           // Krafttag nur wenn erledigt
+    const skips = skipsAmTag(state, modul, d);
+    if (skips > 0) {
+      // Jeder Skip rückt eine Einheit vor.
+      pos = (pos + skips) % len;
+      // Wurde an dem Tag nach den Skips doch noch trainiert? Dann rückt der
+      // erledigte Tag zusätzlich (er ist ja mit dem Kalendertag abgeschlossen).
+      if (tagesStatus(state, modul, d) === 'erledigt') pos = (pos + 1) % len;
+    } else {
+      const einheitId = plan.zyklus[pos % len];
+      const einheit = plan.einheiten.find(e => e.id === einheitId);
+      const status = tagesStatus(state, modul, d);
+      if (istRuhe(einheit)) {
+        pos = (pos + 1) % len;           // Ruhetag rückt immer
+      } else if (status === 'erledigt') {
+        pos = (pos + 1) % len;           // Krafttag nur wenn erledigt
+      }
+      // sonst: offener Krafttag → bleibt stehen
     }
-    // sonst: offener Krafttag → bleibt stehen
     d = naechsterTag(d);
   }
-  // Heute selbst: ein ÜBERSPRUNGENER Tag ist sofort „durch" und rückt weiter
-  // (im Gegensatz zu erledigt/offen, die erst morgen wirken).
-  if (tagesStatus(state, modul, heute) === 'uebersprungen') {
-    pos = (pos + 1) % len;
-  }
+  // Heute selbst: jeder Skip ist sofort „durch" und rückt weiter.
+  // (Erledigt/offen wirken erst morgen — der Tag ist ja noch nicht vorbei.)
+  pos = (pos + skipsAmTag(state, modul, heute)) % len;
   return pos;
 }
 
