@@ -4,8 +4,93 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#0C0D0E">
-<title>All-In-One</title>
-  
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="All-in-One">
+<title>All-in-One</title>
+
+<script>
+// ------------------------------------------------------------
+// PWA-Setup (installierbar, KEIN Service Worker → kein Cache-Problem).
+// Manifest wird inline als Data-URL erzeugt, Icons aus SVG gerastert.
+// Icon: Hexagon-Umriss in Lime + massiver Punkt im Zentrum.
+//   Die sechs Kanten deuten die Module an, der Punkt ist der Nutzer.
+// ------------------------------------------------------------
+(function(){
+  try{
+    // pad=1 → Motiv kleiner (für Androids „maskable", das Ränder wegschneidet)
+    function svgMarkup(pad){
+      var p = pad ? 0.70 : 1;
+      return '<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512">'
+        + '<rect width="512" height="512" rx="' + (pad ? 0 : 112) + '" fill="#0C0D0E"/>'
+        + '<g transform="translate(256,256) scale(' + p + ') translate(-256,-256)">'
+        + '<path d="M256 106 L386 181 L386 331 L256 406 L126 331 L126 181 Z"'
+        + ' fill="none" stroke="#CDFD34" stroke-width="26" stroke-linejoin="round"/>'
+        + '<circle cx="256" cy="256" r="34" fill="#CDFD34"/>'
+        + '</g></svg>';
+    }
+    var svgIcon = 'data:image/svg+xml,' + encodeURIComponent(svgMarkup(0));
+
+    function rasterize(markup, size){
+      return new Promise(function(res, rej){
+        var img = new Image();
+        img.onload = function(){
+          try{
+            var c = document.createElement('canvas');
+            c.width = size; c.height = size;
+            c.getContext('2d').drawImage(img, 0, 0, size, size);
+            res(c.toDataURL('image/png'));
+          }catch(e){ rej(e); }
+        };
+        img.onerror = rej;
+        img.src = 'data:image/svg+xml,' + encodeURIComponent(markup);
+      });
+    }
+
+    function buildManifest(icons){
+      var mani = {
+        name: 'All-in-One',
+        short_name: 'All-in-One',
+        description: 'Kraft, Rad und Ziele an einem Ort.',
+        start_url: '.',
+        scope: '.',
+        display: 'standalone',
+        orientation: 'portrait',
+        background_color: '#0C0D0E',
+        theme_color: '#0C0D0E',
+        icons: icons
+      };
+      // data:-URL (bewährt in Chrome/Samsung; start_url wird gegen das Dokument aufgelöst)
+      var href = 'data:application/manifest+json,' + encodeURIComponent(JSON.stringify(mani));
+      var l = document.createElement('link');
+      l.rel = 'manifest'; l.href = href;
+      document.head.appendChild(l);
+    }
+
+    // PNGs erzeugen (Firefox/Android bevorzugen PNG); Fallback: nur SVG
+    Promise.all([rasterize(svgMarkup(0), 192), rasterize(svgMarkup(0), 512), rasterize(svgMarkup(1), 512)])
+      .then(function(r){
+        buildManifest([
+          { src: r[0], sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: r[1], sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: r[2], sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          { src: svgIcon, sizes: 'any', type: 'image/svg+xml', purpose: 'any' }
+        ]);
+      })
+      .catch(function(){
+        buildManifest([{ src: svgIcon, sizes: 'any', type: 'image/svg+xml', purpose: 'any' }]);
+      });
+
+    // Favicon + Apple-Touch-Icon direkt aus dem SVG
+    ['icon', 'apple-touch-icon'].forEach(function(rel){
+      var l = document.createElement('link');
+      l.rel = rel; l.href = svgIcon;
+      document.head.appendChild(l);
+    });
+  }catch(e){ /* PWA optional — App läuft auch ohne */ }
+})();
+</script>
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Sora:wght@400;500;600&display=swap" rel="stylesheet">
