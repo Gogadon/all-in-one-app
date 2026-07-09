@@ -1206,7 +1206,7 @@ export function erstelleKraftModul(ctx) {
         }
       }
       const rueckblick = [];
-      if (prAnzahl > 0) rueckblick.push({ icon: '🎉', text: `${prAnzahl} neue${prAnzahl === 1 ? 's' : ''} Top-Gewicht${prAnzahl === 1 ? '' : 'e'}` });
+      if (prAnzahl > 0) rueckblick.push({ icon: '🏆', text: `${prAnzahl} neue${prAnzahl === 1 ? 's' : ''} Top-Gewicht${prAnzahl === 1 ? '' : 'e'}` });
       if (verbessert > 0) rueckblick.push({ icon: '💪', text: `${verbessert} Übung${verbessert === 1 ? '' : 'en'} verbessert` });
       if (kraftSaetze > 0) rueckblick.push({ icon: '🏋️', text: `${kraftSaetze} Sätze` });
       if (cardioMin > 0) rueckblick.push({ icon: '🔥', text: `${cardioMin} Min Cardio` });
