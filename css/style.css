@@ -10,6 +10,8 @@
 
   --kraft:#CDFD34; --rad:#37D7F4; --wandern:#FCB44B;
   --schwimmen:#A78BFA; --challenge:#FF6B9D; --sonstiges:#868D88;
+  /* Info-Farbe für Progressions-Hinweise „halten" — bewusst keine Modulfarbe */
+  --info:#8FB4C7;
 
   --font-display:'Bricolage Grotesque',system-ui,sans-serif;
   --font-body:'Sora',system-ui,sans-serif;
@@ -107,17 +109,18 @@ h1,h2,h3,.num{font-family:var(--font-display);letter-spacing:-.02em}
 .seg-inhalt{margin-top:10px;padding-top:10px;border-top:1px solid var(--line);
   display:flex;flex-direction:column;gap:8px}
 
-/* Vorschlag (Progression) — hebt sich IMMER vom Rest ab:
-   farbiger linker Rand + getönter Hintergrund. Die Farbe unterscheidet
-   die Art (steigern/halten/technik), der Block als solcher bleibt erkennbar. */
-.vorschlag{font-size:12.5px;padding:8px 10px 8px 12px;border-radius:var(--r-icon);
+/* Vorschlag (Progression) — hebt sich IMMER klar vom Rest ab:
+   eigene Textfarbe + farbiger linker Rand + getönter Hintergrund.
+   Die Farbe unterscheidet die Art, der Block bleibt als Hinweis erkennbar. */
+.vorschlag{font-size:12.5px;font-weight:500;padding:9px 10px 9px 12px;
+  border-radius:var(--r-icon);
   background:var(--surface-2);color:var(--dim);
   border-left:3px solid var(--dim-2)}
-.vorschlag.steigern{color:var(--kraft);background:rgba(205,253,52,.08);
+.vorschlag.steigern{color:var(--kraft);background:rgba(205,253,52,.10);
   border-left-color:var(--kraft)}
-.vorschlag.halten{color:var(--text);background:rgba(255,255,255,.05);
-  border-left-color:var(--dim)}
-.vorschlag.technik{color:var(--wandern);background:rgba(252,180,75,.07);
+.vorschlag.halten{color:var(--info);background:rgba(143,180,199,.10);
+  border-left-color:var(--info)}
+.vorschlag.technik{color:var(--wandern);background:rgba(252,180,75,.10);
   border-left-color:var(--wandern)}
 
 /* Zuletzt + Verlauf */
