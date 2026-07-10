@@ -28,6 +28,42 @@ export function heuteIso(d = new Date()) {
 }
 
 // ------------------------------------------------------------
+// Datums-Helfer
+//
+// WICHTIG: Alle rechnen auf ISO-Strings ('YYYY-MM-DD') und intern in UTC.
+// Ein `new Date()` + `toISOString()` wäre fehlerhaft — es rechnet die lokale
+// Zeit nach UTC zurück und kippt dadurch an Tagesgrenzen um einen Tag.
+// Deshalb: erst mit heuteIso() den lokalen Kalendertag bestimmen, dann rein
+// in UTC weiterrechnen.
+// ------------------------------------------------------------
+
+/** Montag der Woche, in der `heute` liegt (ISO). */
+export function wochenStart(heute = heuteIso()) {
+  const [y, m, d] = heute.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  const tag = (dt.getUTCDay() + 6) % 7;   // Mo=0
+  dt.setUTCDate(dt.getUTCDate() - tag);
+  return dt.toISOString().slice(0, 10);
+}
+
+/** Erster Tag des Monats, in dem `heute` liegt (ISO). */
+export function monatsStart(heute = heuteIso()) {
+  return heute.slice(0, 7) + '-01';
+}
+
+/** Erster Tag des Jahres, in dem `heute` liegt (ISO). */
+export function jahresStart(heute = heuteIso()) {
+  return heute.slice(0, 4) + '-01-01';
+}
+
+/** Der Kalendertag nach `iso` (ISO). */
+export function naechsterTag(iso) {
+  const [y, m, t] = iso.split('-').map(Number);
+  const d = new Date(Date.UTC(y, m - 1, t + 1));
+  return d.toISOString().slice(0, 10);
+}
+
+// ------------------------------------------------------------
 // Fabriken — erzeugen valide Objekte, mehr nicht.
 // (Reines JSON, keine Klassen → wandert 1:1 in localStorage/Backups.)
 // ------------------------------------------------------------

@@ -21,7 +21,7 @@
 // zur Info auf die Einheit.
 // ============================================================
 
-import { KATEGORIEN, neueId, neueSession, neuesSegment, findeAktivitaet, heuteIso } from './model.js';
+import { KATEGORIEN, neueId, neueSession, neuesSegment, findeAktivitaet, heuteIso, naechsterTag } from './model.js';
 
 // ------------------------------------------------------------
 // Plan holen / anlegen
@@ -320,13 +320,6 @@ export function berechnePositionHeute(state, modul, anker, heute = heuteIso(), i
   // (Erledigt/offen wirken erst morgen — der Tag ist ja noch nicht vorbei.)
   pos = (pos + skipsAmTag(state, modul, heute)) % len;
   return pos;
-}
-
-/** ISO-Tag + 1 (kalendertagsicher). */
-function naechsterTag(iso) {
-  const [y, m, t] = iso.split('-').map(Number);
-  const d = new Date(Date.UTC(y, m - 1, t + 1));
-  return d.toISOString().slice(0, 10);
 }
 
 /**
