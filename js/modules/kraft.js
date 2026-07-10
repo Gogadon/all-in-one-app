@@ -1221,7 +1221,7 @@ export function erstelleKraftModul(ctx) {
         notiz: (s.notiz ?? '').trim() || null,
       };
       try {
-        const res = await teileKarte(daten, `gogadon-${s.datum}.png`);
+        const res = await teileKarte(daten, `all-in-one-${s.datum}.png`);
         if (res === 'heruntergeladen') await hinweis('Bild gespeichert ✓');
       } catch (err) {
         await hinweis('Teilen nicht möglich', err.message);
