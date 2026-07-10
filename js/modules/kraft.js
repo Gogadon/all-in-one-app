@@ -457,11 +457,13 @@ export function eintragInputsHtml(aktivitaet, segment, eintrag) {
     const einheitLabel = def.anzeige === 'zeit' ? 'min'
       : def.anzeige === 'distanz' ? (kat === 'schwimmen' ? 'm' : 'km')
       : (def.einheit || def.kurz || def.label);
-    const platzhalter = def.anzeige === 'zeit' ? 'min'
+    // Placeholder zeigt das erwartete Format. Achtung: Beim Kraft-Cardio meint
+    // „1:52" Stunden:Minuten (anders als im Rad-Modul, wo es Min:Sek sind).
+    const platzhalter = def.anzeige === 'zeit' ? 'z.B. 45 oder 1:15'
       : def.anzeige === 'distanz' ? (kat === 'schwimmen' ? 'm' : 'km')
       : (def.kurz ?? def.label);
     return `<label class="feld">
-      <input type="text" inputmode="decimal" value="${escT(wert)}" placeholder="${escT(platzhalter)}"
+      <input type="text" inputmode="${def.anzeige === 'zeit' ? 'text' : 'decimal'}" value="${escT(wert)}" placeholder="${escT(platzhalter)}"
         data-change="k.wert" data-seg="${segment.id}" data-eintrag="${eintrag.id}" data-typ="${typ}">
       <span>${escT(einheitLabel)}</span>
     </label>`;

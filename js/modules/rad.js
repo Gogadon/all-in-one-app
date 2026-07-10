@@ -201,15 +201,30 @@ export function erstelleRadModul(ctx) {
       else if (typ === 'tempo_avg' || typ === 'tempo_max') wert = formatZahl(roh, 1);
       else wert = formatZahl(roh, def.dezimal ?? 0);
     }
-    const einheit = def.anzeige === 'zeit' ? 'min'
+    const einheit = def.anzeige === 'zeit' ? ''      // Format steht im Placeholder
       : def.anzeige === 'distanz' ? 'km' : (def.einheit || '');
+
+    // Placeholder zeigt das erwartete Format — bei der Dauer besonders wichtig,
+    // weil „35:50" hier Minuten:Sekunden meint (wie auf Uhr/Bordcomputer).
+    let platzhalter = '0';
+    if (def.anzeige === 'zeit') platzhalter = '35:50';
+    else if (def.anzeige === 'distanz') platzhalter = '10,5';
+    else if (typ === 'tempo_avg' || typ === 'tempo_max') platzhalter = '16,8';
+    else if (typ === 'hoehenmeter') platzhalter = '143';
+    else if (typ === 'kalorien') platzhalter = '365';
+    else if (typ === 'puls_avg' || typ === 'puls_max') platzhalter = '116';
+
     const kannWeg = OPTIONAL_MESSWERTE.includes(typ);
+    // Beim Dauer-Feld das Format dauerhaft erklären — der Placeholder
+    // verschwindet ja, sobald getippt wird.
+    const hinweisText = def.anzeige === 'zeit' ? 'Min:Sek · oder Std:Min:Sek' : '';
     return `<div class="tour-feld">
-      <label>${esc(def.label)}</label>
+      <label>${esc(def.label)}${hinweisText ? ` <span class="feld-format">${esc(hinweisText)}</span>` : ''}</label>
       <div class="tour-feld-eingabe">
-        <input type="text" inputmode="decimal" value="${esc(wert)}"
-          placeholder="0" data-change="rad.wert" data-typ="${typ}">
-        <span class="einheit">${esc(einheit)}</span>
+        <input type="text" inputmode="${def.anzeige === 'zeit' ? 'text' : 'decimal'}"
+          value="${esc(wert)}" placeholder="${esc(platzhalter)}"
+          data-change="rad.wert" data-typ="${typ}">
+        ${einheit ? `<span class="einheit">${esc(einheit)}</span>` : ''}
         ${kannWeg ? `<button class="feld-weg" data-action="rad.mwWeg" data-typ="${typ}">✕</button>` : ''}
       </div>
     </div>`;
