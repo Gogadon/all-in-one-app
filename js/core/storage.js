@@ -7,9 +7,13 @@
 // ist ein Austausch DIESER Datei, kein Umbau der App.
 // ============================================================
 
+// ACHTUNG: STORAGE_KEY NIEMALS ändern! Unter diesem Schlüssel liegen die
+// Daten im localStorage des Geräts. Eine Umbenennung macht alle gespeicherten
+// Trainings unauffindbar. Der historische Name bleibt, auch wenn die App
+// inzwischen anders heißt.
 export const STORAGE_KEY = 'gogadon_allinone_v1';
 export const SCHEMA_VERSION = 1;
-const APP_NAME = 'gogadon-allinone';
+const APP_NAME = 'all-in-one';
 
 // ------------------------------------------------------------
 // Zustand
