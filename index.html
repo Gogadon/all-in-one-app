@@ -34,8 +34,9 @@
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function () {
-        navigator.serviceWorker.register('sw.js').catch(function () {
-          /* ohne SW läuft die App trotzdem, nur ggf. nicht installierbar */
+        navigator.serviceWorker.register('sw.js').catch(function (err) {
+          // Ohne SW läuft die App trotzdem — nur ggf. nicht installierbar.
+          console.warn('Service Worker nicht registriert:', err && err.message);
         });
       });
     }
