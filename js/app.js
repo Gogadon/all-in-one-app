@@ -71,7 +71,7 @@ const actions = {
     const blob = new Blob([exportBackup(state)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `gogadon-backup-${heuteIso()}.json`;
+    a.download = `all-in-one-backup-${heuteIso()}.json`;
     a.click();
     URL.revokeObjectURL(a.href);
   },
@@ -85,7 +85,7 @@ const actions = {
       text: 'Letzte Chance — das lässt sich nicht rückgängig machen.',
       jaText: 'Alles löschen', gefahr: true })) return;
     state = leererZustand();
-    unterseite = null; tab = 'heute';
+    unterseite = null; tab = 'dashboard';
     await ctx.save(); render();
   },
 
@@ -255,7 +255,9 @@ function importiereDatei(input) {
       state = importBackup(String(leser.result));
       await ctx.save();
       await hinweis('Backup importiert ✓');
-      unterseite = null; tab = 'heute';
+      // Zurück ins Dashboard: dort sieht man sofort alle Module und die
+      // Wochenstatistik mit den frisch importierten Daten.
+      unterseite = null; tab = 'dashboard';
       render();
     } catch (err) {
       await hinweis('Import fehlgeschlagen', err.message);
@@ -299,7 +301,7 @@ function wochenStatistik() {
 
 function dashboardHtml() {
   let html = `<div class="dash-kopf">
-    <div><span class="eyebrow"><span class="pip"></span>gogadon</span><h1>Start</h1></div>
+    <div><span class="eyebrow"><span class="pip"></span>All-in-One</span><h1>Start</h1></div>
     <button class="zahnrad" data-action="unterseiteAuf" data-seite="daten" aria-label="Daten & Einstellungen">⚙️</button>
   </div>`;
 
