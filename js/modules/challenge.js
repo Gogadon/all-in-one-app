@@ -11,7 +11,7 @@
 // ============================================================
 
 import { formatZahl } from '../core/metrics.js';
-import { heuteIso } from '../core/model.js';
+import { heuteIso, wochenStart, monatsStart, jahresStart } from '../core/model.js';
 import { sessionVolumenErledigt } from './kraft.js';
 import { bestaetige, hinweis } from '../ui/components.js';
 
@@ -49,25 +49,6 @@ function tourMw(s) {
 // ============================================================
 // 1) REINE LOGIK (Node-testbar)
 // ============================================================
-
-/** Montag der aktuellen Woche (ISO). */
-export function wochenStart(heute = heuteIso()) {
-  const [y, m, d] = heute.split('-').map(Number);
-  const dt = new Date(Date.UTC(y, m - 1, d));
-  const tag = (dt.getUTCDay() + 6) % 7;   // Mo=0
-  dt.setUTCDate(dt.getUTCDate() - tag);
-  return dt.toISOString().slice(0, 10);
-}
-
-/** Erster Tag des aktuellen Monats (ISO). */
-export function monatsStart(heute = heuteIso()) {
-  return heute.slice(0, 7) + '-01';
-}
-
-/** Erster Tag des aktuellen Jahres (ISO). */
-export function jahresStart(heute = heuteIso()) {
-  return heute.slice(0, 4) + '-01-01';
-}
 
 /** Start-ISO eines Zeitraums (oder null für „gesamt"/„bis:"). */
 export function zeitraumStart(zeitraum, heute = heuteIso()) {
