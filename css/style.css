@@ -478,3 +478,6 @@ body.ohne-navi .nav{display:none}
 
 /* Plan-Tab: Hinweis „heute erledigt" */
 .plan-hinweis{margin:10px 2px 4px;color:var(--kraft);opacity:.85}
+
+/* Format-Hinweis neben dem Feld-Label (z.B. „Min:Sek" bei der Tour-Dauer) */
+.feld-format{font-size:11px;color:var(--dim-2);font-weight:400;margin-left:4px}
