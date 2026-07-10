@@ -18,6 +18,7 @@ import {
 } from '../core/model.js';
 import { addAktivitaet } from '../core/library.js';
 import { bestaetige, hinweis } from '../ui/components.js';
+import { teileKarte } from '../ui/share.js';
 
 export const MODUL = 'rad';
 
@@ -66,6 +67,31 @@ export function tourStatistik(state) {
     hoehen += mw.hoehenmeter ?? 0;
   }
   return { anzahl: touren.length, distanz, dauer, hoehen };
+}
+
+/**
+ * Highlights einer Tour: Ist sie ein persönlicher Rekord?
+ * Vergleicht gegen alle ANDEREN abgeschlossenen Touren.
+ */
+export function tourHighlights(state, session) {
+  const mw = tourWerte(session);
+  const andere = alleTouren(state).filter(t => t.id !== session.id && t.abgeschlossen);
+  const hl = [];
+
+  const rekord = (typ, label, format) => {
+    const wert = mw[typ];
+    if (wert == null || wert <= 0) return;
+    const bisher = andere.map(t => tourWerte(t)[typ] ?? 0);
+    const best = bisher.length ? Math.max(...bisher) : 0;
+    if (wert > best) hl.push({ name: label, text: format(wert), pr: true });
+  };
+
+  rekord('distanz', 'Längste Tour', v => formatZahl(v / 1000, 1) + ' km');
+  rekord('hoehenmeter', 'Meiste Höhenmeter', v => formatZahl(v, 0) + ' hm');
+  rekord('dauer', 'Längste Fahrzeit', v => formatWert('dauer', v));
+  rekord('tempo_avg', 'Schnellste Ø-Geschw.', v => formatZahl(v, 1) + ' km/h');
+
+  return hl;
 }
 
 // ============================================================
@@ -186,7 +212,10 @@ export function erstelleRadModul(ctx) {
       html += `<button class="knopf geist voll" data-action="rad.verwerfen">Verwerfen</button>`;
     } else {
       html += tourDetailHtml(akt, mw);
-      html += `<button class="knopf klein" data-action="rad.wiederOeffnen" data-sid="${s.id}">Bearbeiten</button>`;
+      html += `<div class="knopf-zeile">
+        <button class="knopf klein" data-action="rad.teilen" data-sid="${s.id}">Teilen</button>
+        <button class="knopf klein" data-action="rad.wiederOeffnen" data-sid="${s.id}">Bearbeiten</button>
+      </div>`;
     }
     return html;
   }
@@ -301,7 +330,8 @@ export function erstelleRadModul(ctx) {
             <span class="pfeil-ico ${auf ? 'runter' : ''}" style="border-bottom-color:var(--dim)"></span></div>
         </button>
         ${meta ? `<p class="dim tour-meta">${esc(meta)}</p>` : ''}
-        ${auf ? tourDetailHtml(findeAktivitaet(S(), t.segmente[0]?.aktivitaetId) ?? tourAktivitaet(S()), mw) : ''}
+        ${auf ? tourDetailHtml(findeAktivitaet(S(), t.segmente[0]?.aktivitaetId) ?? tourAktivitaet(S()), mw)
+          + `<button class="knopf geist voll" data-action="rad.teilen" data-sid="${t.id}">Teilen</button>` : ''}
       </div>`;
     }).join('');
     return html;
@@ -385,6 +415,49 @@ export function erstelleRadModul(ctx) {
     'rad.detail'(d) {
       detailOffen.has(d.sid) ? detailOffen.delete(d.sid) : detailOffen.add(d.sid);
       ctx.render();
+    },
+    async 'rad.teilen'(d) {
+      const s = S().sessions.find(x => x.id === d.sid); if (!s) return;
+      const akt = findeAktivitaet(S(), s.segmente[0]?.aktivitaetId) ?? tourAktivitaet(S());
+      const mw = tourWerte(s);
+
+      // Messwerte als Zeilen — nur die, die auch gefüllt sind.
+      const zeilen = (akt.messwerte ?? STANDARD_MESSWERTE)
+        .filter(typ => typ !== 'distanz' && mw[typ] != null)   // Distanz ist der Hero-Wert
+        .map(typ => ({
+          name: MESSWERTE[typ].label,
+          detail: formatWert(typ, mw[typ], { kategorie: MODUL }),
+        }));
+
+      const kmText = mw.distanz != null ? `${formatZahl(mw.distanz / 1000, 1)} km` : '–';
+      const hl = tourHighlights(S(), s);
+
+      // Tagesrückblick: die Tour in Kennzahlen
+      const rueckblick = [];
+      if (mw.distanz != null) rueckblick.push({ icon: '🚴', text: `${formatZahl(mw.distanz / 1000, 1)} km` });
+      if (mw.hoehenmeter != null) rueckblick.push({ icon: '⛰️', text: `${formatZahl(mw.hoehenmeter, 0)} Höhenmeter` });
+      if (mw.dauer != null) rueckblick.push({ icon: '⏱️', text: formatWert('dauer', mw.dauer) });
+      if (mw.kalorien != null) rueckblick.push({ icon: '🔥', text: `${formatZahl(mw.kalorien, 0)} kcal` });
+
+      const daten = {
+        modul: MODUL,
+        eyebrow: 'RAD · TOUR',
+        titel: s.name || 'Radtour',
+        datum: ctx.formatDatum(s.datum),
+        volumenText: kmText,
+        volumenLabel: 'STRECKE',
+        zeilen,
+        highlights: hl,
+        rueckblick,
+        notiz: (s.notiz ?? '').trim() || null,
+      };
+
+      try {
+        const res = await teileKarte(daten, `all-in-one-tour-${s.datum}.png`);
+        if (res === 'heruntergeladen') await hinweis('Bild gespeichert ✓');
+      } catch (err) {
+        await hinweis('Teilen nicht möglich', err.message);
+      }
     },
   };
 

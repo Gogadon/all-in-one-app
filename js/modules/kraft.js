@@ -1214,6 +1214,8 @@ export function erstelleKraftModul(ctx) {
       if (cardioMin > 0) rueckblick.push({ icon: '🔥', text: `${cardioMin} Min Cardio` });
 
       const daten = {
+        modul: MODUL,
+        eyebrow: 'KRAFT · TRAINING',
         titel: einheit ? einheit.name : 'Training',
         datum: formatDatum(s.datum),
         volumenText: `${formatZahl(sessionVolumenErledigt(s), 0)} kg`,
