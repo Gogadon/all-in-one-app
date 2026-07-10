@@ -12,8 +12,10 @@ const { leererZustand } = await import('../js/core/storage.js');
 const { neueSession, neuesSegment, neuerEintrag, addSegment, addEintrag } = await import('../js/core/model.js');
 const { addAktivitaet } = await import('../js/core/library.js');
 const {
-  fortschritt, wochenStart, monatsStart, jahresStart, zeitraumStart, zeitraumText,
+  fortschritt, zeitraumStart, zeitraumText,
 } = await import('../js/modules/challenge.js');
+// Datums-Helfer wohnen jetzt im Kern (model.js), nicht mehr im Challenge-Modul
+const { wochenStart, monatsStart, jahresStart } = await import('../js/core/model.js');
 
 const HEUTE = '2026-07-08'; // Mittwoch
 
