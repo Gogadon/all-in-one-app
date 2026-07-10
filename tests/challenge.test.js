@@ -100,3 +100,15 @@ test('Challenge: zeitraumText liefert lesbare Beschreibung', () => {
   assert.equal(zeitraumText('gesamt'), 'insgesamt');
   assert.equal(zeitraumText('bis:2026-08-31'), 'bis 2026-08-31');
 });
+
+test('Datum: tageZwischen rechnet in UTC und ignoriert Zeitanteile', async () => {
+  const { tageZwischen } = await import('../js/core/model.js');
+  assert.equal(tageZwischen('2026-07-10', '2026-07-31'), 21);
+  assert.equal(tageZwischen('2026-07-31', '2026-07-31'), 0);
+  assert.equal(tageZwischen('2026-07-31', '2026-07-10'), -21);   // rückwärts
+  assert.equal(tageZwischen('2026-03-28', '2026-04-04'), 7);     // über Sommerzeit
+  assert.equal(tageZwischen('2025-12-29', '2026-01-01'), 3);     // über Jahreswechsel
+  assert.equal(tageZwischen('2024-02-27', '2024-03-01'), 3);     // Schaltjahr
+  // Zeitanteile dürfen das Ergebnis nicht verschieben (lokales Parsen wäre buggy)
+  assert.equal(tageZwischen('2026-07-10T23:30:00', '2026-07-31T01:00:00'), 21);
+});
