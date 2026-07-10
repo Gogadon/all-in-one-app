@@ -9,6 +9,33 @@ const FARBE = {
   text: '#F2F5F3', dim: '#868D88', akzent: '#CDFD34',
 };
 
+/** Modul-Akzentfarben — die Karte übernimmt die Farbe des jeweiligen Moduls. */
+const AKZENT = {
+  kraft: '#CDFD34', rad: '#37D7F4', wandern: '#FCB44B',
+  schwimmen: '#A78BFA', challenge: '#FF6B9D',
+};
+
+/** Hexagon-Signet (das App-Icon) als Wasserzeichen unten in der Ecke. */
+function zeichneSignet(x, cx, cy, r, farbe) {
+  const ecken = [];
+  for (let i = 0; i < 6; i++) {
+    const a = (-90 + i * 60) * Math.PI / 180;
+    ecken.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]);
+  }
+  x.strokeStyle = farbe;
+  x.lineWidth = Math.max(1.5, r * 0.17);
+  x.lineJoin = 'round';
+  x.beginPath();
+  x.moveTo(ecken[0][0], ecken[0][1]);
+  for (let i = 1; i < 6; i++) x.lineTo(ecken[i][0], ecken[i][1]);
+  x.closePath();
+  x.stroke();
+  x.fillStyle = farbe;
+  x.beginPath();
+  x.arc(cx, cy, r * 0.23, 0, Math.PI * 2);
+  x.fill();
+}
+
 /**
  * Zeichnet eine Session-Karte auf ein Canvas und gibt es zurück.
  * daten: {
@@ -22,11 +49,14 @@ export function zeichneKarte(daten) {
   const B = 3;                     // Skalierung für Schärfe (Retina)
   const breite = 500;
   const pad = 28;
-  // Höhe dynamisch grob schätzen
+  // Akzentfarbe nach Modul (Standard: Kraft-Lime)
+  const akzent = AKZENT[daten.modul] ?? FARBE.akzent;
+  const akzentRgb = hexZuRgb(akzent);
+  // Höhe dynamisch grob schätzen (+38 für die Signet-Zeile unten)
   let h = 200 + daten.zeilen.length * 46
     + (daten.highlights?.length ? 30 + daten.highlights.length * 26 : 0)
     + (daten.rueckblick?.length ? 30 + daten.rueckblick.length * 26 : 0)
-    + (daten.notiz ? 60 : 0) + 60;
+    + (daten.notiz ? 60 : 0) + 60 + 38;
   const hoehe = h;
 
   const c = document.createElement('canvas');
@@ -45,15 +75,15 @@ export function zeichneKarte(daten) {
   rundRect(x, 12, 12, breite - 24, hoehe - 24, 22);
   x.clip();
   const grad = x.createRadialGradient(breite - 60, 10, 10, breite - 60, 10, 260);
-  grad.addColorStop(0, 'rgba(205,253,52,0.16)'); grad.addColorStop(1, 'rgba(205,253,52,0)');
+  grad.addColorStop(0, `rgba(${akzentRgb},0.16)`); grad.addColorStop(1, `rgba(${akzentRgb},0)`);
   x.fillStyle = grad; x.fillRect(12, 12, breite - 24, 260);
   x.restore();
 
   let y = pad + 22;
   // Eyebrow links + Datum rechts auf einer Zeile (wie Gym-App)
-  x.fillStyle = FARBE.akzent;
+  x.fillStyle = akzent;
   x.font = '600 12px Sora, sans-serif';
-  x.fillText('GOGADON · TRAINING', pad + 6, y);
+  x.fillText(daten.eyebrow ?? 'TRAINING', pad + 6, y);
   x.textAlign = 'right';
   x.fillStyle = FARBE.dim; x.font = '400 13px Sora, sans-serif';
   x.fillText(daten.datum, breite - pad - 6, y);
@@ -67,10 +97,10 @@ export function zeichneKarte(daten) {
   // Trainingsvolumen als eigene Zeile: Label + Wert nebeneinander
   x.fillStyle = FARBE.text; x.font = '600 13px Sora, sans-serif';
   x.globalAlpha = 0.7;
-  x.fillText('TRAININGSVOLUMEN', pad + 6, y);
+  x.fillText(daten.volumenLabel ?? 'TRAININGSVOLUMEN', pad + 6, y);
   x.globalAlpha = 1;
   x.textAlign = 'right';
-  x.fillStyle = FARBE.akzent; x.font = '800 24px "Bricolage Grotesque", sans-serif';
+  x.fillStyle = akzent; x.font = '800 24px "Bricolage Grotesque", sans-serif';
   x.fillText(daten.volumenText, breite - pad - 6, y + 2);
   x.textAlign = 'left';
   y += 24;
@@ -92,14 +122,14 @@ export function zeichneKarte(daten) {
   // Highlights
   if (daten.highlights?.length) {
     y += 6; linie(x, pad, y, breite - pad, y); y += 24;
-    x.fillStyle = FARBE.akzent; x.font = '600 12px Sora, sans-serif';
+    x.fillStyle = akzent; x.font = '600 12px Sora, sans-serif';
     x.fillText('HIGHLIGHTS', pad + 4, y); y += 24;
     for (const hl of daten.highlights) {
       x.font = '15px Sora, sans-serif';
       x.fillStyle = FARBE.text;
       const icon = hl.pr ? '🏆 ' : '↑ ';
       x.fillText(kurz(icon + hl.name, 30), pad + 4, y);
-      x.fillStyle = FARBE.akzent; x.textAlign = 'right';
+      x.fillStyle = akzent; x.textAlign = 'right';
       x.font = '600 14px Sora, sans-serif';
       x.fillText(hl.text, breite - pad - 6, y);
       x.textAlign = 'left';
@@ -110,7 +140,7 @@ export function zeichneKarte(daten) {
   // Tagesrückblick (gebündelte Kennzahlen)
   if (daten.rueckblick?.length) {
     y += 6; linie(x, pad, y, breite - pad, y); y += 24;
-    x.fillStyle = FARBE.akzent; x.font = '600 12px Sora, sans-serif';
+    x.fillStyle = akzent; x.font = '600 12px Sora, sans-serif';
     x.fillText('TAGESRÜCKBLICK', pad + 4, y); y += 24;
     for (const r of daten.rueckblick) {
       x.fillStyle = FARBE.text; x.font = '15px Sora, sans-serif';
@@ -127,6 +157,18 @@ export function zeichneKarte(daten) {
       x.fillText(zeile, pad + 4, y); y += 20;
     }
   }
+
+  // Wasserzeichen unten links: Hexagon-Signet + App-Name.
+  // Sitzt am unteren Kartenrand, nicht am Textfluss — dadurch immer an
+  // derselben Stelle, egal wie lang die Karte wird.
+  const wzY = hoehe - 34;
+  zeichneSignet(x, pad + 14, wzY, 10, akzent);
+  x.globalAlpha = 0.55;
+  x.fillStyle = FARBE.dim;
+  x.font = '600 11px Sora, sans-serif';
+  x.textAlign = 'left';
+  x.fillText('ALL-IN-ONE', pad + 32, wzY + 4);
+  x.globalAlpha = 1;
 
   return c;
 }
@@ -157,6 +199,13 @@ export async function teileKarte(daten, dateiname = 'training.png') {
 }
 
 // --- Helfer ---
+/** '#CDFD34' → '205,253,52' (für rgba()-Strings) */
+function hexZuRgb(hex) {
+  const h = String(hex).replace('#', '');
+  const n = parseInt(h, 16);
+  return `${(n >> 16) & 255},${(n >> 8) & 255},${n & 255}`;
+}
+
 function rundRect(x, px, py, w, h, r) {
   x.beginPath();
   x.moveTo(px + r, py);
