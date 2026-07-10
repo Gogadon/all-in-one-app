@@ -11,7 +11,7 @@
 // ============================================================
 
 import { formatZahl } from '../core/metrics.js';
-import { heuteIso, wochenStart, monatsStart, jahresStart } from '../core/model.js';
+import { heuteIso, wochenStart, monatsStart, jahresStart, tageZwischen } from '../core/model.js';
 import { sessionVolumenErledigt } from './kraft.js';
 import { bestaetige, hinweis } from '../ui/components.js';
 
@@ -92,8 +92,7 @@ export function fortschritt(state, ziel, heute = heuteIso()) {
 
   // Resttage bei Ziel mit Enddatum
   if (bis) {
-    const d1 = new Date(heute), d2 = new Date(bis);
-    res.resttage = Math.max(0, Math.round((d2 - d1) / 86400000));
+    res.resttage = Math.max(0, tageZwischen(heute, bis));
     res.abgelaufen = heute > bis;
   }
   return res;
