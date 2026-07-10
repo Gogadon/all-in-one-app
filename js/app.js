@@ -14,8 +14,8 @@ import {
   erstelleKraftModul, MODUL as KRAFT,
   sessionVolumenErledigt, segmentZusammenfassungKraft, segmentZusammenfassungWerte,
 } from './modules/kraft.js';
-import { erstelleRadModul, MODUL as RAD, alleTouren, tourStatistik } from './modules/rad.js';
-import { erstelleChallengeModul, MODUL as CHALLENGE, fortschritt, GROESSEN } from './modules/challenge.js';
+import { erstelleRadModul, MODUL as RAD, tourStatistik } from './modules/rad.js';
+import { erstelleChallengeModul, MODUL as CHALLENGE, fortschritt, wochenStart } from './modules/challenge.js';
 
 const main = document.getElementById('main');
 const nav = document.getElementById('nav');
@@ -76,6 +76,7 @@ const actions = {
     URL.revokeObjectURL(a.href);
   },
   'daten.import'() { document.getElementById('importDatei')?.click(); },
+  'daten.datei'(d, el) { importiereDatei(el); },
   async 'daten.reset'() {
     if (!await bestaetige({ titel: 'Alles zurücksetzen?',
       text: 'Sämtliche Sessions, Pläne und Übungen auf diesem Gerät werden gelöscht. Am besten vorher ein Backup exportieren.',
@@ -105,7 +106,6 @@ document.addEventListener('click', e => {
 document.addEventListener('change', e => {
   const el = e.target.closest('[data-change]');
   if (!el) return;
-  if (el.id === 'importDatei') return importiereDatei(el);
   const fn = actions[el.dataset.change];
   if (fn) fn(el.dataset, el, e);
 });
@@ -276,15 +276,10 @@ function importiereDatei(input) {
 // Dashboard (Start-Tab): Module wählen + Wochen-Übersicht
 // ------------------------------------------------------------
 
-/** Montag der aktuellen Woche als ISO. */
-function wochenStart() {
-  const d = new Date();
-  const tag = (d.getDay() + 6) % 7;   // Mo=0
-  d.setDate(d.getDate() - tag);
-  return d.toISOString().slice(0, 10);
-}
-
-/** Wochen-Statistik (diese Woche, modulübergreifend). */
+/** Wochen-Statistik (diese Woche, modulübergreifend).
+ *  Nutzt die robuste wochenStart-Funktion aus challenge.js: sie rechnet rein
+ *  in UTC auf Basis des lokal ermittelten heuteIso() und kann deshalb an
+ *  Tagesgrenzen nicht kippen (toISOString() auf ein lokales Date wäre buggy). */
 function wochenStatistik() {
   const abMo = wochenStart();
   let einheiten = 0, touren = 0, km = 0, volumen = 0;
