@@ -11,13 +11,12 @@
 // für alles" trägt.
 // ============================================================
 
-import { MESSWERTE, formatWert, formatZahl, parseZahl, parseDauer } from '../core/metrics.js';
+import { MESSWERTE, formatWert, formatZahl, parseZahl } from '../core/metrics.js';
 import {
   heuteIso, neueSession, neuesSegment, neuerEintrag,
-  addSegment, addEintrag, findeAktivitaet, loeseSegmentAuf,
+  addSegment, addEintrag, findeAktivitaet,
 } from '../core/model.js';
-import { addAktivitaet, aktivitaetenNachKategorie } from '../core/library.js';
-import { sparkline, trend } from '../ui/charts.js';
+import { addAktivitaet } from '../core/library.js';
 import { bestaetige, hinweis } from '../ui/components.js';
 
 export const MODUL = 'rad';
