@@ -115,3 +115,35 @@ test('Rad: Touren stören Kraft-Auswertungen nicht', async () => {
   const kraftSessions = state.sessions.filter(s => (s.modul ?? 'kraft') === 'kraft');
   assert.equal(kraftSessions.length, 0);
 });
+
+test('Rad: Highlights erkennen persönliche Rekorde', async () => {
+  const { state, rad } = neuesModul();
+  const { tourHighlights } = await import('../js/modules/rad.js');
+  // Tour 1: 10 km, 143 hm
+  await rad.actions['rad.neu']();
+  await rad.actions['rad.wert']({ typ: 'distanz' }, { value: '10' });
+  await rad.actions['rad.wert']({ typ: 'hoehenmeter' }, { value: '143' });
+  await rad.actions['rad.fertig']();
+  // Tour 2: 20 km (Rekord), 100 hm (kein Rekord)
+  await rad.actions['rad.neu']();
+  await rad.actions['rad.wert']({ typ: 'distanz' }, { value: '20' });
+  await rad.actions['rad.wert']({ typ: 'hoehenmeter' }, { value: '100' });
+  await rad.actions['rad.fertig']();
+
+  const hl2 = tourHighlights(state, state.sessions[1]);
+  assert.ok(hl2.some(h => h.name === 'Längste Tour'));
+  assert.ok(!hl2.some(h => h.name === 'Meiste Höhenmeter'));
+
+  const hl1 = tourHighlights(state, state.sessions[0]);
+  assert.ok(hl1.some(h => h.name === 'Meiste Höhenmeter'));
+  assert.ok(!hl1.some(h => h.name === 'Längste Tour'));
+});
+
+test('Rad: Teilen-Button erscheint bei fertiger Tour', async () => {
+  const { state, rad } = neuesModul();
+  await rad.actions['rad.neu']();
+  await rad.actions['rad.wert']({ typ: 'distanz' }, { value: '10' });
+  await rad.actions['rad.fertig']();
+  const html = rad.verlaufHtml();
+  assert.ok(html.includes('rad.detail'));   // aufklappbar
+});
