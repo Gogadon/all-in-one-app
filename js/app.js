@@ -7,7 +7,7 @@
 
 import { load, save, exportBackup, importBackup, leererZustand } from './core/storage.js';
 import { formatZahl } from './core/metrics.js';
-import { heuteIso, findeAktivitaet, sessionKategorien } from './core/model.js';
+import { heuteIso, findeAktivitaet, sessionKategorien, wochenStart } from './core/model.js';
 import { findeEinheit, naechsteEinheit } from './core/plan.js';
 import { esc, formatDatum, sheet, bestaetige, hinweis } from './ui/components.js';
 import {
@@ -15,7 +15,7 @@ import {
   sessionVolumenErledigt, segmentZusammenfassungKraft, segmentZusammenfassungWerte,
 } from './modules/kraft.js';
 import { erstelleRadModul, MODUL as RAD, tourStatistik } from './modules/rad.js';
-import { erstelleChallengeModul, MODUL as CHALLENGE, fortschritt, wochenStart } from './modules/challenge.js';
+import { erstelleChallengeModul, MODUL as CHALLENGE, fortschritt } from './modules/challenge.js';
 
 const main = document.getElementById('main');
 const nav = document.getElementById('nav');
