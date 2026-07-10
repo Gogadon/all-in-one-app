@@ -50,8 +50,15 @@ export async function load() {
     pruefeGrundform(state);
     return migriere(state);
   } catch (err) {
-    console.error('Gespeicherter Zustand unlesbar — starte leer. Rettungskopie angelegt.', err);
-    try { localStorage.setItem(STORAGE_KEY + '_defekt', roh); } catch {}
+    console.error('Gespeicherter Zustand unlesbar — starte leer.', err);
+    // Rettungskopie der kaputten Rohdaten sichern. Scheitert das (Speicher voll,
+    // blockiert), muss man es wissen — sonst sind die Daten wirklich weg.
+    try {
+      localStorage.setItem(STORAGE_KEY + '_defekt', roh);
+      console.warn('Rettungskopie der defekten Daten liegt unter', STORAGE_KEY + '_defekt');
+    } catch (kopieErr) {
+      console.warn('Rettungskopie konnte NICHT angelegt werden:', kopieErr.message);
+    }
     return leererZustand();
   }
 }
