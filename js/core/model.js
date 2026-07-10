@@ -63,6 +63,17 @@ export function naechsterTag(iso) {
   return d.toISOString().slice(0, 10);
 }
 
+/** Ein ISO-Tag als UTC-Date-Objekt (Mitternacht). Ignoriert Zeitanteile. */
+export function isoZuDatum(iso) {
+  const [y, m, d] = String(iso).slice(0, 10).split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d));
+}
+
+/** Ganze Kalendertage von `vonIso` bis `bisIso` (negativ, wenn bis < von). */
+export function tageZwischen(vonIso, bisIso) {
+  return Math.round((isoZuDatum(bisIso) - isoZuDatum(vonIso)) / 86400000);
+}
+
 // ------------------------------------------------------------
 // Fabriken — erzeugen valide Objekte, mehr nicht.
 // (Reines JSON, keine Klassen → wandert 1:1 in localStorage/Backups.)
