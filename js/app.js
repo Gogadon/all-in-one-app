@@ -403,16 +403,31 @@ function unterseiteHtml(titel, inhalt) {
   let startY = null, zug = 0, aktiv = false;
 
   main.addEventListener('touchstart', e => {
-    // Nur starten, wenn ganz oben und Sheet zu
-    if (main.scrollTop <= 0 && !document.body.classList.contains('sheet-auf')) {
+    // Nur starten, wenn ganz oben und kein Sheet/Dialog offen ist.
+    const ueberlagerung = document.body.classList.contains('sheet-auf')
+      || document.querySelector('.dialog.offen');
+    if (main.scrollTop <= 0 && !ueberlagerung) {
       startY = e.touches[0].clientY; aktiv = true; zug = 0;
     } else { aktiv = false; }
   }, { passive: true });
 
   main.addEventListener('touchmove', e => {
     if (!aktiv || startY == null) return;
+    // Sobald die Liste gescrollt ist, ist die Geste kein Pull-to-Reload mehr.
+    // (Sonst löst ein Richtungswechsel mitten im Scrollen einen Reload aus.)
+    if (main.scrollTop > 0) {
+      aktiv = false; zug = 0; startY = null;
+      ptr.style.height = '0px'; ptr.classList.remove('bereit');
+      return;
+    }
     const delta = e.touches[0].clientY - startY;
-    if (delta <= 0) { zug = 0; ptr.style.height = '0px'; ptr.classList.remove('bereit'); return; }
+    if (delta <= 0) {
+      // Nach oben gewischt: Zug zurücksetzen, aber Startpunkt nachführen,
+      // damit ein späterer Zug wieder bei 0 beginnt.
+      zug = 0; startY = e.touches[0].clientY;
+      ptr.style.height = '0px'; ptr.classList.remove('bereit');
+      return;
+    }
     zug = Math.min(delta * 0.5, MAX);           // gedämpft
     ptr.style.height = zug + 'px';
     ptr.classList.toggle('bereit', zug >= SCHWELLE);
