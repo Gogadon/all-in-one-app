@@ -161,14 +161,28 @@ function navHtml() {
   };
   const erlaubt = modulTabs[aktivesModul] ?? ['dashboard', 'heute'];
 
-  // Manche Tabs heißen je Modul anders (Challenge: „Heute" → „Ziele").
-  const labelFuer = (t) =>
-    (t.id === 'heute' && aktivesModul === CHALLENGE) ? 'Ziele' : t.label;
+  // Manche Tabs heißen je Modul anders. Challenge: „Heute" → „Ziele".
+  // Rad/Wandern: „Heute" → „Touren" (der Tab ist die Tour-Übersicht mit
+  // Knopf zum Neu-Eintragen; „Heute" wäre irreführend, da man auch ältere
+  // Touren sieht).
+  const heisstTouren = aktivesModul === RAD || aktivesModul === WANDERN;
+  const labelFuer = (t) => {
+    if (t.id !== 'heute') return t.label;
+    if (aktivesModul === CHALLENGE) return 'Ziele';
+    if (heisstTouren) return 'Touren';
+    return t.label;
+  };
 
   // Challenge nutzt fürs „Heute" ein Zielscheiben-Icon statt der Hantel.
   const zielIcon = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/></svg>';
-  const iconFuer = (t) =>
-    (t.id === 'heute' && aktivesModul === CHALLENGE) ? zielIcon : t.icon;
+  // Rad/Wandern: Routen-Icon (Wegpunkte mit Pfad) statt der Hantel.
+  const tourenIcon = '<svg viewBox="0 0 24 24"><circle cx="6" cy="18" r="2.2"/><circle cx="18" cy="6" r="2.2"/><path d="M8 17c4 0 4-10 8-10"/></svg>';
+  const iconFuer = (t) => {
+    if (t.id !== 'heute') return t.icon;
+    if (aktivesModul === CHALLENGE) return zielIcon;
+    if (heisstTouren) return tourenIcon;
+    return t.icon;
+  };
 
   const sichtbar = TABS.filter(t => erlaubt.includes(t.id));
   return sichtbar.map(t =>
