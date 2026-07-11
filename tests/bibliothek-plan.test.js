@@ -328,3 +328,23 @@ test('Überspringen: geskippter Ruhetag rückt nicht doppelt', async () => {
   // Morgen: der geskippte Ruhetag darf nicht nochmal automatisch rücken
   assert.equal(aktuelleEinheit(state, 'kraft', '2026-07-10').name, 'Rücken');
 });
+
+test('Alternativen: Löschen räumt tote Verweise + schützt Historie (Etappe 4)', () => {
+  const state = leererZustand();
+  const bank = addAktivitaet(state, { name: 'Bankdrücken', kategorie: 'kraft', messwerte: ['gewicht', 'wdh'] });
+  const chest = addAktivitaet(state, { name: 'Chest Press', kategorie: 'kraft', messwerte: ['gewicht', 'wdh'] });
+  addAlternative(state, bank.id, chest.id);
+
+  // Unbenutzte Alternative löschen → Verweis muss mitverschwinden (kein toter Verweis)
+  entferneAktivitaet(state, chest.id);
+  assert.deepEqual(bank.alternativen, []);
+  assert.equal(state.bibliothek.find(a => a.id === chest.id), undefined);
+
+  // Alternative, die in einer Session steckt, ist geschützt
+  const chest2 = addAktivitaet(state, { name: 'Chest Press 2', kategorie: 'kraft', messwerte: ['gewicht', 'wdh'] });
+  addAlternative(state, bank.id, chest2.id);
+  const s = neueSession();
+  addSegment(s, neuesSegment(bank.id, { altOf: chest2.id }));
+  state.sessions.push(s);
+  assert.throws(() => entferneAktivitaet(state, chest2.id), /Session/);
+});
