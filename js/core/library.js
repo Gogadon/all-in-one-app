@@ -53,7 +53,11 @@ export function setzeMesswerte(state, id, messwerte) {
 
 /** In wie vielen Sessions kommt die Aktivität vor? */
 export function wirdVerwendet(state, id) {
-  return state.sessions.filter(s => s.segmente.some(seg => seg.aktivitaetId === id)).length;
+  // Eine Übung gilt als benutzt, wenn sie als Haupt-Aktivität ODER als
+  // Alternative (altOf) in einer Session steckt — beides gehört zur Historie.
+  return state.sessions.filter(s =>
+    s.segmente.some(seg => seg.aktivitaetId === id || seg.altOf === id)
+  ).length;
 }
 
 /** Archivieren: raus aus Auswahllisten, Verlauf bleibt vollständig. */
@@ -78,15 +82,22 @@ export function entferneAktivitaet(state, id) {
   const i = state.bibliothek.findIndex(a => a.id === id);
   if (i === -1) throw new Error('Aktivität nicht gefunden.');
   state.bibliothek.splice(i, 1);
+  // Verweise auf die gelöschte Übung aus allen Alternativ-Listen entfernen,
+  // damit keine toten Verweise zurückbleiben.
+  for (const a of state.bibliothek) {
+    if (Array.isArray(a.alternativen)) {
+      a.alternativen = a.alternativen.filter(ref => ref !== id);
+    }
+  }
 }
 
 // ------------------------------------------------------------
-// Alternativen (Ersatzübungen)
-// Erben nur die Kategorie der Hauptaktivität; eigener Name,
-// eigene Einstellungen, eigene Historie (über altOf im Segment).
+// Alternativen (Ersatzübungen) — V2-Modell
+// Eine Alternative ist eine ECHTE Bibliotheks-Übung. Die Übung trägt nur
+// Verweise (IDs) in `alternativen`. Dadurch hat jede Alternative ihre eigene
+// Historie, Progression und Einstellungen. Verweise sind einseitig.
 // ------------------------------------------------------------
 
-/** Alternative anlegen. Gibt sie zurück. */
 /**
  * Verknüpft eine bestehende Übung als Alternative (V2: reiner ID-Verweis).
  * Die Alternative IST eine echte Bibliotheks-Übung; hier wird nur verlinkt.
