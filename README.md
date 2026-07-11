@@ -136,6 +136,21 @@ Wird ein Feld während der Eingabe neu erzeugt, verliert es den Fokus und der
 „Weiter"-Knopf der Handy-Tastatur springt ins Leere. Deshalb speichert
 `k.wert` nur und rendert *nicht* neu.
 
+### 6. Alternativen sind echte Bibliotheks-Übungen (ID-Verweise)
+
+Eine Übung trägt `alternativen: [uebungsId, …]` — reine Verweise auf andere
+echte Übungen in der Bibliothek. Eine Alternative ist also KEIN eingebettetes
+Objekt mehr (das war Schema 1), sondern eine vollwertige Übung mit eigener
+Historie, Progression und Einstellungen.
+
+- Umschalten im Heute-Tab setzt `segment.altOf = <uebungsId>`.
+- `identVon(segment)` gibt `altOf ?? aktivitaetId` zurück — dadurch nutzt die
+  Alternative automatisch ihre eigene Historie.
+- Verweise sind **einseitig**: A→B heißt nicht automatisch B→A.
+- `entferneAlternative` löscht nur den Verweis; die echte Übung bleibt.
+- Die Migration von Schema 1→2 (in `storage.js`) wandelt alte eingebettete
+  Alternativen in echte Übungen um und führt gleichnamige zusammen.
+
 ---
 
 ## Tests
@@ -188,7 +203,6 @@ deuten die Module an, der Punkt ist der Nutzer.
 ## Offene Ideen
 
 - Module: Wandern, Schwimmen
-- Alternativübungen aus der Bibliothek wählen (statt frei benannt)
 - Dashboard als kompaktes Kachel-Raster, wenn mehr Module dazukommen
 - Teilen vom Dashboard (Wochen-/Monatsstatistik)
 - App-weiter Kalender: Personal Training, geplante Touren
