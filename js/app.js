@@ -94,12 +94,26 @@ const actions = {
   ...challenge.actions,
 };
 
+// Führt eine Aktion aus und fängt Fehler zentral ab. Viele Aktionen sind
+// async (save, Import, Teilen); ohne diesen Wrapper würde ein Fehler dort zu
+// einer unbehandelten Promise-Rejection — die App wirkt „eingefroren", ohne
+// dem Nutzer zu sagen, was los ist. So gibt es stattdessen einen Hinweis.
+async function fuehreAktionAus(fn, data, el, event) {
+  try {
+    await fn(data, el, event);
+  } catch (err) {
+    console.error('Aktion fehlgeschlagen:', err);
+    try { await hinweis('Etwas ist schiefgelaufen', err?.message ?? String(err)); }
+    catch { /* selbst der Hinweis kann scheitern — dann bleibt nur die Konsole */ }
+  }
+}
+
 // Klicks: nächstes Element mit data-action suchen und ausführen
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-action]');
   if (!el) return;
   const fn = actions[el.dataset.action];
-  if (fn) fn(el.dataset, el, e);
+  if (fn) fuehreAktionAus(fn, el.dataset, el, e);
 });
 
 // Eingaben: data-change feuert bei „change" (Verlassen des Felds)
@@ -107,7 +121,7 @@ document.addEventListener('change', e => {
   const el = e.target.closest('[data-change]');
   if (!el) return;
   const fn = actions[el.dataset.change];
-  if (fn) fn(el.dataset, el, e);
+  if (fn) fuehreAktionAus(fn, el.dataset, el, e);
 });
 
 // Komfort: beim Antippen eines Zahlen-/Wertfelds den Inhalt sofort markieren,
