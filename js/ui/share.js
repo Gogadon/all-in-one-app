@@ -89,10 +89,27 @@ export function zeichneKarte(daten) {
   x.fillText(daten.datum, breite - pad - 6, y);
   x.textAlign = 'left';
   y += 32;
-  // Titel — volle Breite, keine Kollision mehr
+  // Titel — passt sich an: erst Schrift verkleinern (30→20px), dann als
+  // Notbremse mit … kürzen. So bleibt ein langer Tourname in einer Zeile,
+  // ohne aus der Karte zu laufen oder umzubrechen.
   x.fillStyle = FARBE.text;
-  x.font = '800 30px "Bricolage Grotesque", sans-serif';
-  x.fillText(daten.titel, pad + 4, y);
+  x.textAlign = 'left';
+  const maxTitelBreite = breite - 2 * pad - 8;
+  let titel = String(daten.titel ?? '');
+  let groesse = 30;
+  x.font = `800 ${groesse}px "Bricolage Grotesque", sans-serif`;
+  while (x.measureText(titel).width > maxTitelBreite && groesse > 20) {
+    groesse -= 1;
+    x.font = `800 ${groesse}px "Bricolage Grotesque", sans-serif`;
+  }
+  // Reicht das Verkleinern nicht, sauber kürzen (bei kleinster Größe).
+  if (x.measureText(titel).width > maxTitelBreite) {
+    while (titel.length > 1 && x.measureText(titel + '…').width > maxTitelBreite) {
+      titel = titel.slice(0, -1);
+    }
+    titel = titel.replace(/\s+$/, '') + '…';
+  }
+  x.fillText(titel, pad + 4, y);
   y += 30;
   // Trainingsvolumen als eigene Zeile: Label + Wert nebeneinander
   x.fillStyle = FARBE.text; x.font = '600 13px Sora, sans-serif';
