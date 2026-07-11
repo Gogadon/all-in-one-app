@@ -25,6 +25,16 @@ const {
   erstelleRadModul, alleTouren, tourStatistik, tourWerte, tourAktivitaet,
 } = await import('../js/modules/rad.js');
 
+function neuesModulMitTab() {
+  const state = leererZustand();
+  const tabs = { aktiv: 'heute' };
+  const ctx = { get state(){return state}, save: async()=>{}, render:()=>{},
+    sheet:{oeffne(){},schliesse(){},aktualisiere(){}}, esc:t=>String(t??''),
+    formatDatum:i=>i, tabWechsel:(t)=>{tabs.aktiv=t;} };
+  const rad = erstelleRadModul(ctx);
+  return { state, rad, tabs };
+}
+
 function neuesModul() {
   const state = leererZustand();
   const ctx = {
@@ -146,4 +156,23 @@ test('Rad: Teilen-Button erscheint bei fertiger Tour', async () => {
   await rad.actions['rad.fertig']();
   const html = rad.verlaufHtml();
   assert.ok(html.includes('rad.detail'));   // aufklappbar
+});
+
+test('Rad: Bearbeiten wechselt in den Heute-Tab und speichert wieder', async () => {
+  const { state, rad, tabs } = neuesModulMitTab();
+  await rad.actions['rad.neu']();
+  await rad.actions['rad.wert']({ typ: 'distanz' }, { value: '10' });
+  await rad.actions['rad.fertig']();
+  const tourId = state.sessions[0].id;
+  assert.equal(state.sessions[0].abgeschlossen, true);
+
+  // Aus dem Verlauf heraus bearbeiten
+  tabs.aktiv = 'verlauf';
+  await rad.actions['rad.wiederOeffnen']({ sid: tourId });
+  assert.equal(tabs.aktiv, 'heute');                  // Tab gewechselt
+  assert.equal(state.sessions[0].abgeschlossen, false); // Tour offen
+
+  // Speichern muss die Tour wiederfinden (nicht ins Leere laufen)
+  await rad.actions['rad.fertig']();
+  assert.equal(state.sessions[0].abgeschlossen, true);
 });
