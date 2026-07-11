@@ -88,3 +88,20 @@ test('Wandern: Statistik summiert über alle Wanderungen', async () => {
   assert.equal(stat.anzahl, 2);
   assert.equal(stat.distanz, 13000);   // 5+8 km in Metern
 });
+
+test('Wandern: Klick auf Tour im Touren-Tab klappt auf, bearbeitet nicht sofort', async () => {
+  const { state, wandern } = neuesModul();
+  await wandern.actions['wandern.neu']();
+  await wandern.actions['wandern.wert']({ typ: 'distanz' }, { value: '8' });
+  await wandern.actions['wandern.fertig']();
+  const id = state.sessions[0].id;
+
+  // Detail-Klick klappt nur auf — Tour bleibt abgeschlossen
+  wandern.actions['wandern.detail']({ sid: id });
+  assert.equal(state.sessions[0].abgeschlossen, true);
+  assert.ok(wandern.heuteHtml().includes('Bearbeiten'));
+
+  // Erst der Bearbeiten-Knopf öffnet zum Editieren
+  await wandern.actions['wandern.wiederOeffnen']({ sid: id });
+  assert.equal(state.sessions[0].abgeschlossen, false);
+});
