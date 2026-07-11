@@ -385,6 +385,7 @@ h1,h2,h3,.num{font-family:var(--font-display);letter-spacing:-.02em}
 
 /* ===== Rad-Modul ===== */
 .eyebrow .pip.rad{background:var(--rad);box-shadow:0 0 10px var(--rad)}
+.eyebrow .pip.wandern{background:var(--wandern);box-shadow:0 0 10px var(--wandern)}
 .stat-karte{padding:16px}
 .stat-3{display:flex;justify-content:space-between;text-align:center}
 .stat-3>div{display:flex;flex-direction:column;gap:2px;flex:1}
@@ -439,9 +440,11 @@ h1,h2,h3,.num{font-family:var(--font-display);letter-spacing:-.02em}
 .modul-kachel::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px}
 .modul-kachel.kraft::before{background:var(--kraft)}
 .modul-kachel.rad::before{background:var(--rad)}
+.modul-kachel.wandern::before{background:var(--wandern)}
 .modul-kachel .mk-label{font-family:var(--font-display);font-weight:800;font-size:22px}
 .modul-kachel.kraft .mk-label{color:var(--kraft)}
 .modul-kachel.rad .mk-label{color:var(--rad)}
+.modul-kachel.wandern .mk-label{color:var(--wandern)}
 .modul-kachel .mk-status{font-size:13px;color:var(--dim)}
 .dash-stats{display:flex;justify-content:space-between;padding:18px 16px;text-align:center}
 .dash-stat{display:flex;flex-direction:column;gap:3px;flex:1}

@@ -68,6 +68,11 @@ export const MESSWERTE = Object.freeze({
     agg: 'summe', summierbar: true,
     schritt: 10, dezimal: 0, optional: true,  // versteckt-Standard; Auto-Schätzung ab Etappe 2
   }),
+  schritte: Object.freeze({
+    label: 'Schritte', einheit: '',
+    agg: 'summe', summierbar: true,
+    schritt: 100, dezimal: 0, optional: true,
+  }),
   tempo_avg: Object.freeze({
     label: 'Ø-Geschw.', kurz: 'km/h', einheit: 'km/h',
     agg: 'mittel', summierbar: false,

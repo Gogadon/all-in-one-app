@@ -15,6 +15,7 @@ import {
   sessionVolumenErledigt, segmentZusammenfassungKraft, segmentZusammenfassungWerte,
 } from './modules/kraft.js';
 import { erstelleRadModul, MODUL as RAD, tourStatistik } from './modules/rad.js';
+import { erstelleWanderModul, MODUL as WANDERN, wanderStatistik } from './modules/wandern.js';
 import { erstelleChallengeModul, MODUL as CHALLENGE, fortschritt } from './modules/challenge.js';
 
 const main = document.getElementById('main');
@@ -52,6 +53,7 @@ const ctx = {
 };
 const kraft = erstelleKraftModul(ctx);
 const rad = erstelleRadModul(ctx);
+const wandern = erstelleWanderModul(ctx);
 const challenge = erstelleChallengeModul(ctx);
 
 // Welches Modul zeigt der Heute-/Verlauf-Tab gerade? (Plan bleibt Kraft.)
@@ -91,6 +93,7 @@ const actions = {
 
   ...kraft.actions,
   ...rad.actions,
+  ...wandern.actions,
   ...challenge.actions,
 };
 
@@ -153,6 +156,7 @@ function navHtml() {
   const modulTabs = {
     [KRAFT]:     ['dashboard', 'heute', 'plan', 'verlauf'],
     [RAD]:       ['dashboard', 'heute', 'verlauf'],
+    [WANDERN]:   ['dashboard', 'heute', 'verlauf'],
     [CHALLENGE]: ['dashboard', 'heute'],
   };
   const erlaubt = modulTabs[aktivesModul] ?? ['dashboard', 'heute'];
@@ -182,6 +186,10 @@ function verlaufHtml() {
   // Rad: eigener Touren-Verlauf (kein Fortschritt-Tab)
   if (aktivesModul === RAD) {
     return rad.verlaufHtml();
+  }
+  // Wandern: eigener Wander-Verlauf
+  if (aktivesModul === WANDERN) {
+    return wandern.verlaufHtml();
   }
 
   // Kraft: Feed + Fortschritt wie gehabt
@@ -308,6 +316,10 @@ function wochenStatistik() {
       touren++;
       const mw = s.segmente[0]?.eintraege[0]?.messwerte ?? {};
       km += (mw.distanz ?? 0) / 1000;
+    } else if (s.modul === WANDERN) {
+      touren++;
+      const mw = s.segmente[0]?.eintraege[0]?.messwerte ?? {};
+      km += (mw.distanz ?? 0) / 1000;
     }
   }
   return { einheiten, touren, km, volumen };
@@ -326,6 +338,8 @@ function dashboardHtml() {
   })();
   const radStat = tourStatistik(state);
   const radStatus = radStat.anzahl > 0 ? `${radStat.anzahl} Touren · ${Math.round(radStat.distanz / 1000)} km` : 'Noch keine Tour';
+  const wanderStat = wanderStatistik(state);
+  const wanderStatus = wanderStat.anzahl > 0 ? `${wanderStat.anzahl} Touren · ${Math.round(wanderStat.distanz / 1000)} km` : 'Noch keine Tour';
   const chStatus = (() => {
     const ziele = state.challenges ?? [];
     if (!ziele.length) return 'Keine Ziele';
@@ -341,6 +355,10 @@ function dashboardHtml() {
     <button class="modul-kachel rad" data-action="modulOeffne" data-m="${RAD}">
       <span class="mk-label">Rad</span>
       <span class="mk-status">${esc(radStatus)}</span>
+    </button>
+    <button class="modul-kachel wandern" data-action="modulOeffne" data-m="${WANDERN}">
+      <span class="mk-label">Wandern</span>
+      <span class="mk-status">${esc(wanderStatus)}</span>
     </button>
     <button class="modul-kachel challenge" data-action="modulOeffne" data-m="${CHALLENGE}">
       <span class="mk-label">Challenge</span>
@@ -384,6 +402,7 @@ function render() {
     case 'heute':
       mainInner.innerHTML =
         aktivesModul === RAD ? rad.heuteHtml()
+        : aktivesModul === WANDERN ? wandern.heuteHtml()
         : aktivesModul === CHALLENGE ? challenge.heuteHtml()
         : kraft.heuteHtml();
       break;
