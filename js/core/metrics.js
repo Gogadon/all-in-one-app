@@ -44,7 +44,7 @@ export const MESSWERTE = Object.freeze({
     anzeige: 'distanz', schritt: 100, dezimal: 0,
   }),
   hoehenmeter: Object.freeze({
-    label: 'Höhenmeter', kurz: 'hm', einheit: 'm',
+    label: 'Höhenmeter', kurz: 'hm', einheit: 'hm',
     agg: 'summe', summierbar: true,
     schritt: 10, dezimal: 0,
   }),

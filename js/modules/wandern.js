@@ -417,13 +417,17 @@ export function erstelleWanderModul(ctx) {
       const mw = wanderWerte(s);
 
       const zeilen = (akt.messwerte ?? STANDARD_MESSWERTE)
-        .filter(typ => typ !== 'distanz' && mw[typ] != null)
+        .filter(typ => typ !== 'distanz' && typ !== 'hoehenmeter' && mw[typ] != null)
         .map(typ => ({
           name: MESSWERTE[typ].label,
           detail: formatWert(typ, mw[typ], { kategorie: MODUL }),
         }));
 
       const kmText = mw.distanz != null ? `${formatZahl(mw.distanz / 1000, 1)} km` : '–';
+      // Höhenmeter prominent direkt unter dem Hero (der Stolz beim Wandern).
+      const heroSub = mw.hoehenmeter != null
+        ? { label: 'HÖHENMETER', wert: `${formatZahl(mw.hoehenmeter, 0)} hm` }
+        : null;
       const hl = wanderHighlights(S(), s);
 
       const rueckblick = [];
@@ -439,6 +443,7 @@ export function erstelleWanderModul(ctx) {
         datum: ctx.formatDatum(s.datum),
         volumenText: kmText,
         volumenLabel: 'STRECKE',
+        heroSub,
         zeilen,
         highlights: hl,
         rueckblick,

@@ -122,6 +122,20 @@ export function zeichneKarte(daten) {
   x.textAlign = 'left';
   y += 24;
 
+  // Optionale zweite Kennzahl direkt unter dem Hero (z.B. Höhenmeter beim
+  // Wandern): prominenter als die normale Zeilenliste, aber unter dem Hero.
+  if (daten.heroSub) {
+    x.fillStyle = FARBE.dim; x.font = '600 12px Sora, sans-serif';
+    x.globalAlpha = 0.7;
+    x.fillText(daten.heroSub.label, pad + 6, y);
+    x.globalAlpha = 1;
+    x.textAlign = 'right';
+    x.fillStyle = FARBE.text; x.font = '700 15px "Bricolage Grotesque", sans-serif';
+    x.fillText(daten.heroSub.wert, breite - pad - 6, y);
+    x.textAlign = 'left';
+    y += 22;
+  }
+
   // Trennlinie
   linie(x, pad, y, breite - pad, y); y += 24;
 
