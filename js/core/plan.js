@@ -6,7 +6,13 @@
 // state.plaene.kraft = {
 //   einheiten: [ Einheit … ],   ← BIBLIOTHEK: jede Einheit existiert 1×
 //   zyklus:    [ einheitId … ], ← ABLAUF: Verweise, Mehrfachnennung erlaubt
-//   position:  0,               ← Zeiger in den ZYKLUS (nicht die Bibliothek)
+//   position:  0,               ← LEGACY/CACHE: abgeleiteter Spiegelwert.
+//                                  NICHT die Quelle der Wahrheit! Die aktuelle
+//                                  Zyklus-Position wird aus `anker` + Verlauf
+//                                  berechnet (siehe berechnePositionHeute).
+//                                  position wird nur als Cache mitgeführt,
+//                                  damit ältere UI-Teile einen Wert haben.
+//   anker: { iso, index },      ← QUELLE DER WAHRHEIT für die Position.
 // }
 //
 // Einheit (Rezept):
@@ -158,7 +164,14 @@ export function verschiebeImZyklus(state, modul, index, richtung) {
   else if (zeigerWar === j) plan.position = index;
 }
 
-/** Zeiger direkt auf eine Zyklus-Stelle setzen („Heute korrigieren"). */
+/**
+ * ⚠️ LEGACY — NICHT MEHR VERWENDEN.
+ * Setzt nur den Cache-Wert `plan.position`. Da die Position dynamisch aus dem
+ * Anker berechnet wird, überschreibt aktuelleEinheit() diesen Wert beim
+ * nächsten Rendern sofort wieder. Für „Heute korrigieren" gibt es setzeAnker(),
+ * das dauerhaft wirkt. Diese Funktion bleibt nur, um alte Importe nicht zu
+ * brechen; sie hat keinen echten Effekt mehr auf die angezeigte Position.
+ */
 export function setzePosition(state, modul, index) {
   const plan = mussPlan(state, modul);
   if (plan.zyklus.length === 0) return;
@@ -350,6 +363,13 @@ function holeAnker(plan, heute) {
 /**
  * Die HEUTE fällige Einheit — über die dynamische Position berechnet.
  * Ersetzt die alte feste-position-Logik von naechsteEinheit.
+ *
+ * ⚠️ SEITENEFFEKT: Diese Funktion liest nicht nur, sie schreibt auch
+ * `plan.position` (als Spiegel) und legt via holeAnker() ggf. einen Anker an.
+ * Sie ist damit KEINE reine Abfrage. Das ist bewusst so, damit ältere
+ * UI-Teile, die noch `plan.position` lesen, einen aktuellen Wert sehen.
+ * Wer nur die Position OHNE Seiteneffekt braucht, nimmt direkt
+ * berechnePositionHeute(). Die Quelle der Wahrheit ist IMMER der Anker.
  */
 export function aktuelleEinheit(state, modul, heute = heuteIso()) {
   const plan = planFuer(state, modul);
@@ -357,7 +377,7 @@ export function aktuelleEinheit(state, modul, heute = heuteIso()) {
   const anker = holeAnker(plan, heute);
   const pos = berechnePositionHeute(state, modul, anker, heute,
     (e) => einheitIstRuhetag(state, e));
-  plan.position = pos;   // Spiegel für Anzeige/Abwärtskompatibilität
+  plan.position = pos;   // Spiegel/Cache — NICHT die Quelle der Wahrheit (das ist der Anker)
   const id = plan.zyklus[pos % plan.zyklus.length];
   return plan.einheiten.find(e => e.id === id) ?? null;
 }
