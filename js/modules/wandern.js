@@ -156,13 +156,21 @@ export function erstelleWanderModul(ctx) {
     const km = mw.distanz != null ? formatZahl(mw.distanz / 1000, 1) + ' km' : '';
     const hm = mw.hoehenmeter != null ? formatZahl(mw.hoehenmeter, 0) + ' hm' : '';
     const teile = [km, hm].filter(Boolean).join(' · ');
-    return `<button class="karte anim tour-zeile" data-action="wandern.oeffne" data-sid="${t.id}">
-      <div>
-        <strong>${esc(t.name || 'Wanderung')}</strong>
-        <small class="dim">${esc(formatDatum(t.datum))}${teile ? ' · ' + esc(teile) : ''}</small>
-      </div>
-      <span class="pfeil-ico" style="border-bottom-color:var(--wandern)"></span>
-    </button>`;
+    const auf = detailOffen.has(t.id);
+    return `<div class="karte anim">
+      <button class="tour-kopf" data-action="wandern.detail" data-sid="${t.id}">
+        <div>
+          <strong>${esc(t.name || 'Wanderung')}</strong><br>
+          <small class="dim">${esc(formatDatum(t.datum))}${teile ? ' · ' + esc(teile) : ''}</small>
+        </div>
+        <span class="pfeil-ico ${auf ? 'runter' : ''}" style="border-bottom-color:var(--wandern)"></span>
+      </button>
+      ${auf ? tourDetailHtml(findeAktivitaet(S(), t.segmente[0]?.aktivitaetId) ?? wanderAktivitaet(S()), mw)
+        + `<div class="knopf-zeile">
+            <button class="knopf klein" data-action="wandern.teilen" data-sid="${t.id}">Teilen</button>
+            <button class="knopf klein" data-action="wandern.wiederOeffnen" data-sid="${t.id}">Bearbeiten</button>
+          </div>` : ''}
+    </div>`;
   }
 
   function tourHtml(s) {

@@ -168,13 +168,21 @@ export function erstelleRadModul(ctx) {
     const km = mw.distanz != null ? formatZahl(mw.distanz / 1000, 1) + ' km' : '';
     const dauer = mw.dauer != null ? formatWert('dauer', mw.dauer) : '';
     const teile = [km, dauer].filter(Boolean).join(' · ');
-    return `<button class="karte anim tour-zeile" data-action="rad.oeffne" data-sid="${t.id}">
-      <div>
-        <strong>${esc(t.name || 'Radtour')}</strong>
-        <small class="dim">${esc(formatDatum(t.datum))}${teile ? ' · ' + esc(teile) : ''}</small>
-      </div>
-      <span class="pfeil-ico" style="border-bottom-color:var(--rad)"></span>
-    </button>`;
+    const auf = detailOffen.has(t.id);
+    return `<div class="karte anim">
+      <button class="tour-kopf" data-action="rad.detail" data-sid="${t.id}">
+        <div>
+          <strong>${esc(t.name || 'Radtour')}</strong><br>
+          <small class="dim">${esc(formatDatum(t.datum))}${teile ? ' · ' + esc(teile) : ''}</small>
+        </div>
+        <span class="pfeil-ico ${auf ? 'runter' : ''}" style="border-bottom-color:var(--rad)"></span>
+      </button>
+      ${auf ? tourDetailHtml(findeAktivitaet(S(), t.segmente[0]?.aktivitaetId) ?? tourAktivitaet(S()), mw)
+        + `<div class="knopf-zeile">
+            <button class="knopf klein" data-action="rad.teilen" data-sid="${t.id}">Teilen</button>
+            <button class="knopf klein" data-action="rad.wiederOeffnen" data-sid="${t.id}">Bearbeiten</button>
+          </div>` : ''}
+    </div>`;
   }
 
   /** Die Bearbeitungs-Ansicht einer Tour (Messwerte eintragen). */
