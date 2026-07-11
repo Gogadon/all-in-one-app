@@ -101,6 +101,7 @@ export function tourHighlights(state, session) {
 export function erstelleRadModul(ctx) {
   const S = () => ctx.state;
   const esc = ctx.esc;
+  const tabWechsel = ctx.tabWechsel ?? (() => {});
   const formatDatum = ctx.formatDatum;
 
   // UI-Zustand (nicht persistiert)
@@ -113,11 +114,20 @@ export function erstelleRadModul(ctx) {
   // Heute-Tab: neue Tour starten oder aktuelle bearbeiten
   // ----------------------------------------------------------
 
+  // Die aktuell offene (in Bearbeitung befindliche) Tour — direkt aus dem
+  // State abgeleitet, nicht aus der flüchtigen Variable offeneTour. Dadurch
+  // funktioniert die Bearbeitung auch nach einem Reload und bei älteren Touren.
+  function findeOffeneTour() {
+    return S().sessions.find(s =>
+      s.modul === MODUL && !s.abgeschlossen && !s.uebersprungen) ?? null;
+  }
+
   function heuteHtml() {
-    // Gibt es heute schon eine offene (nicht abgeschlossene) Tour?
-    const heute = S().sessions.find(s =>
-      s.modul === MODUL && s.datum === heuteIso() && !s.abgeschlossen && !s.uebersprungen);
-    if (heute) return tourHtml(heute);
+    const offen = findeOffeneTour();
+    if (offen) {
+      offeneTour = offen.id;      // flüchtige Variable nachführen (für Reload)
+      return tourHtml(offen);
+    }
     return startHtml();
   }
 
@@ -341,6 +351,15 @@ export function erstelleRadModul(ctx) {
   // Aktionen
   // ----------------------------------------------------------
 
+  // Die gerade bearbeitete Tour holen. Nutzt die flüchtige Variable, fällt
+  // aber auf die State-Ableitung zurück (falls offeneTour nach einem Reload
+  // noch null ist). So laufen die Aktionen nach einem Reload nicht ins Leere.
+  function aktuelleTour() {
+    let s = offeneTour ? S().sessions.find(x => x.id === offeneTour) : null;
+    if (!s) { s = findeOffeneTour(); if (s) offeneTour = s.id; }
+    return s;
+  }
+
   const actions = {
     async 'rad.neu'() {
       const akt = tourAktivitaet(S());
@@ -352,12 +371,12 @@ export function erstelleRadModul(ctx) {
       await speichernUndZeigen();
     },
     async 'rad.name'(d, el) {
-      const s = S().sessions.find(x => x.id === offeneTour); if (!s) return;
+      const s = aktuelleTour(); if (!s) return;
       s.name = el.value;
       await ctx.save();  // kein Render → Fokus bleibt
     },
     async 'rad.wert'(d, el) {
-      const s = S().sessions.find(x => x.id === offeneTour); if (!s) return;
+      const s = aktuelleTour(); if (!s) return;
       const e = s.segmente[0].eintraege[0];
       const def = MESSWERTE[d.typ];
       let wert;
@@ -375,12 +394,12 @@ export function erstelleRadModul(ctx) {
     async 'rad.mwWeg'(d) {
       const akt = tourAktivitaet(S());
       akt.messwerte = akt.messwerte.filter(t => t !== d.typ);
-      const s = S().sessions.find(x => x.id === offeneTour);
+      const s = aktuelleTour();
       if (s) delete s.segmente[0].eintraege[0].messwerte[d.typ];
       await speichernUndZeigen();
     },
     async 'rad.fertig'() {
-      const s = S().sessions.find(x => x.id === offeneTour); if (!s) return;
+      const s = aktuelleTour(); if (!s) return;
       const mw = s.segmente[0].eintraege[0].messwerte;
       if (Object.keys(mw).length === 0) {
         await hinweis('Nichts eingetragen', 'Trag mindestens einen Wert ein, bevor du die Tour speicherst.');
@@ -392,9 +411,9 @@ export function erstelleRadModul(ctx) {
       await speichernUndZeigen();
     },
     async 'rad.verwerfen'() {
-      const s = S().sessions.find(x => x.id === offeneTour); if (!s) return;
+      const s = aktuelleTour(); if (!s) return;
       if (!await bestaetige({ titel: 'Tour verwerfen?', jaText: 'Verwerfen', gefahr: true })) return;
-      S().sessions = S().sessions.filter(x => x.id !== offeneTour);
+      S().sessions = S().sessions.filter(x => x.id !== s.id);
       offeneTour = null;
       await speichernUndZeigen();
     },
@@ -403,6 +422,7 @@ export function erstelleRadModul(ctx) {
       s.abgeschlossen = false;
       s.segmente[0].erledigt = false;
       offeneTour = s.id;
+      tabWechsel('heute');       // Bearbeitung passiert im Heute-Tab
       await speichernUndZeigen();
     },
     async 'rad.wiederOeffnen'(d) {
@@ -410,6 +430,7 @@ export function erstelleRadModul(ctx) {
       s.abgeschlossen = false;
       s.segmente[0].erledigt = false;
       offeneTour = s.id;
+      tabWechsel('heute');       // Bearbeitung passiert im Heute-Tab
       await speichernUndZeigen();
     },
     'rad.detail'(d) {
