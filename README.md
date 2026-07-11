@@ -148,6 +148,11 @@ Historie, Progression und Einstellungen.
   Alternative automatisch ihre eigene Historie.
 - Verweise sind **einseitig**: A→B heißt nicht automatisch B→A.
 - `entferneAlternative` löscht nur den Verweis; die echte Übung bleibt.
+- `wirdVerwendet` zählt eine Übung als benutzt, wenn sie als Haupt-Aktivität
+  **oder** als Alternative (`altOf`) in einer Session steckt. Beides schützt
+  vor dem Löschen — sonst würde eine alte Session ins Leere zeigen.
+- `entferneAktivitaet` räumt beim Löschen einer Übung deren ID aus allen
+  Alternativ-Listen, damit keine toten Verweise zurückbleiben.
 - Die Migration von Schema 1→2 (in `storage.js`) wandelt alte eingebettete
   Alternativen in echte Übungen um und führt gleichnamige zusammen.
 
