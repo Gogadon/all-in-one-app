@@ -191,7 +191,8 @@ export function loeseSegmentAuf(state, segment) {
   if (!aktivitaet) return { aktivitaet: null, alternative: null, anzeigeName: '(gelöschte Aktivität)' };
   let alternative = null;
   if (segment.altOf) {
-    alternative = (aktivitaet.alternativen ?? []).find(a => a.id === segment.altOf) ?? null;
+    // altOf ist jetzt die ID einer echten Bibliotheks-Übung (V2-Modell).
+    alternative = findeAktivitaet(state, segment.altOf) ?? null;
   }
   return { aktivitaet, alternative, anzeigeName: alternative?.name ?? aktivitaet.name };
 }

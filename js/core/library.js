@@ -87,30 +87,38 @@ export function entferneAktivitaet(state, id) {
 // ------------------------------------------------------------
 
 /** Alternative anlegen. Gibt sie zurück. */
-export function addAlternative(state, aktivitaetId, { name, einstellungen = {} }) {
+/**
+ * Verknüpft eine bestehende Übung als Alternative (V2: reiner ID-Verweis).
+ * Die Alternative IST eine echte Bibliotheks-Übung; hier wird nur verlinkt.
+ */
+export function addAlternative(state, aktivitaetId, alternativeId) {
   const akt = muss(state, aktivitaetId);
-  if (!name || !name.trim()) throw new Error('Alternative braucht einen Namen.');
-  const alt = { id: neueId(), name: name.trim(), einstellungen: { ...einstellungen } };
-  (akt.alternativen ??= []).push(alt);
-  return alt;
+  if (!findeAktivitaet(state, alternativeId)) throw new Error('Alternative (Übung) nicht gefunden.');
+  if (aktivitaetId === alternativeId) throw new Error('Eine Übung kann nicht ihre eigene Alternative sein.');
+  (akt.alternativen ??= []);
+  if (!akt.alternativen.includes(alternativeId)) akt.alternativen.push(alternativeId);
 }
 
-/** Wie oft wurde eine Alternative in Sessions benutzt? */
+/** Wie oft wurde eine Alternative (Übungs-id) in Sessions benutzt? */
 export function alternativeWirdVerwendet(state, altId) {
   return state.sessions.filter(s => s.segmente.some(seg => seg.altOf === altId)).length;
 }
 
-/** Alternative entfernen — nur wenn unbenutzt (sonst würde Verlauf den Namen verlieren). */
+/**
+ * Entfernt nur den Verweis (die echte Übung bleibt in der Bibliothek!).
+ * Blockiert, wenn die Alternative aktuell in Sessions genutzt wird.
+ */
 export function entferneAlternative(state, aktivitaetId, altId) {
   const akt = muss(state, aktivitaetId);
   const anzahl = alternativeWirdVerwendet(state, altId);
   if (anzahl > 0) {
     throw new Error(`Alternative steckt in ${anzahl} Session(s) und bleibt deshalb erhalten.`);
   }
-  const i = (akt.alternativen ?? []).findIndex(a => a.id === altId);
+  const i = (akt.alternativen ?? []).indexOf(altId);
   if (i === -1) throw new Error('Alternative nicht gefunden.');
   akt.alternativen.splice(i, 1);
 }
+
 
 // ------------------------------------------------------------
 // Abfragen & Vorschläge

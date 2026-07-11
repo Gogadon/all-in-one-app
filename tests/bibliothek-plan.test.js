@@ -73,11 +73,15 @@ test('Bibliothek: Archivieren ist der Normalweg, hartes Löschen nur wenn unbenu
   assert.equal(state.bibliothek.length, 1);
 });
 
-test('Alternativen: anlegen, in Session nutzen, Löschschutz', () => {
+test('Alternativen: verknüpfen (Verweis), in Session nutzen, Löschschutz', () => {
   const state = leererZustand();
   const bank = addAktivitaet(state, { name: 'Bankdrücken', kategorie: 'kraft', messwerte: ['gewicht', 'wdh'] });
-  const kh = addAlternative(state, bank.id, { name: 'KH-Bankdrücken' });
-  const maschine = addAlternative(state, bank.id, { name: 'Brustpresse' });
+  // Alternativen sind jetzt echte Übungen, die verlinkt werden.
+  const kh = addAktivitaet(state, { name: 'KH-Bankdrücken', kategorie: 'kraft', messwerte: ['gewicht', 'wdh'] });
+  const maschine = addAktivitaet(state, { name: 'Brustpresse', kategorie: 'kraft', messwerte: ['gewicht', 'wdh'] });
+  addAlternative(state, bank.id, kh.id);
+  addAlternative(state, bank.id, maschine.id);
+  assert.deepEqual(bank.alternativen, [kh.id, maschine.id]);
 
   const s = neueSession();
   addEintrag(addSegment(s, neuesSegment(bank.id, { altOf: kh.id })), neuerEintrag({ gewicht: 30, wdh: 10 }));
@@ -87,8 +91,12 @@ test('Alternativen: anlegen, in Session nutzen, Löschschutz', () => {
   assert.throws(() => entferneAlternative(state, bank.id, kh.id), /bleibt deshalb erhalten/);
   assert.equal(loeseSegmentAuf(state, s.segmente[0]).anzeigeName, 'KH-Bankdrücken');
 
-  entferneAlternative(state, bank.id, maschine.id); // unbenutzt → ok
-  assert.equal(state.bibliothek[0].alternativen.length, 1);
+  entferneAlternative(state, bank.id, maschine.id); // Verweis unbenutzt → ok
+  assert.deepEqual(bank.alternativen, [kh.id]);
+  // Die echte Übung bleibt in der Bibliothek erhalten
+  assert.ok(state.bibliothek.some(a => a.id === maschine.id));
+  // Eine Übung kann nicht ihre eigene Alternative sein
+  assert.throws(() => addAlternative(state, bank.id, bank.id), /eigene Alternative/);
 });
 
 test('Bibliothek: Suche und Kategorie-Vorschläge', () => {

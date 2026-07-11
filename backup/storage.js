@@ -12,7 +12,7 @@
 // Trainings unauffindbar. Der historische Name bleibt, auch wenn die App
 // inzwischen anders heißt.
 export const STORAGE_KEY = 'gogadon_allinone_v1';
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 1;
 const APP_NAME = 'all-in-one';
 
 // ------------------------------------------------------------
@@ -125,7 +125,7 @@ export function migriere(state) {
   let schema = state.schema ?? 1;
   while (schema < SCHEMA_VERSION) {
     switch (schema) {
-      case 1: state = migriereV1zuV2(state); schema = 2; break;
+      // case 1: state = migriereV1zuV2(state); schema = 2; break;
       default:
         throw new Error(`Keine Migration von Schema ${schema} bekannt.`);
     }
@@ -150,95 +150,4 @@ function pruefeGrundform(state) {
   if (!Array.isArray(state.bibliothek) || !Array.isArray(state.sessions)) {
     throw new Error('Zustand hat nicht die erwartete Form (bibliothek/sessions fehlen).');
   }
-}
-
-// ============================================================
-// Migration Schema 1 → 2: Alternativen werden echte Übungen
-//
-// VORHER (V1): Eine Übung trug eingebettete Alternativen als Objekte:
-//   alternativen: [ { id, name, einstellungen } ]
-// Sessions verwiesen via segment.altOf auf diese eingebettete id.
-//
-// NACHHER (V2): Alternativen sind echte Bibliotheks-Übungen. Die Übung
-// trägt nur noch VERWEISE (IDs):
-//   alternativen: [ uebungsId, uebungsId, … ]
-//
-// Regeln (mit Manuel abgestimmt):
-//  - Gleichnamige Alternativen werden zu EINER Übung zusammengeführt
-//    (z.B. „Face Pulls" 3× → eine Übung, dreifach verlinkt).
-//  - Ist eine Alternative namensgleich mit einer bestehenden HAUPT-Übung,
-//    wird auf diese echte Übung verwiesen (kein Duplikat).
-//  - segment.altOf wird auf die neue (echte) Übungs-ID umgezogen, damit die
-//    bisherige Historie erhalten bleibt.
-// ============================================================
-export function migriereV1zuV2(state) {
-  const norm = (n) => String(n ?? '').toLowerCase().trim().replace(/\s+/g, ' ');
-  const neueId = () => 'm2_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
-
-  const bib = state.bibliothek ?? [];
-  // Index bestehender Hauptübungen nach normalisiertem Namen.
-  const hauptNachName = new Map();
-  for (const a of bib) hauptNachName.set(norm(a.name), a.id);
-
-  // Zwei Mappings:
-  //  altIdZuNeu:   alte eingebettete Alternativ-id → neue echte Übungs-id
-  //                (für die Umschreibung von segment.altOf)
-  //  nameZuNeu:    normalisierter Name → neue echte Übungs-id
-  //                (für die Zusammenführung gleichnamiger)
-  const altIdZuNeu = new Map();
-  const nameZuNeu = new Map();
-  const neueUebungen = [];
-
-  for (const uebung of bib) {
-    const alts = uebung.alternativen;
-    if (!Array.isArray(alts) || alts.length === 0) { uebung.alternativen = []; continue; }
-    const verweise = [];
-    for (const alt of alts) {
-      // Schon im V2-Format (String-id)? Dann unverändert übernehmen.
-      if (typeof alt === 'string') { verweise.push(alt); continue; }
-      if (!alt || !alt.name) continue;
-      const key = norm(alt.name);
-
-      // 1) Verweist der Name auf eine bestehende Hauptübung? → deren id nutzen.
-      let zielId = hauptNachName.get(key);
-
-      // 2) Sonst: schon eine zusammengeführte neue Übung mit dem Namen? → wiederverwenden.
-      if (!zielId) zielId = nameZuNeu.get(key);
-
-      // 3) Sonst: neue echte Übung anlegen.
-      if (!zielId) {
-        zielId = neueId();
-        const neu = {
-          id: zielId,
-          name: alt.name,
-          kategorie: uebung.kategorie ?? 'kraft',
-          messwerte: [...(uebung.messwerte ?? [])],
-          einstellungen: { ...(alt.einstellungen ?? {}) },
-          alternativen: [],
-        };
-        if (uebung.cardio) neu.cardio = true;
-        neueUebungen.push(neu);
-        nameZuNeu.set(key, zielId);
-      }
-
-      // altOf-Umschreibung: die alte eingebettete id zeigt künftig auf zielId.
-      if (alt.id) altIdZuNeu.set(alt.id, zielId);
-      if (!verweise.includes(zielId)) verweise.push(zielId);
-    }
-    uebung.alternativen = verweise;
-  }
-
-  // Neue Übungen in die Bibliothek aufnehmen.
-  state.bibliothek = [...bib, ...neueUebungen];
-
-  // Bestehende Sessions: segment.altOf auf die neuen ids umziehen.
-  for (const s of state.sessions ?? []) {
-    for (const seg of s.segmente ?? []) {
-      if (seg.altOf && altIdZuNeu.has(seg.altOf)) {
-        seg.altOf = altIdZuNeu.get(seg.altOf);
-      }
-    }
-  }
-
-  return state;
 }

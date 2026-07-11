@@ -32,12 +32,15 @@ globalThis.localStorage = {
 function baueState() {
   const state = leererZustand();
   const bank = neueAktivitaet({ name: 'Bankdrücken', kategorie: 'kraft', messwerte: ['gewicht', 'wdh'] });
-  bank.alternativen.push({ id: 'alt-1', name: 'KH-Bankdrücken' });
+  // Alternative ist jetzt eine echte Übung (V2), hier mit fester ID für den Test.
+  const khAlt = neueAktivitaet({ name: 'KH-Bankdrücken', kategorie: 'kraft', messwerte: ['gewicht', 'wdh'] });
+  khAlt.id = 'alt-1';
+  bank.alternativen.push('alt-1');
   const laufband = neueAktivitaet({ name: 'Laufband', kategorie: 'sonstiges', messwerte: ['dauer', 'puls_avg', 'puls_max'] });
   const ebike = neueAktivitaet({ name: 'E-Bike Tour', kategorie: 'rad', messwerte: ['distanz', 'hoehenmeter', 'dauer', 'puls_avg', 'puls_max'] });
   const kraulen = neueAktivitaet({ name: 'Kraulen', kategorie: 'schwimmen', messwerte: ['distanz', 'dauer'] });
   const plank = neueAktivitaet({ name: 'Plank', kategorie: 'kraft', messwerte: ['dauer'] });
-  state.bibliothek.push(bank, laufband, ebike, kraulen, plank);
+  state.bibliothek.push(bank, khAlt, laufband, ebike, kraulen, plank);
   return { state, bank, laufband, ebike, kraulen, plank };
 }
 
@@ -179,7 +182,7 @@ test('Backup: Export → Import Runde; Müll wird sauber abgelehnt', () => {
   const json = exportBackup(state);
   const zurueck = importBackup(json);
   assert.equal(zurueck.sessions[0].segmente[0].eintraege[0].messwerte.distanz, 24300);
-  assert.equal(zurueck.schema, 1);
+  assert.equal(zurueck.schema, 2);
 
   // auch "nackter" Zustand ohne Backup-Hülle wird akzeptiert
   const nackt = importBackup(JSON.stringify(state));
@@ -205,4 +208,52 @@ test('Fabriken wehren Unsinn ab', () => {
   assert.throws(() => neueAktivitaet({ name: 'X', kategorie: 'kraft', messwerte: ['bizepsumfang'] }), /Unbekannte Messwerte/);
   assert.throws(() => neuerEintrag({ quatsch: 1 }), /Unbekannte Messwerte/);
   assert.throws(() => aggregiere('quatsch', [1]), /Unbekannter Messwert-Typ/);
+});
+
+test('Migration V1→V2: Alternativen werden echte Übungen (zusammengeführt)', async () => {
+  const { migriereV1zuV2 } = await import('../js/core/storage.js');
+  const state = {
+    schema: 1,
+    bibliothek: [
+      { id: 'bank', name: 'Bankdrücken', kategorie: 'kraft', messwerte: ['gewicht', 'wdh'],
+        alternativen: [
+          { id: 'e1', name: 'Chest Press', einstellungen: {} },
+          { id: 'e2', name: 'Face Pulls', einstellungen: {} },
+        ] },
+      { id: 'nacken', name: 'Nackenheben', kategorie: 'kraft', messwerte: ['gewicht', 'wdh'],
+        alternativen: [
+          { id: 'e3', name: 'Face Pulls', einstellungen: {} },   // gleichnamig → zusammenführen
+        ] },
+      { id: 'lauf', name: 'Laufband', kategorie: 'kraft', messwerte: ['dauer'], cardio: true,
+        alternativen: [
+          { id: 'e4', name: 'Fahrrad', einstellungen: {} },      // existiert als Hauptübung
+        ] },
+      { id: 'rad', name: 'Fahrrad', kategorie: 'kraft', messwerte: ['dauer'], cardio: true,
+        alternativen: [] },
+    ],
+    sessions: [
+      { id: 's1', datum: '2026-07-01', modul: 'kraft',
+        segmente: [{ id: 'seg1', aktivitaetId: 'bank', altOf: 'e2', eintraege: [] }] },  // nutzte "Face Pulls"
+    ],
+  };
+  migriereV1zuV2(state);
+  const bib = state.bibliothek;
+  const ids = new Set(bib.map(a => a.id));
+
+  // Alle Alternativen sind IDs, alle gültig
+  for (const a of bib) for (const ref of a.alternativen) {
+    assert.equal(typeof ref, 'string');
+    assert.ok(ids.has(ref), `Verweis ${ref} muss existieren`);
+  }
+  // Face Pulls nur einmal, bei beiden verlinkt
+  const fp = bib.filter(a => a.name === 'Face Pulls');
+  assert.equal(fp.length, 1);
+  const fpVerlinkt = bib.filter(a => a.alternativen.includes(fp[0].id));
+  assert.equal(fpVerlinkt.length, 2);
+  // Fahrrad bleibt einmalig (Alternative → echte Hauptübung)
+  assert.equal(bib.filter(a => a.name === 'Fahrrad').length, 1);
+  const lauf = bib.find(a => a.name === 'Laufband');
+  assert.ok(lauf.alternativen.includes('rad'), 'Laufband-Alternative zeigt auf echte Fahrrad-id');
+  // Historie: seg.altOf wurde auf die neue Face-Pulls-id umgezogen
+  assert.equal(state.sessions[0].segmente[0].altOf, fp[0].id);
 });

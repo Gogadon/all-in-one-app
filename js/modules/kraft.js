@@ -633,12 +633,15 @@ export function erstelleKraftModul(ctx) {
       html += `<div class="seg-inhalt">`;
 
       // Alternativen-Umschalter (Tagestausch, altOf)
-      if ((aktivitaet.alternativen ?? []).length) {
+      // alternativen sind jetzt IDs → zu echten Bibliotheks-Übungen auflösen.
+      const altUebungen = (aktivitaet.alternativen ?? [])
+        .map(id => findeAktivitaet(S(), id)).filter(Boolean);
+      if (altUebungen.length) {
         html += `<button class="chip tausch" data-action="k.altListe" data-seg="${seg.id}">⇄ ${esc(anzeigeName)}</button>`;
         if (altOffen.has(seg.id)) {
           html += `<div class="chip-zeile">
             <button class="chip ${!seg.altOf ? 'aktiv' : ''}" data-action="k.altWahl" data-seg="${seg.id}" data-alt="">${esc(aktivitaet.name)}</button>
-            ${aktivitaet.alternativen.map(a =>
+            ${altUebungen.map(a =>
               `<button class="chip ${seg.altOf === a.id ? 'aktiv' : ''}" data-action="k.altWahl" data-seg="${seg.id}" data-alt="${a.id}">${esc(a.name)}</button>`).join('')}
           </div>`;
         }
@@ -877,9 +880,17 @@ export function erstelleKraftModul(ctx) {
 
   function pickerHtml() {
     const q = picker.suche;
-    const treffer = q ? sucheAktivitaet(S(), q)
+    let treffer = q ? sucheAktivitaet(S(), q)
       : [...aktivitaetenNachKategorie(S(), 'kraft'), ...aktivitaetenNachKategorie(S(), 'sonstiges')];
-    return `<h3>Übung wählen</h3>
+    // Beim Alternative-Wählen: die Basis-Übung selbst und bereits verknüpfte
+    // Alternativen aus der Liste nehmen (Selbstverweis/Doppelte vermeiden).
+    if (picker.ziel === 'alternative') {
+      const basis = findeAktivitaet(S(), picker.aktId);
+      const schonVerlinkt = new Set(basis?.alternativen ?? []);
+      treffer = treffer.filter(a => a.id !== picker.aktId && !schonVerlinkt.has(a.id));
+    }
+    const titel = picker.ziel === 'alternative' ? 'Alternative wählen' : 'Übung wählen';
+    return `<h3>${titel}</h3>
       <input class="suche" type="text" placeholder="Suchen oder neu benennen…" value="${esc(q)}" data-change="k.suche">
       <div class="picker-liste">${treffer.filter(a => !a.archiviert).map(a =>
         `<button class="picker-zeile" data-action="k.waehle" data-akt="${a.id}"><span class="punkt ${a.kategorie}"></span>${esc(a.name)}</button>`).join('') || '<p class="dim">Keine Treffer.</p>'}
@@ -893,7 +904,8 @@ export function erstelleKraftModul(ctx) {
   function einstellungenHtml(aktId, altId) {
     const akt = findeAktivitaet(S(), aktId);
     if (!akt) return '';
-    const ziel = altId ? (akt.alternativen ?? []).find(a => a.id === altId) : akt;
+    // Ziel ist die Übung selbst oder die Alternative (echte Übung).
+    const ziel = altId ? findeAktivitaet(S(), altId) : akt;
     if (!ziel) return '';
     const prog = ziel.einstellungen?.prog ?? { art: 'off' };
     const chip = (art, label) =>
@@ -963,7 +975,9 @@ export function erstelleKraftModul(ctx) {
 
     if (!altId) {
       html += `<p class="sheet-abschnitt">Alternativen</p>`;
-      html += (akt.alternativen ?? []).map(a => `<div class="plan-zeile">
+      const altListe = (akt.alternativen ?? [])
+        .map(id => findeAktivitaet(S(), id)).filter(Boolean);
+      html += altListe.map(a => `<div class="plan-zeile">
         <span class="name">${esc(a.name)}</span>
         <span class="werkzeuge">
           <button data-action="k.altName" data-akt="${aktId}" data-alt="${a.id}">✎</button>
@@ -971,7 +985,10 @@ export function erstelleKraftModul(ctx) {
           <button data-action="k.altWeg" data-akt="${aktId}" data-alt="${a.id}">✕</button>
         </span>
       </div>`).join('') || '<p class="dim">Noch keine.</p>';
-      html += `<button class="knopf klein" data-action="k.altPlus" data-akt="${aktId}">+ Alternative</button>`;
+      html += `<div class="knopf-zeile">
+        <button class="knopf klein" data-action="k.altWaehlen" data-akt="${aktId}">+ aus Bibliothek</button>
+        <button class="knopf klein geist" data-action="k.altPlus" data-akt="${aktId}">+ neu anlegen</button>
+      </div>`;
 
       // Übung löschen / archivieren
       const genutzt = wirdVerwendet(S(), aktId);
@@ -1374,12 +1391,27 @@ export function erstelleKraftModul(ctx) {
     // ---- Picker ----
     'k.uebungPlus'() { picker = { ziel: 'session', suche: '' }; sheet.oeffne(pickerHtml()); },
     'k.planUebungPlus'(d) { picker = { ziel: 'einheit', einheitId: d.einheit, suche: '' }; sheet.oeffne(pickerHtml()); },
+    'k.altWaehlen'(d) { picker = { ziel: 'alternative', aktId: d.akt, suche: '' }; sheet.oeffne(pickerHtml()); },
     'k.suche'(d, el) { picker.suche = el.value; sheet.aktualisiere(pickerHtml()); },
     async 'k.waehle'(d) {
       if (!picker) return;
       if (picker.ziel === 'einheit') {
         addAktivitaetZuEinheit(S(), MODUL, picker.einheitId, d.akt);
         planOffen.add(picker.einheitId);
+      } else if (picker.ziel === 'alternative') {
+        // Bestehende Übung als Alternative verknüpfen (reiner Verweis).
+        const zielAkt = picker.aktId;
+        try {
+          addAlternative(S(), zielAkt, d.akt);
+        } catch (err) {
+          await hinweis('Nicht möglich', err.message);
+          picker = null; sheet.schliesse(); return;
+        }
+        picker = null; sheet.schliesse();
+        await ctx.save();
+        sheet.oeffne(einstellungenHtml(zielAkt, null));   // zurück ins Übungs-Sheet
+        ctx.render();
+        return;
       } else {
         const s = heutigeSession(); if (!s) return;
         const seg = addSegment(s, neuesSegment(d.akt));
@@ -1391,10 +1423,14 @@ export function erstelleKraftModul(ctx) {
     },
     async 'k.neu'(d) {
       if (!picker?.suche.trim()) return;
+      const zielVorPicker = picker.ziel === 'alternative' ? picker.aktId : null;
       const akt = addAktivitaet(S(), {
         name: picker.suche, kategorie: d.kat, messwerte: vorschlagMesswerte(d.kat),
       });
       await actions['k.waehle']({ akt: akt.id });
+      // Falls die neue Übung als Alternative gedacht war, ist sie via k.waehle
+      // schon verknüpft. zielVorPicker nur zur Klarheit dokumentiert.
+      void zielVorPicker;
     },
 
     // ---- Plan: Bibliothek ----
@@ -1423,11 +1459,18 @@ export function erstelleKraftModul(ctx) {
       if (umbenennen.typ === 'einheit') {
         benenneEinheitUm(S(), MODUL, umbenennen.id, name);
       } else if (umbenennen.typ === 'altName') {
-        const akt = findeAktivitaet(S(), umbenennen.id);
-        const alt = akt?.alternativen.find(a => a.id === umbenennen.altId);
+        // Alternative ist eine echte Übung → direkt umbenennen.
+        const alt = findeAktivitaet(S(), umbenennen.altId);
         if (alt) alt.name = name;
       } else if (umbenennen.typ === 'altNeu') {
-        addAlternative(S(), umbenennen.id, { name });
+        // Neue Alternative als echte Übung anlegen und verweisen.
+        const basis = findeAktivitaet(S(), umbenennen.id);
+        const neu = addAktivitaet(S(), {
+          name, kategorie: basis?.kategorie ?? 'kraft',
+          messwerte: [...(basis?.messwerte ?? [])],
+        });
+        if (basis?.cardio) neu.cardio = true;
+        (basis.alternativen ??= []).push(neu.id);
       }
       const reopenAkt = (umbenennen.typ === 'altName' || umbenennen.typ === 'altNeu') ? umbenennen.id : null;
       umbenennen = null;
@@ -1567,8 +1610,9 @@ export function erstelleKraftModul(ctx) {
       ctx.render();
     },
     async 'k.progArt'(d) {
-      const akt = findeAktivitaet(S(), d.akt); if (!akt) return;
-      const ziel = d.alt ? akt.alternativen.find(a => a.id === d.alt) : akt;
+      // Ziel ist entweder die Übung selbst oder die Alternative (echte Übung).
+      const ziel = d.alt ? findeAktivitaet(S(), d.alt) : findeAktivitaet(S(), d.akt);
+      if (!ziel) return;
       ziel.einstellungen ??= {};
       if (d.art === 'off') delete ziel.einstellungen.prog;
       else ziel.einstellungen.prog = { art: d.art, ...PROG_DEFAULTS[d.art], ...(ziel.einstellungen.prog?.art === d.art ? ziel.einstellungen.prog : {}), art: d.art };
@@ -1577,8 +1621,7 @@ export function erstelleKraftModul(ctx) {
       ctx.render();
     },
     async 'k.progParam'(d, el) {
-      const akt = findeAktivitaet(S(), d.akt);
-      const ziel = d.alt ? akt?.alternativen.find(a => a.id === d.alt) : akt;
+      const ziel = d.alt ? findeAktivitaet(S(), d.alt) : findeAktivitaet(S(), d.akt);
       const prog = ziel?.einstellungen?.prog; if (!prog) return;
       const n = parseZahl(el.value);
       if (n != null && n > 0) prog[d.param] = n;
@@ -1590,8 +1633,8 @@ export function erstelleKraftModul(ctx) {
       sheet.oeffne(umbenennenHtml());
     },
     'k.altName'(d) {
-      const akt = findeAktivitaet(S(), d.akt);
-      const alt = akt?.alternativen.find(a => a.id === d.alt); if (!alt) return;
+      // Alternative ist eine echte Übung → direkt finden.
+      const alt = findeAktivitaet(S(), d.alt); if (!alt) return;
       umbenennen = { typ: 'altName', id: d.akt, altId: d.alt, titel: 'Alternative umbenennen', wert: alt.name };
       sheet.oeffne(umbenennenHtml());
     },

@@ -16,7 +16,7 @@ import {
   berechneVorschlag, bestVorTag, eintragPR, letzteSaetze, verlaufLetzte,
   prefillEintrag, identVon, segmentZusammenfassungKraft, segmentZusammenfassungWerte,
   sessionVolumenErledigt, fmtSatz, dauerInputWert, eintragInputsHtml, PROG_DEFAULTS,
-  effektiveWdh, istEinarmig, satzVolumen,
+  effektiveWdh, istEinarmig, satzVolumen, erstelleKraftModul,
 } from '../js/modules/kraft.js';
 
 const HEUTE = '2026-07-05';
@@ -103,7 +103,8 @@ test('Historie zählt NUR erledigte Segmente (exCountsOnDay-Lektion aus der Gym-
 
 test('Alternativen haben eigene Historie (identVon = altOf)', () => {
   const { state, bank } = welt();
-  const kh = addAlternative(state, bank.id, { name: 'KH-Bankdrücken' });
+  const kh = addAktivitaet(state, { name: 'KH-Bankdrücken', kategorie: 'kraft', messwerte: ['gewicht', 'wdh'] });
+  addAlternative(state, bank.id, kh.id);
   session(state, '2026-06-20', bank.id, [[80, 8]]);                      // Hauptübung
   session(state, '2026-06-27', bank.id, [[32, 10]], { altOf: kh.id });   // Alternative
 
@@ -272,4 +273,35 @@ test('Assistiert: weniger Hilfe und Übergang zu Zusatzgewicht sind PRs', () => 
   assert.equal(eintragPR(state, d.id, neuerEintrag({ gewicht: 5, wdh: 5 }), HEUTE), 'gewicht');
   const s = sessMit(state, '2026-07-05', d.id, [{ gewicht: -12.5, wdh: 10 }]);
   assert.equal(sessionVolumenErledigt(s), 0);
+});
+
+test('Alternative aus Bibliothek wählen (Etappe 3): verknüpfen + neu anlegen', async () => {
+  const state = leererZustand();
+  const bank = addAktivitaet(state, { name: 'Bankdrücken', kategorie: 'kraft', messwerte: ['gewicht', 'wdh'] });
+  const chest = addAktivitaet(state, { name: 'Chest Press', kategorie: 'kraft', messwerte: ['gewicht', 'wdh'] });
+  let sheetInhalt = '';
+  const ctx = {
+    get state() { return state; }, save: async () => {}, render: () => {},
+    sheet: { oeffne(h) { sheetInhalt = h; }, schliesse() { sheetInhalt = ''; }, aktualisiere(h) { sheetInhalt = h; } },
+    esc: t => String(t ?? ''), formatDatum: i => i, tabWechsel: () => {},
+  };
+  const k = erstelleKraftModul(ctx);
+
+  // Bestehende Übung als Alternative
+  k.actions['k.altWaehlen']({ akt: bank.id });
+  assert.ok(sheetInhalt.includes('Alternative wählen'));
+  assert.ok(!sheetInhalt.includes(`data-akt="${bank.id}"`), 'Basis nicht wählbar');
+  await k.actions['k.waehle']({ akt: chest.id });
+  assert.deepEqual(bank.alternativen, [chest.id]);
+
+  // Schon verlinkte ausgeblendet
+  k.actions['k.altWaehlen']({ akt: bank.id });
+  assert.ok(!sheetInhalt.includes('Chest Press'));
+
+  // Neue Übung als Alternative anlegen
+  k.actions['k.altWaehlen']({ akt: bank.id });
+  k.actions['k.suche']({}, { value: 'Kurzhantel-Bank' });
+  await k.actions['k.neu']({ kat: 'kraft' });
+  const neu = state.bibliothek.find(a => a.name === 'Kurzhantel-Bank');
+  assert.ok(neu && bank.alternativen.includes(neu.id));
 });
