@@ -1213,12 +1213,26 @@ export function erstelleKraftModul(ctx) {
       if (kraftSaetze > 0) rueckblick.push({ icon: '🏋️', text: `${kraftSaetze} Sätze` });
       if (cardioMin > 0) rueckblick.push({ icon: '🔥', text: `${cardioMin} Min Cardio` });
 
+      // Hero-Wert der Karte: normalerweise das Trainingsvolumen. An reinen
+      // Cardio-/Ruhetagen (kein gehobenes Gewicht) wäre „0 kg" irreführend —
+      // dann zeigen wir stattdessen die Gesamt-Cardiozeit.
+      const vol = sessionVolumenErledigt(s);
+      let heroLabel = 'TRAININGSVOLUMEN';
+      let heroText = `${formatZahl(vol, 0)} kg`;
+      if (vol <= 0 && cardioMin > 0) {
+        heroLabel = 'CARDIO';
+        heroText = cardioMin >= 60
+          ? `${Math.floor(cardioMin / 60)}:${String(cardioMin % 60).padStart(2, '0')} h`
+          : `${cardioMin} min`;
+      }
+
       const daten = {
         modul: MODUL,
         eyebrow: 'KRAFT · TRAINING',
         titel: einheit ? einheit.name : 'Training',
         datum: formatDatum(s.datum),
-        volumenText: `${formatZahl(sessionVolumenErledigt(s), 0)} kg`,
+        volumenText: heroText,
+        volumenLabel: heroLabel,
         zeilen,
         highlights: hl,
         rueckblick,
