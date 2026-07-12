@@ -1,0 +1,204 @@
+// tests/statistik.test.js — Zeitraum-Aggregation (reiner Kern, kein DOM)
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+
+const {
+  neueSession, neuesSegment, neuerEintrag, addSegment, addEintrag, zeitraum,
+} = await import('../js/core/model.js');
+const {
+  zeitraumStatistik, aggregiereTouren, tourenImZeitraum,
+  gewichtGleich, gewichtNachGroesse,
+} = await import('../js/core/statistik.js');
+
+// ------------------------------------------------------------
+// Hilfs-Fabrik: eine fertige Tour direkt bauen (ohne Modul-UI).
+// Rad/Wandern-Struktur: 1 Segment, 1 Eintrag mit den Messwerten.
+// ------------------------------------------------------------
+function macheTour(state, { modul = 'rad', datum, mw = {}, abgeschlossen = true, uebersprungen = false } = {}) {
+  const s = neueSession({ datum });
+  s.modul = modul;
+  if (abgeschlossen) s.abgeschlossen = true;
+  if (uebersprungen) s.uebersprungen = true;
+  const seg = addSegment(s, neuesSegment('akt-' + modul));
+  addEintrag(seg, neuerEintrag(mw));
+  state.sessions.push(s);
+  return s;
+}
+
+function leererState() { return { sessions: [] }; }
+
+// ============================================================
+// zeitraum() — Grenzen (bis exklusiv)
+// ============================================================
+
+test('zeitraum: Woche = Montag bis nächster Montag (exklusiv)', () => {
+  // 2026-07-08 ist ein Mittwoch → Woche Mo 06.07. bis (exkl.) Mo 13.07.
+  assert.deepEqual(zeitraum('woche', '2026-07-08'), { von: '2026-07-06', bis: '2026-07-13' });
+});
+
+test('zeitraum: Monat = 1. bis 1. des Folgemonats (exklusiv)', () => {
+  assert.deepEqual(zeitraum('monat', '2026-07-08'), { von: '2026-07-01', bis: '2026-08-01' });
+  // Jahreswechsel korrekt
+  assert.deepEqual(zeitraum('monat', '2026-12-20'), { von: '2026-12-01', bis: '2027-01-01' });
+});
+
+test('zeitraum: Jahr = 1.1. bis 1.1. Folgejahr (exklusiv)', () => {
+  assert.deepEqual(zeitraum('jahr', '2026-07-08'), { von: '2026-01-01', bis: '2027-01-01' });
+});
+
+test('zeitraum: unbekannte Art wirft', () => {
+  assert.throws(() => zeitraum('quartal', '2026-07-08'), /Unbekannte Zeitraum-Art/);
+});
+
+// ============================================================
+// Grundfälle: summe / mittel / max
+// ============================================================
+
+test('Statistik: summe addiert, mittel = Ø der Touren, max = Maximum', () => {
+  const state = leererState();
+  macheTour(state, { datum: '2026-07-06', mw: { distanz: 10000, dauer: 3600, tempo_avg: 20, tempo_max: 35, puls_avg: 130 } });
+  macheTour(state, { datum: '2026-07-12', mw: { distanz: 30000, dauer: 3600, tempo_avg: 30, tempo_max: 40 } });
+
+  const r = zeitraumStatistik(state, 'rad', 'woche', '2026-07-08');
+  assert.equal(r.anzahl, 2);
+  assert.equal(r.von, '2026-07-06');
+  assert.equal(r.bis, '2026-07-13');
+
+  // summe
+  assert.equal(r.kennzahlen.distanz, 40000);
+  assert.equal(r.kennzahlen.dauer, 7200);
+  // mittel (Gleichgewicht): einfacher Ø der Touren-Werte
+  assert.equal(r.kennzahlen.tempo_avg, 25);        // (20+30)/2
+  // max
+  assert.equal(r.kennzahlen.tempo_max, 40);        // max(35,40)
+  // mittel mit fehlenden Werten: nur Touren, die den Wert haben
+  assert.equal(r.kennzahlen.puls_avg, 130);        // nur Tour 1 hatte Puls
+});
+
+test('Statistik: leerer Zeitraum → anzahl 0, keine Kennzahlen', () => {
+  const state = leererState();
+  macheTour(state, { datum: '2026-07-06', mw: { distanz: 10000 } });
+  const r = zeitraumStatistik(state, 'rad', 'woche', '2020-01-01');
+  assert.equal(r.anzahl, 0);
+  assert.deepEqual(r.kennzahlen, {});
+  assert.deepEqual(r.sessions, []);
+});
+
+test('Statistik: Kennzahlen stehen in Registry-Reihenfolge', () => {
+  const state = leererState();
+  macheTour(state, { datum: '2026-07-06', mw: { puls_avg: 120, distanz: 10000, dauer: 3600 } });
+  const r = zeitraumStatistik(state, 'rad', 'woche', '2026-07-08');
+  // Registry-Reihenfolge: distanz kommt vor dauer, dauer vor puls_avg
+  assert.deepEqual(Object.keys(r.kennzahlen), ['distanz', 'dauer', 'puls_avg']);
+});
+
+// ============================================================
+// Zeitraum-Grenzen im Zusammenspiel mit echten Touren
+// ============================================================
+
+test('Statistik: Woche/Monat/Jahr grenzen korrekt ab', () => {
+  const state = leererState();
+  macheTour(state, { datum: '2026-06-30', mw: { distanz: 5000 } });   // Vormonat, gleiches Jahr
+  macheTour(state, { datum: '2026-07-01', mw: { distanz: 5000 } });   // Monat + Jahr
+  macheTour(state, { datum: '2026-07-06', mw: { distanz: 10000 } });  // Woche + Monat + Jahr
+  macheTour(state, { datum: '2026-07-12', mw: { distanz: 30000 } });  // Woche (So) + Monat + Jahr
+  macheTour(state, { datum: '2026-07-13', mw: { distanz: 20000 } });  // nächste Woche, noch im Monat
+
+  const woche = zeitraumStatistik(state, 'rad', 'woche', '2026-07-08');
+  assert.equal(woche.anzahl, 2);                 // 06. + 12.
+  assert.equal(woche.kennzahlen.distanz, 40000);
+
+  const monat = zeitraumStatistik(state, 'rad', 'monat', '2026-07-08');
+  assert.equal(monat.anzahl, 4);                 // 01./06./12./13.
+  assert.equal(monat.kennzahlen.distanz, 65000);
+
+  const jahr = zeitraumStatistik(state, 'rad', 'jahr', '2026-07-08');
+  assert.equal(jahr.anzahl, 5);                  // alle
+  assert.equal(jahr.kennzahlen.distanz, 70000);
+});
+
+// ============================================================
+// Abgrenzung: Modul, offene & übersprungene Touren
+// ============================================================
+
+test('Statistik: fremdes Modul zählt nicht mit', () => {
+  const state = leererState();
+  macheTour(state, { modul: 'rad', datum: '2026-07-06', mw: { distanz: 10000 } });
+  macheTour(state, { modul: 'wandern', datum: '2026-07-06', mw: { distanz: 8000 } });
+
+  const rad = zeitraumStatistik(state, 'rad', 'woche', '2026-07-08');
+  assert.equal(rad.anzahl, 1);
+  assert.equal(rad.kennzahlen.distanz, 10000);
+
+  const wandern = zeitraumStatistik(state, 'wandern', 'woche', '2026-07-08');
+  assert.equal(wandern.anzahl, 1);
+  assert.equal(wandern.kennzahlen.distanz, 8000);
+});
+
+test('Statistik: offene und übersprungene Touren zählen nicht', () => {
+  const state = leererState();
+  macheTour(state, { datum: '2026-07-06', mw: { distanz: 10000 } });                          // fertig
+  macheTour(state, { datum: '2026-07-07', mw: { distanz: 99000 }, abgeschlossen: false });    // offen
+  macheTour(state, { datum: '2026-07-08', mw: { distanz: 88000 }, uebersprungen: true });     // übersprungen
+
+  const r = zeitraumStatistik(state, 'rad', 'woche', '2026-07-08');
+  assert.equal(r.anzahl, 1);
+  assert.equal(r.kennzahlen.distanz, 10000);
+});
+
+test('Statistik: sessions sind neueste zuerst', () => {
+  const state = leererState();
+  macheTour(state, { datum: '2026-07-06', mw: { distanz: 10000 } });
+  macheTour(state, { datum: '2026-07-12', mw: { distanz: 30000 } });
+  const r = zeitraumStatistik(state, 'rad', 'woche', '2026-07-08');
+  assert.deepEqual(r.sessions.map(s => s.datum), ['2026-07-12', '2026-07-06']);
+});
+
+// ============================================================
+// Migrations-Seam: gewichteter Mittelwert
+// ============================================================
+
+test('Seam: gewichteter Mittelwert unterscheidet sich vom einfachen', () => {
+  const state = leererState();
+  // 10 km @ 20 km/h, 30 km @ 30 km/h
+  macheTour(state, { datum: '2026-07-06', mw: { distanz: 10000, tempo_avg: 20 } });
+  macheTour(state, { datum: '2026-07-12', mw: { distanz: 30000, tempo_avg: 30 } });
+
+  // Default (Gleichgewicht): (20+30)/2 = 25
+  const einfach = zeitraumStatistik(state, 'rad', 'woche', '2026-07-08');
+  assert.equal(einfach.kennzahlen.tempo_avg, 25);
+
+  // Nach Distanz gewichtet: (20·10000 + 30·30000)/40000 = 27,5
+  const gewichtet = zeitraumStatistik(state, 'rad', 'woche', '2026-07-08', { gewicht: gewichtNachGroesse });
+  assert.equal(gewichtet.kennzahlen.tempo_avg, 27.5);
+
+  // summe/max bleiben von der Gewichtung unberührt
+  assert.equal(gewichtet.kennzahlen.distanz, 40000);
+});
+
+test('Seam: gewichtGleich ist der Default', () => {
+  const state = leererState();
+  macheTour(state, { datum: '2026-07-06', mw: { distanz: 10000, tempo_avg: 20 } });
+  macheTour(state, { datum: '2026-07-12', mw: { distanz: 30000, tempo_avg: 30 } });
+  const explizit = aggregiereTouren(state.sessions, { gewicht: gewichtGleich });
+  const default_ = aggregiereTouren(state.sessions);
+  assert.deepEqual(default_.kennzahlen, explizit.kennzahlen);
+});
+
+// ============================================================
+// aggregiereTouren direkt (untere Ebene)
+// ============================================================
+
+test('aggregiereTouren: leere Liste → anzahl 0, keine Kennzahlen', () => {
+  const r = aggregiereTouren([]);
+  assert.equal(r.anzahl, 0);
+  assert.deepEqual(r.kennzahlen, {});
+});
+
+test('tourenImZeitraum: filtert exklusiv am oberen Rand', () => {
+  const state = leererState();
+  macheTour(state, { datum: '2026-07-12', mw: { distanz: 1000 } });
+  macheTour(state, { datum: '2026-07-13', mw: { distanz: 2000 } });
+  const drin = tourenImZeitraum(state, 'rad', '2026-07-06', '2026-07-13');
+  assert.deepEqual(drin.map(s => s.datum), ['2026-07-12']);   // 13. ist EXKLUSIV draußen
+});
