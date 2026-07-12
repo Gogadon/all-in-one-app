@@ -135,3 +135,22 @@ test('Wandern: leerer Zeitraum zeigt einen Hinweis', async () => {
   const html = wandern.statistikHtml();
   assert.ok(html.includes('Keine Wanderungen'));
 });
+
+// ---- Touren-Tab „Alle anzeigen" (Etappe 3) ----
+
+test('Wandern: „Alle anzeigen" erscheint ab 6 Touren und klappt auf', async () => {
+  const { wandern } = neuesModul();
+  for (let i = 0; i < 6; i++) {
+    await wandern.actions['wandern.neu']();
+    await wandern.actions['wandern.wert']({ typ: 'distanz' }, { value: String(8 + i) });
+    await wandern.actions['wandern.fertig']();
+  }
+  let html = wandern.heuteHtml();
+  assert.ok(html.includes('Alle anzeigen (6)'));
+  assert.equal((html.match(/data-action="wandern\.detail"/g) || []).length, 5);
+
+  await wandern.actions['wandern.alleTouren']();
+  html = wandern.heuteHtml();
+  assert.ok(html.includes('Weniger anzeigen'));
+  assert.equal((html.match(/data-action="wandern\.detail"/g) || []).length, 6);
+});

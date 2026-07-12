@@ -115,6 +115,9 @@ export function erstelleRadModul(ctx) {
   let statArt = 'monat';       // 'woche' | 'monat' | 'jahr'
   let statAnker = heuteIso();
 
+  // Touren-Tab: ganze Liste aus- oder eingeklappt (Default: nur letzte 5).
+  let alleTourenAuf = false;
+
   async function speichernUndZeigen() { await ctx.save(); ctx.render(); }
 
   // ----------------------------------------------------------
@@ -158,11 +161,17 @@ export function erstelleRadModul(ctx) {
 
     html += `<button class="knopf primaer gross voll" data-action="rad.neu">+ Neue Tour eintragen</button>`;
 
-    // Letzte Touren als Vorschau
-    const touren = alleTouren(S()).slice(0, 5);
-    if (touren.length) {
-      html += `<p class="sheet-abschnitt zwischen">Zuletzt</p>`;
+    // Touren-Liste: standardmäßig die letzten 5, per „Alle anzeigen" ausklappbar.
+    const alle = alleTouren(S());
+    if (alle.length) {
+      const touren = alleTourenAuf ? alle : alle.slice(0, 5);
+      html += `<p class="sheet-abschnitt zwischen">${alleTourenAuf ? 'Alle Touren' : 'Zuletzt'}</p>`;
       html += touren.map(t => tourZeileHtml(t)).join('');
+      if (alle.length > 5) {
+        html += alleTourenAuf
+          ? `<button class="knopf geist voll" data-action="rad.alleTouren">Weniger anzeigen</button>`
+          : `<button class="knopf geist voll" data-action="rad.alleTouren">Alle anzeigen (${alle.length})</button>`;
+      }
     } else {
       html += `<div class="karte leer anim"><p>Noch keine Touren. Trag deine erste Runde ein — freie Fahrt, wann immer du Lust hast. 🚲</p></div>`;
     }
@@ -481,6 +490,10 @@ export function erstelleRadModul(ctx) {
       // nicht in die Zukunft blättern (leere Zeiträume)
       if (zeitraum(statArt, neu).von > zeitraum(statArt, heuteIso()).von) return;
       statAnker = neu;
+      ctx.render();
+    },
+    'rad.alleTouren'() {
+      alleTourenAuf = !alleTourenAuf;
       ctx.render();
     },
     async 'rad.teilen'(d) {

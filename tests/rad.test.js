@@ -221,3 +221,39 @@ test('Rad: Bearbeiten wechselt in den Heute-Tab und speichert wieder', async () 
   await rad.actions['rad.fertig']();
   assert.equal(state.sessions[0].abgeschlossen, true);
 });
+
+// ---- Touren-Tab „Alle anzeigen" (Etappe 3) ----
+
+test('Rad: „Alle anzeigen" erscheint ab 6 Touren und klappt die volle Liste auf', async () => {
+  const { rad } = neuesModul();
+  for (let i = 0; i < 6; i++) {
+    await rad.actions['rad.neu']();
+    await rad.actions['rad.wert']({ typ: 'distanz' }, { value: String(10 + i) });
+    await rad.actions['rad.fertig']();
+  }
+  let html = rad.heuteHtml();
+  assert.ok(html.includes('Alle anzeigen (6)'));
+  assert.equal((html.match(/data-action="rad\.detail"/g) || []).length, 5);  // erst 5 sichtbar
+
+  await rad.actions['rad.alleTouren']();     // aufklappen
+  html = rad.heuteHtml();
+  assert.ok(html.includes('Weniger anzeigen'));
+  assert.equal((html.match(/data-action="rad\.detail"/g) || []).length, 6);  // alle sichtbar
+
+  await rad.actions['rad.alleTouren']();     // wieder einklappen
+  html = rad.heuteHtml();
+  assert.ok(html.includes('Alle anzeigen (6)'));
+  assert.equal((html.match(/data-action="rad\.detail"/g) || []).length, 5);
+});
+
+test('Rad: kein „Alle anzeigen" bei 5 oder weniger Touren', async () => {
+  const { rad } = neuesModul();
+  for (let i = 0; i < 5; i++) {
+    await rad.actions['rad.neu']();
+    await rad.actions['rad.wert']({ typ: 'distanz' }, { value: '10' });
+    await rad.actions['rad.fertig']();
+  }
+  const html = rad.heuteHtml();
+  assert.ok(!html.includes('Alle anzeigen'));
+  assert.equal((html.match(/data-action="rad\.detail"/g) || []).length, 5);
+});

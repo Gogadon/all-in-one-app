@@ -112,6 +112,9 @@ export function erstelleWanderModul(ctx) {
   let statArt = 'monat';       // 'woche' | 'monat' | 'jahr'
   let statAnker = heuteIso();
 
+  // Touren-Tab: ganze Liste aus- oder eingeklappt (Default: nur letzte 5).
+  let alleTourenAuf = false;
+
   async function speichernUndZeigen() { await ctx.save(); ctx.render(); }
 
   function findeOffeneTour() {
@@ -147,10 +150,17 @@ export function erstelleWanderModul(ctx) {
 
     html += `<button class="knopf primaer gross voll" data-action="wandern.neu">+ Neue Wanderung eintragen</button>`;
 
-    const touren = alleWanderungen(S()).slice(0, 5);
-    if (touren.length) {
-      html += `<p class="sheet-abschnitt zwischen">Zuletzt</p>`;
+    // Touren-Liste: standardmäßig die letzten 5, per „Alle anzeigen" ausklappbar.
+    const alle = alleWanderungen(S());
+    if (alle.length) {
+      const touren = alleTourenAuf ? alle : alle.slice(0, 5);
+      html += `<p class="sheet-abschnitt zwischen">${alleTourenAuf ? 'Alle Touren' : 'Zuletzt'}</p>`;
       html += touren.map(t => tourZeileHtml(t)).join('');
+      if (alle.length > 5) {
+        html += alleTourenAuf
+          ? `<button class="knopf geist voll" data-action="wandern.alleTouren">Weniger anzeigen</button>`
+          : `<button class="knopf geist voll" data-action="wandern.alleTouren">Alle anzeigen (${alle.length})</button>`;
+      }
     } else {
       html += `<div class="karte leer anim"><p>Noch keine Wanderungen. Trag deine erste Tour ein — raus in die Natur, wann immer du Lust hast. 🥾</p></div>`;
     }
@@ -447,6 +457,10 @@ export function erstelleWanderModul(ctx) {
       const neu = verschiebeZeitraum(statArt, statAnker, +1);
       if (zeitraum(statArt, neu).von > zeitraum(statArt, heuteIso()).von) return;
       statAnker = neu;
+      ctx.render();
+    },
+    'wandern.alleTouren'() {
+      alleTourenAuf = !alleTourenAuf;
       ctx.render();
     },
     async 'wandern.teilen'(d) {
