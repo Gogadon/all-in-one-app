@@ -14,7 +14,7 @@ import { MESSWERTE, formatWert, formatZahl, parseZahl } from '../core/metrics.js
 import {
   heuteIso, neueSession, neuesSegment, neuerEintrag,
   addSegment, addEintrag, findeAktivitaet,
-  zeitraum, verschiebeZeitraum,
+  zeitraum, verschiebeZeitraum, sortiereNeuesteZuerst,
 } from '../core/model.js';
 import { zeitraumStatistik, zeitraumLabel } from '../core/statistik.js';
 import { addAktivitaet } from '../core/library.js';
@@ -34,9 +34,8 @@ const OPTIONAL_MESSWERTE = ['puls_max'];
 
 /** Alle Wanderungen (Sessions dieses Moduls), neueste zuerst. */
 export function alleWanderungen(state) {
-  return state.sessions
-    .filter(s => s.modul === MODUL && !s.uebersprungen)
-    .sort((a, b) => b.datum.localeCompare(a.datum));
+  return sortiereNeuesteZuerst(
+    state.sessions.filter(s => s.modul === MODUL && !s.uebersprungen));
 }
 
 /** Die eine Wander-Aktivität (wird bei Bedarf angelegt — „Wanderung"). */

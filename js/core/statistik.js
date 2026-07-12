@@ -31,7 +31,7 @@
 // ============================================================
 
 import { MESSWERTE, aggregiere } from './metrics.js';
-import { sessionWert, zeitraum, isoZuDatum, heuteIso } from './model.js';
+import { sessionWert, zeitraum, isoZuDatum, heuteIso, sortiereNeuesteZuerst } from './model.js';
 
 // ------------------------------------------------------------
 // Gewichts-Strategien für mittel-Messwerte
@@ -73,14 +73,12 @@ export function gewichtNachGroesse(typ, k) {
  * Neueste zuerst — passt zur antippbaren Tourenliste in der UI.
  */
 export function tourenImZeitraum(state, modul, vonIso, bisIso) {
-  return state.sessions
-    .filter(s =>
-      s.modul === modul &&
-      s.abgeschlossen === true &&
-      !s.uebersprungen &&
-      s.datum >= vonIso &&
-      s.datum < bisIso)
-    .sort((a, b) => b.datum.localeCompare(a.datum));
+  return sortiereNeuesteZuerst(state.sessions.filter(s =>
+    s.modul === modul &&
+    s.abgeschlossen === true &&
+    !s.uebersprungen &&
+    s.datum >= vonIso &&
+    s.datum < bisIso));
 }
 
 // ------------------------------------------------------------

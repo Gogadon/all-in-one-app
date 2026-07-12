@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 
 const {
   neueSession, neuesSegment, neuerEintrag, addSegment, addEintrag,
-  zeitraum, verschiebeZeitraum,
+  zeitraum, verschiebeZeitraum, sortiereNeuesteZuerst,
 } = await import('../js/core/model.js');
 const {
   zeitraumStatistik, aggregiereTouren, tourenImZeitraum,
@@ -258,4 +258,49 @@ test('zeitraumLabel: Woche über Jahresgrenze nennt beide Jahre', () => {
   const label = zeitraumLabel('woche', '2026-12-31');
   assert.ok(label.includes('2026') && label.includes('2027'));
   assert.ok(label.includes('Dezember') && label.includes('Januar'));
+});
+
+// ============================================================
+// Sortierung: gleicher Tag → zuletzt eingetragene zuerst
+// ============================================================
+
+test('neueSession: setzt einen erstelltAm-Zeitstempel', () => {
+  const s = neueSession({ datum: '2026-07-08' });
+  assert.equal(typeof s.erstelltAm, 'string');
+  assert.ok(!Number.isNaN(Date.parse(s.erstelltAm)));
+});
+
+test('tourenImZeitraum: bei gleichem Tag steht die zuletzt eingetragene oben', () => {
+  const state = leererState();
+  const frueh = macheTour(state, { datum: '2026-07-08', mw: { distanz: 6500 } });   // zuerst eingetragen
+  const spaet = macheTour(state, { datum: '2026-07-08', mw: { distanz: 21500 } });  // danach eingetragen
+  const liste = tourenImZeitraum(state, 'rad', '2026-07-06', '2026-07-13');
+  assert.equal(liste[0].id, spaet.id);   // spätere Tour oben
+  assert.equal(liste[1].id, frueh.id);
+});
+
+test('sortiereNeuesteZuerst: erstelltAm sticht die Einfüge-Reihenfolge', () => {
+  // A steht im Array vorne, wurde aber SPÄTER eingetragen (erstelltAm) → A gehört nach oben.
+  const liste = [
+    { id: 'A', datum: '2026-07-08', erstelltAm: '2026-07-08T18:00:00.000Z' },
+    { id: 'B', datum: '2026-07-08', erstelltAm: '2026-07-08T09:00:00.000Z' },
+  ];
+  assert.deepEqual(sortiereNeuesteZuerst(liste).map(x => x.id), ['A', 'B']);
+});
+
+test('sortiereNeuesteZuerst: ohne erstelltAm zählt die Einfüge-Reihenfolge (später = oben)', () => {
+  const liste = [
+    { id: 'alt',  datum: '2026-07-08' },   // Index 0 = früher eingetragen
+    { id: 'neu',  datum: '2026-07-08' },   // Index 1 = später eingetragen
+  ];
+  assert.deepEqual(sortiereNeuesteZuerst(liste).map(x => x.id), ['neu', 'alt']);
+});
+
+test('sortiereNeuesteZuerst: verschiedene Tage bleiben nach Datum absteigend', () => {
+  const liste = [
+    { id: 'a', datum: '2026-07-06' },
+    { id: 'b', datum: '2026-07-12' },
+    { id: 'c', datum: '2026-07-09' },
+  ];
+  assert.deepEqual(sortiereNeuesteZuerst(liste).map(x => x.id), ['b', 'c', 'a']);
 });

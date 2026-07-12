@@ -139,8 +139,31 @@ export function neueAktivitaet({ name, kategorie, messwerte = [], einstellungen 
 }
 
 /** Session = was tatsächlich passiert ist. ausPlan leer → spontan. */
+/**
+ * Sessions/Touren „neueste zuerst": nach `datum` absteigend, und bei gleichem
+ * Tag zuerst die zuletzt EINGETRAGENE. Der Tages-Stichentscheid nutzt
+ * `erstelltAm` (Eintrag-Zeitpunkt); fehlt der (alte Daten), zählt die
+ * Reihenfolge in der Liste — neue Sessions werden hinten angehängt, also ist
+ * ein höherer Index die spätere Tour. Es wird bewusst keine Uhrzeit der
+ * eigentlichen Aktivität erfasst; die Eintrag-Reihenfolge ist die beste
+ * Näherung an „was kam zuletzt".
+ */
+export function sortiereNeuesteZuerst(liste) {
+  return liste
+    .map((s, i) => ({ s, i }))
+    .sort((a, b) =>
+      b.s.datum.localeCompare(a.s.datum)
+      || (b.s.erstelltAm ?? '').localeCompare(a.s.erstelltAm ?? '')
+      || b.i - a.i)
+    .map(x => x.s);
+}
+
 export function neueSession({ datum = heuteIso(), ausPlan = null, notiz = '' } = {}) {
-  return { id: neueId(), datum, ausPlan, notiz, segmente: [] };
+  // erstelltAm hält die Eintrag-Zeit fest (volles Datum+Uhrzeit). Nötig, um
+  // mehrere Touren am selben Tag korrekt „neueste zuerst" zu sortieren — das
+  // Feld `datum` allein hat keine Uhrzeit. Alte Sessions ohne erstelltAm
+  // fallen in der Sortierung auf die Einfüge-Reihenfolge zurück.
+  return { id: neueId(), datum, erstelltAm: new Date().toISOString(), ausPlan, notiz, segmente: [] };
 }
 
 /** Segment = eine Aktivität innerhalb einer Session. altOf = genutzte Alternative. */
