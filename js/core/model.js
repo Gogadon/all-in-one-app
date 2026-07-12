@@ -101,6 +101,22 @@ export function zeitraum(art, anker = heuteIso()) {
   throw new Error(`Unbekannte Zeitraum-Art: ${art}`);
 }
 
+/**
+ * Verschiebt den Zeitraum um `schritt` Einheiten (−1 = zurück, +1 = vor) und
+ * gibt einen Anker-Tag im neuen Zeitraum zurück (dessen ersten Tag). Für die
+ * vor/zurück-Pfeile der Statistik-Ansicht. Rechnet ebenfalls in UTC.
+ */
+export function verschiebeZeitraum(art, anker, schritt) {
+  const { von } = zeitraum(art, anker);
+  const [y, m, d] = von.split('-').map(Number);
+  let dt;
+  if (art === 'woche')      dt = new Date(Date.UTC(y, m - 1, d + 7 * schritt));
+  else if (art === 'monat') dt = new Date(Date.UTC(y, m - 1 + schritt, 1));
+  else if (art === 'jahr')  dt = new Date(Date.UTC(y + schritt, 0, 1));
+  else throw new Error(`Unbekannte Zeitraum-Art: ${art}`);
+  return dt.toISOString().slice(0, 10);
+}
+
 // ------------------------------------------------------------
 // Fabriken — erzeugen valide Objekte, mehr nicht.
 // (Reines JSON, keine Klassen → wandert 1:1 in localStorage/Backups.)

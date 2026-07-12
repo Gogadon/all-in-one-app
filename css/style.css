@@ -484,3 +484,35 @@ body.ohne-navi .nav{display:none}
 
 /* Format-Hinweis neben dem Feld-Label (z.B. „Min:Sek" bei der Tour-Dauer) */
 .feld-format{font-size:11px;color:var(--dim-2);font-weight:400;margin-left:4px}
+
+/* ============================================================
+   Statistik-Tab (Rad/Wandern) — Zeitraum + Kennzahlen
+   Akzentfarbe kommt via --akzent vom Wrapper .statistik.
+   ============================================================ */
+.stat-arten{margin:0 2px 14px}
+.stat-arten .chip.aktiv{
+  background:var(--surface-2);border-color:var(--akzent);color:var(--akzent)}
+
+.stat-nav{display:flex;align-items:center;gap:10px;padding:12px 14px}
+.stat-pfeil{flex:none;width:40px;height:40px;display:flex;align-items:center;
+  justify-content:center;border:1px solid var(--line);border-radius:var(--r-button);
+  background:var(--surface-2);color:var(--text)}
+.stat-pfeil:active{background:var(--line)}
+.stat-pfeil.aus{opacity:.35;pointer-events:none}
+.stat-pfeil svg{width:17px;height:17px;fill:none;stroke:currentColor;
+  stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.stat-zeitraum{flex:1;text-align:center;font-family:var(--font-display);
+  font-weight:700;font-size:15.5px;letter-spacing:-.01em}
+.stat-zeitraum.jetzt{color:var(--akzent)}
+
+.stat-anzahl{text-align:center;font-size:12px;margin:-2px 2px 12px;
+  letter-spacing:.02em}
+
+.stat-kennzahlen{display:grid;grid-template-columns:1fr 1fr;
+  column-gap:16px;padding:6px 16px 10px}
+.stat-kennzahl{display:flex;flex-direction:column;gap:1px;padding:11px 0;
+  border-top:1px solid var(--line)}
+.stat-kennzahl:nth-child(-n+2){border-top:none}
+.sk-wert{font-family:var(--font-display);font-variant-numeric:tabular-nums;
+  font-weight:700;font-size:19px;color:var(--akzent)}
+.sk-label{font-size:11px}

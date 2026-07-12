@@ -15,7 +15,9 @@ import { MESSWERTE, formatWert, formatZahl, parseZahl } from '../core/metrics.js
 import {
   heuteIso, neueSession, neuesSegment, neuerEintrag,
   addSegment, addEintrag, findeAktivitaet,
+  zeitraum, verschiebeZeitraum,
 } from '../core/model.js';
+import { zeitraumStatistik, zeitraumLabel } from '../core/statistik.js';
 import { addAktivitaet } from '../core/library.js';
 import { bestaetige, hinweis } from '../ui/components.js';
 import { teileKarte } from '../ui/share.js';
@@ -107,6 +109,11 @@ export function erstelleRadModul(ctx) {
   // UI-Zustand (nicht persistiert)
   let offeneTour = null;      // id der gerade bearbeiteten Tour-Session
   const detailOffen = new Set();
+
+  // Statistik-Tab: aktueller Zeitraum. `anker` = ein Tag im Zeitraum,
+  // die vor/zurück-Pfeile verschieben ihn. Default: laufender Monat.
+  let statArt = 'monat';       // 'woche' | 'monat' | 'jahr'
+  let statAnker = heuteIso();
 
   async function speichernUndZeigen() { await ctx.save(); ctx.render(); }
 
@@ -321,38 +328,54 @@ export function erstelleRadModul(ctx) {
   }
 
   // ----------------------------------------------------------
-  // Verlauf-Tab (eigene Tour-Liste)
+  // Statistik-Tab: Zeitraum wählen → Kennzahlen + Touren des Zeitraums
   // ----------------------------------------------------------
 
-  function verlaufHtml() {
-    const touren = alleTouren(S());
-    let html = `<div class="tab-kopf anim">
-      <span class="eyebrow"><span class="pip rad"></span>Rad</span><h1>Touren-Verlauf</h1></div>`;
-    if (!touren.length) {
-      return html + `<div class="karte leer anim"><p>Noch keine Touren eingetragen.</p></div>`;
-    }
-    html += touren.map(t => {
-      const mw = tourWerte(t);
-      const auf = detailOffen.has(t.id);
-      const km = mw.distanz != null ? formatZahl(mw.distanz / 1000, 1) + ' km' : '–';
-      const meta = [
-        mw.dauer != null ? formatWert('dauer', mw.dauer) : null,
-        mw.tempo_avg != null ? formatZahl(mw.tempo_avg, 1) + ' km/h' : null,
-        mw.hoehenmeter != null ? formatZahl(mw.hoehenmeter, 0) + ' hm' : null,
-      ].filter(Boolean).join(' · ');
-      return `<div class="karte anim">
-        <button class="tour-kopf" data-action="rad.detail" data-sid="${t.id}">
-          <div><strong>${esc(t.name || 'Radtour')}</strong><br>
-            <small class="dim">${esc(formatDatum(t.datum))}</small></div>
-          <div class="tour-km"><span style="color:var(--rad)">${km}</span>
-            <span class="pfeil-ico ${auf ? 'runter' : ''}" style="border-bottom-color:var(--dim)"></span></div>
-        </button>
-        ${meta ? `<p class="dim tour-meta">${esc(meta)}</p>` : ''}
-        ${auf ? tourDetailHtml(findeAktivitaet(S(), t.segmente[0]?.aktivitaetId) ?? tourAktivitaet(S()), mw)
-          + `<button class="knopf geist voll" data-action="rad.teilen" data-sid="${t.id}">Teilen</button>` : ''}
+  const PFEIL_LINKS  = '<svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>';
+  const PFEIL_RECHTS = '<svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>';
+
+  function statistikHtml() {
+    const r = zeitraumStatistik(S(), MODUL, statArt, statAnker);
+    // „vor" sperren, sobald wir im laufenden (oder einem späteren) Zeitraum sind —
+    // in die Zukunft zu blättern zeigt nur leere Zeiträume.
+    const aktuellerStart = zeitraum(statArt, heuteIso()).von;
+    const istAktuell = r.von >= aktuellerStart;
+
+    let html = `<div class="statistik" style="--akzent:var(--rad)">
+      <div class="tab-kopf anim">
+        <span class="eyebrow"><span class="pip rad"></span>Rad</span><h1>Statistik</h1>
       </div>`;
-    }).join('');
-    return html;
+
+    // Zeitraum-Art
+    const arten = [['woche', 'Woche'], ['monat', 'Monat'], ['jahr', 'Jahr']];
+    html += `<div class="chip-zeile stat-arten anim">${arten.map(([a, l]) =>
+      `<button class="chip ${statArt === a ? 'aktiv' : ''}" data-action="rad.statArt" data-art="${a}">${l}</button>`).join('')}</div>`;
+
+    // vor/zurück + Zeitraum-Beschriftung
+    html += `<div class="karte stat-nav anim">
+      <button class="stat-pfeil" data-action="rad.statZurueck" aria-label="Früher">${PFEIL_LINKS}</button>
+      <div class="stat-zeitraum ${istAktuell ? 'jetzt' : ''}">${esc(zeitraumLabel(statArt, statAnker))}</div>
+      <button class="stat-pfeil ${istAktuell ? 'aus' : ''}" ${istAktuell ? 'disabled' : ''} data-action="rad.statVor" aria-label="Später">${PFEIL_RECHTS}</button>
+    </div>`;
+
+    if (r.anzahl === 0) {
+      return html + `<div class="karte leer anim"><p>Keine Touren in diesem Zeitraum. Blätter zurück oder wechsle den Zeitraum. 🚲</p></div></div>`;
+    }
+
+    // Kennzahlen des Zeitraums (Reihenfolge & Aggregation kommen aus der Registry)
+    html += `<p class="stat-anzahl dim anim">${r.anzahl} ${r.anzahl === 1 ? 'Tour' : 'Touren'}</p>`;
+    html += `<div class="karte stat-kennzahlen anim">${
+      Object.entries(r.kennzahlen).map(([typ, wert]) => `<div class="stat-kennzahl">
+        <span class="sk-wert">${esc(formatWert(typ, wert, { kategorie: MODUL }))}</span>
+        <span class="sk-label dim">${esc(MESSWERTE[typ].label)}</span>
+      </div>`).join('')
+    }</div>`;
+
+    // Antippbare Tourenliste des Zeitraums → bestehendes Detail
+    html += `<p class="sheet-abschnitt zwischen">Touren</p>`;
+    html += r.sessions.map(t => tourZeileHtml(t)).join('');
+
+    return html + `</div>`;
   }
 
   // ----------------------------------------------------------
@@ -445,6 +468,21 @@ export function erstelleRadModul(ctx) {
       detailOffen.has(d.sid) ? detailOffen.delete(d.sid) : detailOffen.add(d.sid);
       ctx.render();
     },
+    'rad.statArt'(d) {
+      statArt = d.art;
+      ctx.render();
+    },
+    'rad.statZurueck'() {
+      statAnker = verschiebeZeitraum(statArt, statAnker, -1);
+      ctx.render();
+    },
+    'rad.statVor'() {
+      const neu = verschiebeZeitraum(statArt, statAnker, +1);
+      // nicht in die Zukunft blättern (leere Zeiträume)
+      if (zeitraum(statArt, neu).von > zeitraum(statArt, heuteIso()).von) return;
+      statAnker = neu;
+      ctx.render();
+    },
     async 'rad.teilen'(d) {
       const s = S().sessions.find(x => x.id === d.sid); if (!s) return;
       const akt = findeAktivitaet(S(), s.segmente[0]?.aktivitaetId) ?? tourAktivitaet(S());
@@ -490,5 +528,5 @@ export function erstelleRadModul(ctx) {
     },
   };
 
-  return { heuteHtml, verlaufHtml, actions };
+  return { heuteHtml, statistikHtml, actions };
 }

@@ -149,13 +149,58 @@ test('Rad: Highlights erkennen persönliche Rekorde', async () => {
   assert.ok(!hl1.some(h => h.name === 'Längste Tour'));
 });
 
-test('Rad: Teilen-Button erscheint bei fertiger Tour', async () => {
+test('Rad: fertige Tour taucht in der Statistik-Ansicht auf (aufklappbar)', async () => {
   const { state, rad } = neuesModul();
   await rad.actions['rad.neu']();
   await rad.actions['rad.wert']({ typ: 'distanz' }, { value: '10' });
   await rad.actions['rad.fertig']();
-  const html = rad.verlaufHtml();
-  assert.ok(html.includes('rad.detail'));   // aufklappbar
+  const html = rad.statistikHtml();
+  assert.ok(html.includes('rad.detail'));   // Tour aufklappbar
+});
+
+// ---- Statistik-Ansicht (Etappe 2) ----
+
+test('Rad: Statistik-Ansicht zeigt Umschalter, Navigation und Kennzahlen', async () => {
+  const { state, rad } = neuesModul();
+  // Zwei Touren „heute" → liegen im laufenden Monat (Default-Zeitraum)
+  for (const km of ['10', '20']) {
+    await rad.actions['rad.neu']();
+    await rad.actions['rad.wert']({ typ: 'distanz' }, { value: km });
+    await rad.actions['rad.fertig']();
+  }
+  const html = rad.statistikHtml();
+  assert.ok(html.includes('rad.statArt'));       // Woche/Monat/Jahr-Umschalter
+  assert.ok(html.includes('rad.statZurueck'));   // zurück-Pfeil
+  assert.ok(html.includes('rad.statVor'));       // vor-Pfeil
+  assert.ok(html.includes('Statistik'));         // Überschrift
+  assert.ok(html.includes('2 Touren'));          // Anzahl im Zeitraum
+  assert.ok(html.includes('Distanz'));           // Kennzahl-Label
+});
+
+test('Rad: vor-Pfeil ist im laufenden Zeitraum gesperrt', () => {
+  const { rad } = neuesModul();
+  const html = rad.statistikHtml();
+  // Der „Später"-Pfeil trägt disabled/aus, weil es keinen späteren Zeitraum gibt.
+  assert.ok(/data-action="rad\.statVor"[^>]*disabled/.test(html) || html.includes('stat-pfeil aus'));
+});
+
+test('Rad: Zeitraum-Art umschalten markiert den aktiven Chip', async () => {
+  const { rad } = neuesModul();
+  await rad.actions['rad.statArt']({ art: 'woche' });
+  const html = rad.statistikHtml();
+  assert.ok(/chip aktiv" data-action="rad\.statArt" data-art="woche"/.test(html));
+});
+
+test('Rad: leerer Zeitraum zeigt einen Hinweis', async () => {
+  const { rad } = neuesModul();
+  await rad.actions['rad.neu']();
+  await rad.actions['rad.wert']({ typ: 'distanz' }, { value: '10' });
+  await rad.actions['rad.fertig']();
+  // Zwei Monate zurück → die heutige Tour liegt nicht mehr im Zeitraum
+  await rad.actions['rad.statZurueck']();
+  await rad.actions['rad.statZurueck']();
+  const html = rad.statistikHtml();
+  assert.ok(html.includes('Keine Touren'));
 });
 
 test('Rad: Bearbeiten wechselt in den Heute-Tab und speichert wieder', async () => {

@@ -31,7 +31,7 @@
 // ============================================================
 
 import { MESSWERTE, aggregiere } from './metrics.js';
-import { sessionWert, zeitraum } from './model.js';
+import { sessionWert, zeitraum, isoZuDatum, heuteIso } from './model.js';
 
 // ------------------------------------------------------------
 // Gewichts-Strategien für mittel-Messwerte
@@ -170,4 +170,44 @@ export function zeitraumStatistik(state, modul, art, anker, { gewicht = gewichtG
   const sessions = tourenImZeitraum(state, modul, von, bis);
   const { kennzahlen } = aggregiereTouren(sessions, { gewicht });
   return { modul, art, von, bis, anzahl: sessions.length, sessions, kennzahlen };
+}
+
+// ------------------------------------------------------------
+// Anzeige-Beschriftung eines Zeitraums (für den Kopf der Ansicht)
+// ------------------------------------------------------------
+
+const MONAT_LANG = (dt) => dt.toLocaleDateString('de-DE', { month: 'long', timeZone: 'UTC' });
+
+/**
+ * Menschenlesbare Beschriftung eines Zeitraums, z.B.
+ *   woche → „6.–12. Juli 2026" (bzw. „29. Juni – 5. Juli 2026" über Monatsgrenze)
+ *   monat → „Juli 2026"
+ *   jahr  → „2026"
+ * Rechnet in UTC, passend zu den übrigen Datums-Helfern.
+ */
+export function zeitraumLabel(art, anker = heuteIso()) {
+  const { von, bis } = zeitraum(art, anker);
+
+  if (art === 'jahr') return von.slice(0, 4);
+
+  if (art === 'monat') {
+    return isoZuDatum(von).toLocaleDateString('de-DE', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  }
+
+  // woche: erster Tag … letzter Tag (bis ist exklusiv → einen Tag zurück)
+  const a = isoZuDatum(von);
+  const b = new Date(isoZuDatum(bis).getTime() - 86400000);
+  const tag = (dt) => dt.getUTCDate();
+  const jA = a.getUTCFullYear(), jB = b.getUTCFullYear();
+
+  if (von.slice(0, 7) === b.toISOString().slice(0, 7)) {
+    // gleicher Monat: „6.–12. Juli 2026"
+    return `${tag(a)}.–${tag(b)}. ${MONAT_LANG(a)} ${jB}`;
+  }
+  if (jA === jB) {
+    // gleicher Jahrgang, Monatswechsel: „29. Juni – 5. Juli 2026"
+    return `${tag(a)}. ${MONAT_LANG(a)} – ${tag(b)}. ${MONAT_LANG(b)} ${jB}`;
+  }
+  // Jahreswechsel: „29. Dezember 2026 – 4. Januar 2027"
+  return `${tag(a)}. ${MONAT_LANG(a)} ${jA} – ${tag(b)}. ${MONAT_LANG(b)} ${jB}`;
 }

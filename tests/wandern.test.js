@@ -105,3 +105,33 @@ test('Wandern: Klick auf Tour im Touren-Tab klappt auf, bearbeitet nicht sofort'
   await wandern.actions['wandern.wiederOeffnen']({ sid: id });
   assert.equal(state.sessions[0].abgeschlossen, false);
 });
+
+// ---- Statistik-Ansicht (Etappe 2) ----
+
+test('Wandern: Statistik-Ansicht zeigt Umschalter und Kennzahlen', async () => {
+  const { wandern } = neuesModul();
+  for (const km of ['8', '12']) {
+    await wandern.actions['wandern.neu']();
+    await wandern.actions['wandern.wert']({ typ: 'distanz' }, { value: km });
+    await wandern.actions['wandern.wert']({ typ: 'hoehenmeter' }, { value: '300' });
+    await wandern.actions['wandern.fertig']();
+  }
+  const html = wandern.statistikHtml();
+  assert.ok(html.includes('wandern.statArt'));
+  assert.ok(html.includes('wandern.statZurueck'));
+  assert.ok(html.includes('wandern.statVor'));
+  assert.ok(html.includes('Statistik'));
+  assert.ok(html.includes('2 Wanderungen'));
+  assert.ok(html.includes('Höhenmeter'));
+});
+
+test('Wandern: leerer Zeitraum zeigt einen Hinweis', async () => {
+  const { wandern } = neuesModul();
+  await wandern.actions['wandern.neu']();
+  await wandern.actions['wandern.wert']({ typ: 'distanz' }, { value: '8' });
+  await wandern.actions['wandern.fertig']();
+  await wandern.actions['wandern.statZurueck']();
+  await wandern.actions['wandern.statZurueck']();
+  const html = wandern.statistikHtml();
+  assert.ok(html.includes('Keine Wanderungen'));
+});

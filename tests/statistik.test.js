@@ -3,11 +3,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 const {
-  neueSession, neuesSegment, neuerEintrag, addSegment, addEintrag, zeitraum,
+  neueSession, neuesSegment, neuerEintrag, addSegment, addEintrag,
+  zeitraum, verschiebeZeitraum,
 } = await import('../js/core/model.js');
 const {
   zeitraumStatistik, aggregiereTouren, tourenImZeitraum,
-  gewichtGleich, gewichtNachGroesse,
+  gewichtGleich, gewichtNachGroesse, zeitraumLabel,
 } = await import('../js/core/statistik.js');
 
 // ------------------------------------------------------------
@@ -201,4 +202,60 @@ test('tourenImZeitraum: filtert exklusiv am oberen Rand', () => {
   macheTour(state, { datum: '2026-07-13', mw: { distanz: 2000 } });
   const drin = tourenImZeitraum(state, 'rad', '2026-07-06', '2026-07-13');
   assert.deepEqual(drin.map(s => s.datum), ['2026-07-12']);   // 13. ist EXKLUSIV draußen
+});
+
+// ============================================================
+// verschiebeZeitraum() — vor/zurück-Navigation
+// ============================================================
+
+test('verschiebeZeitraum: Woche zurück/vor', () => {
+  assert.equal(zeitraum('woche', verschiebeZeitraum('woche', '2026-07-08', -1)).von, '2026-06-29');
+  assert.equal(zeitraum('woche', verschiebeZeitraum('woche', '2026-07-08', +1)).von, '2026-07-13');
+});
+
+test('verschiebeZeitraum: Monat zurück/vor (inkl. Jahreswechsel)', () => {
+  assert.equal(zeitraum('monat', verschiebeZeitraum('monat', '2026-07-08', -1)).von, '2026-06-01');
+  assert.equal(zeitraum('monat', verschiebeZeitraum('monat', '2026-07-08', +1)).von, '2026-08-01');
+  assert.equal(zeitraum('monat', verschiebeZeitraum('monat', '2026-01-15', -1)).von, '2025-12-01');
+});
+
+test('verschiebeZeitraum: Jahr zurück/vor', () => {
+  assert.equal(zeitraum('jahr', verschiebeZeitraum('jahr', '2026-07-08', -1)).von, '2025-01-01');
+  assert.equal(zeitraum('jahr', verschiebeZeitraum('jahr', '2026-07-08', +1)).von, '2027-01-01');
+});
+
+test('verschiebeZeitraum: zurück dann vor landet wieder im selben Zeitraum', () => {
+  for (const art of ['woche', 'monat', 'jahr']) {
+    const heim = zeitraum(art, '2026-07-08').von;
+    const zurueck = verschiebeZeitraum(art, '2026-07-08', -1);
+    const wieder = verschiebeZeitraum(art, zurueck, +1);
+    assert.equal(zeitraum(art, wieder).von, heim);
+  }
+});
+
+// ============================================================
+// zeitraumLabel() — Anzeige-Beschriftung
+// ============================================================
+
+test('zeitraumLabel: Jahr = nur die Jahreszahl', () => {
+  assert.equal(zeitraumLabel('jahr', '2026-07-08'), '2026');
+});
+
+test('zeitraumLabel: Monat = Monat + Jahr', () => {
+  assert.equal(zeitraumLabel('monat', '2026-07-08'), 'Juli 2026');
+});
+
+test('zeitraumLabel: Woche im selben Monat', () => {
+  assert.equal(zeitraumLabel('woche', '2026-07-08'), '6.–12. Juli 2026');
+});
+
+test('zeitraumLabel: Woche über Monatsgrenze', () => {
+  // Woche um den 1. Juli 2026: Mo 29.06. – So 05.07.
+  assert.equal(zeitraumLabel('woche', '2026-07-01'), '29. Juni – 5. Juli 2026');
+});
+
+test('zeitraumLabel: Woche über Jahresgrenze nennt beide Jahre', () => {
+  const label = zeitraumLabel('woche', '2026-12-31');
+  assert.ok(label.includes('2026') && label.includes('2027'));
+  assert.ok(label.includes('Dezember') && label.includes('Januar'));
 });

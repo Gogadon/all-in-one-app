@@ -167,6 +167,8 @@ function navHtml() {
   // Touren sieht).
   const heisstTouren = aktivesModul === RAD || aktivesModul === WANDERN;
   const labelFuer = (t) => {
+    // Rad/Wandern: der Verlauf-Tab ist die Statistik-Ansicht.
+    if (t.id === 'verlauf' && heisstTouren) return 'Statistik';
     if (t.id !== 'heute') return t.label;
     if (aktivesModul === CHALLENGE) return 'Ziele';
     if (heisstTouren) return 'Touren';
@@ -177,7 +179,10 @@ function navHtml() {
   const zielIcon = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/></svg>';
   // Rad/Wandern: Routen-Icon (Wegpunkte mit Pfad) statt der Hantel.
   const tourenIcon = '<svg viewBox="0 0 24 24"><circle cx="6" cy="18" r="2.2"/><circle cx="18" cy="6" r="2.2"/><path d="M8 17c4 0 4-10 8-10"/></svg>';
+  // Rad/Wandern: Balken-Icon für den Statistik-Tab statt der Uhr.
+  const statistikIcon = '<svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>';
   const iconFuer = (t) => {
+    if (t.id === 'verlauf' && heisstTouren) return statistikIcon;
     if (t.id !== 'heute') return t.icon;
     if (aktivesModul === CHALLENGE) return zielIcon;
     if (heisstTouren) return tourenIcon;
@@ -197,13 +202,13 @@ function navHtml() {
 let verlaufSub = 'feed';   // 'feed' | 'fortschritt'
 
 function verlaufHtml() {
-  // Rad: eigener Touren-Verlauf (kein Fortschritt-Tab)
+  // Rad: eigene Statistik-Ansicht (Zeitraum → Kennzahlen + Touren)
   if (aktivesModul === RAD) {
-    return rad.verlaufHtml();
+    return rad.statistikHtml();
   }
-  // Wandern: eigener Wander-Verlauf
+  // Wandern: eigene Statistik-Ansicht
   if (aktivesModul === WANDERN) {
-    return wandern.verlaufHtml();
+    return wandern.statistikHtml();
   }
 
   // Kraft: Feed + Fortschritt wie gehabt
