@@ -74,6 +74,33 @@ export function tageZwischen(vonIso, bisIso) {
   return Math.round((isoZuDatum(bisIso) - isoZuDatum(vonIso)) / 86400000);
 }
 
+/**
+ * Grenzen eines Zeitraums als { von, bis } (ISO). `bis` ist EXKLUSIV,
+ * also der erste Tag NACH dem Zeitraum — bequem für `datum < bis`.
+ * art: 'woche' | 'monat' | 'jahr'. `anker` = ein beliebiger Tag darin.
+ * Rechnet wie die übrigen Helfer in UTC, damit nichts an Tagesgrenzen kippt.
+ */
+export function zeitraum(art, anker = heuteIso()) {
+  if (art === 'woche') {
+    const von = wochenStart(anker);
+    const [y, m, d] = von.split('-').map(Number);
+    const bis = new Date(Date.UTC(y, m - 1, d + 7)).toISOString().slice(0, 10);
+    return { von, bis };
+  }
+  if (art === 'monat') {
+    const von = monatsStart(anker);
+    const [y, m] = von.split('-').map(Number);   // m ist 1-basiert → Date.UTC(y, m, 1) = Folgemonat
+    const bis = new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 10);
+    return { von, bis };
+  }
+  if (art === 'jahr') {
+    const von = jahresStart(anker);
+    const y = Number(von.slice(0, 4));
+    return { von, bis: `${y + 1}-01-01` };
+  }
+  throw new Error(`Unbekannte Zeitraum-Art: ${art}`);
+}
+
 // ------------------------------------------------------------
 // Fabriken — erzeugen valide Objekte, mehr nicht.
 // (Reines JSON, keine Klassen → wandert 1:1 in localStorage/Backups.)
