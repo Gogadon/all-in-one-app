@@ -348,3 +348,50 @@ test('Alternativen: Löschen räumt tote Verweise + schützt Historie (Etappe 4)
   state.sessions.push(s);
   assert.throws(() => entferneAktivitaet(state, chest2.id), /Session/);
 });
+
+// ============================================================
+// Regressionstest: Anker folgt beim Zyklus-Umbau der Einheit
+// (Review-Punkt 5/6, 13.7. per Diagnose bestätigt und gefixt).
+// aktuelleEinheit rechnet aus dem Anker — ohne Nachführen zeigte der
+// Anker nach Löschen/Entfernen/Verschieben auf die falsche Einheit.
+// ============================================================
+test('Plan: Anker folgt der Einheit bei Zyklus-Umbau', async () => {
+  const {
+    addEinheit, addZuZyklus, setzeAnker, aktuelleEinheit,
+    loescheEinheit, entferneAusZyklus, verschiebeImZyklus,
+  } = await import('../js/core/plan.js');
+  const { leererZustand } = await import('../js/core/storage.js');
+  const HEUTE = '2026-07-13', M = 'kraft';
+
+  function baue() {
+    const state = leererZustand();
+    const A = addEinheit(state, M, { name: 'A' });
+    const B = addEinheit(state, M, { name: 'B' });
+    const C = addEinheit(state, M, { name: 'C' });
+    addZuZyklus(state, M, A.id); addZuZyklus(state, M, B.id); addZuZyklus(state, M, C.id);
+    setzeAnker(state, M, 1, HEUTE);   // Anker auf Index 1 → B
+    return { state, A, B, C };
+  }
+  const cur = s => aktuelleEinheit(s, M, HEUTE)?.name;
+
+  // Vor dem Anker löschen → Anker bleibt auf B
+  let { state, A } = baue();
+  assert.equal(cur(state), 'B');
+  loescheEinheit(state, M, A.id);
+  assert.equal(cur(state), 'B');
+
+  // Vor dem Anker aus dem Zyklus entfernen → B
+  ({ state, A } = baue());
+  entferneAusZyklus(state, M, 0);
+  assert.equal(cur(state), 'B');
+
+  // A und B tauschen → Anker folgt B
+  ({ state } = baue());
+  verschiebeImZyklus(state, M, 0, +1);
+  assert.equal(cur(state), 'B');
+
+  // Verankerte Einheit selbst löschen → kein Absturz, gültige Einheit
+  const { state: s2, B } = baue();
+  loescheEinheit(s2, M, B.id);
+  assert.ok(cur(s2) === 'A' || cur(s2) === 'C');
+});

@@ -92,11 +92,13 @@ export function loescheEinheit(state, modul, einheitId) {
   const plan = mussPlan(state, modul);
   const iB = plan.einheiten.findIndex(e => e.id === einheitId);
   if (iB === -1) throw new Error('Einheit nicht gefunden.');
-  // Vorkommen im Zyklus einsammeln (für Positions-Korrektur), dann raus.
+  // Vorkommen im Zyklus einsammeln (für Positions- + Anker-Korrektur), dann raus.
   const zeigtAuf = plan.zyklus[plan.position];
+  const ankerId = plan.anker ? plan.zyklus[plan.anker.index] : null;
   plan.einheiten.splice(iB, 1);
   plan.zyklus = plan.zyklus.filter(id => id !== einheitId);
   reparierePosition(plan, zeigtAuf);
+  repariereAnker(plan, ankerId);
 }
 
 // ------------------------------------------------------------
@@ -147,10 +149,18 @@ export function entferneAusZyklus(state, modul, index) {
   if (index < 0 || index >= plan.zyklus.length) return;
   const zeigtAuf = plan.zyklus[plan.position];
   const warZeiger = index === plan.position;
+  const ankerId = plan.anker ? plan.zyklus[plan.anker.index] : null;
+  const warAnker = plan.anker ? index === plan.anker.index : false;
   plan.zyklus.splice(index, 1);
-  if (plan.zyklus.length === 0) { plan.position = 0; return; }
+  if (plan.zyklus.length === 0) {
+    plan.position = 0;
+    if (plan.anker) plan.anker.index = 0;
+    return;
+  }
   if (warZeiger) plan.position %= plan.zyklus.length;         // Zeiger-Stelle gelöscht → nächste rückt nach
   else reparierePosition(plan, zeigtAuf);
+  if (warAnker) plan.anker.index %= plan.zyklus.length;       // Anker-Stelle gelöscht → nächste rückt nach
+  else repariereAnker(plan, ankerId);
 }
 
 /** Zyklus-Stelle verschieben (richtung: -1 hoch / +1 runter). Zeiger folgt der Stelle. */
@@ -159,9 +169,14 @@ export function verschiebeImZyklus(state, modul, index, richtung) {
   const j = index + Math.sign(richtung);
   if (index < 0 || index >= plan.zyklus.length || j < 0 || j >= plan.zyklus.length) return;
   const zeigerWar = plan.position;
+  const ankerWar = plan.anker ? plan.anker.index : null;
   [plan.zyklus[index], plan.zyklus[j]] = [plan.zyklus[j], plan.zyklus[index]];
   if (zeigerWar === index) plan.position = j;
   else if (zeigerWar === j) plan.position = index;
+  if (plan.anker) {                          // Anker folgt der verschobenen Stelle mit
+    if (ankerWar === index) plan.anker.index = j;
+    else if (ankerWar === j) plan.anker.index = index;
+  }
 }
 
 /**
@@ -241,6 +256,21 @@ function reparierePosition(plan, zeigerId) {
   if (plan.zyklus.length === 0) { plan.position = 0; return; }
   const i = plan.zyklus.indexOf(zeigerId);
   plan.position = i === -1 ? plan.position % plan.zyklus.length : i;
+}
+
+/**
+ * Anker wieder auf „seine" Einheit setzen (nach Zyklus-Umbau) — analog
+ * reparierePosition, aber für plan.anker.index. Wichtig, weil aktuelleEinheit
+ * die Position aus dem ANKER berechnet (nicht aus position): ohne Nachführen
+ * würde der Index nach Löschen/Verschieben auf die falsche Einheit zeigen.
+ * `ankerId` = die vor dem Umbau verankerte Einheit (plan.zyklus[anker.index]).
+ * Ist sie selbst weg, greift derselbe Fallback wie bei position (index % len).
+ */
+function repariereAnker(plan, ankerId) {
+  if (!plan.anker) return;
+  if (plan.zyklus.length === 0) { plan.anker.index = 0; return; }
+  const i = plan.zyklus.indexOf(ankerId);
+  plan.anker.index = i === -1 ? plan.anker.index % plan.zyklus.length : i;
 }
 
 // ============================================================
