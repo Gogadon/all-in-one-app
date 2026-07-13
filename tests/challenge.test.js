@@ -126,3 +126,34 @@ test('Challenge: offene Radtour zählt NICHT in rad_km/rad_hm', () => {
   assert.equal(fortschritt(state, { was: 'rad_km', zielwert: 100, zeitraum: 'monat' }, HEUTE).ist, 20);
   assert.equal(fortschritt(state, { was: 'rad_hm', zielwert: 1000, zeitraum: 'monat' }, HEUTE).ist, 300);
 });
+
+// ---- Wandern in Challenges (Review-Punkt 4) ----
+
+function wanderTour(state, datum, km, hm = 0, schritte = 0) {
+  const s = neueSession({ datum }); s.modul = 'wandern'; s.abgeschlossen = true;
+  const seg = addSegment(s, neuesSegment('x')); seg.erledigt = true;
+  addEintrag(seg, neuerEintrag({ distanz: km * 1000, hoehenmeter: hm, schritte }));
+  state.sessions.push(s);
+}
+
+test('Challenge: Wander-Größen (km/hm/schritte/touren) zählen korrekt', () => {
+  const state = leererZustand();
+  wanderTour(state, '2026-07-06', 8, 300, 12000);
+  wanderTour(state, '2026-07-08', 12, 500, 18000);
+  radTour(state, '2026-07-08', 30, 400);   // Rad darf NICHT in Wander-Größen zählen
+  assert.equal(fortschritt(state, { was: 'wander_km', zielwert: 100, zeitraum: 'monat' }, HEUTE).ist, 20);
+  assert.equal(fortschritt(state, { was: 'wander_hm', zielwert: 1000, zeitraum: 'monat' }, HEUTE).ist, 800);
+  assert.equal(fortschritt(state, { was: 'wander_schritte', zielwert: 100000, zeitraum: 'monat' }, HEUTE).ist, 30000);
+  assert.equal(fortschritt(state, { was: 'wander_touren', zielwert: 5, zeitraum: 'monat' }, HEUTE).ist, 2);
+});
+
+test('Challenge: offene Wanderung zählt nicht in Wander-Größen', () => {
+  const state = leererZustand();
+  wanderTour(state, '2026-07-08', 10, 200, 15000);
+  const offen = neueSession({ datum: '2026-07-08' });
+  offen.modul = 'wandern'; offen.abgeschlossen = false;
+  const seg = addSegment(offen, neuesSegment('x'));
+  addEintrag(seg, neuerEintrag({ distanz: 99000, hoehenmeter: 5000, schritte: 99000 }));
+  state.sessions.push(offen);
+  assert.equal(fortschritt(state, { was: 'wander_km', zielwert: 100, zeitraum: 'monat' }, HEUTE).ist, 10);
+});

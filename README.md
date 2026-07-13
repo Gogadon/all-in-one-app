@@ -1,6 +1,6 @@
 # All-in-One
 
-Fitness-Tracking-App für Kraft, Rad und selbstgesetzte Ziele.
+Fitness-Tracking-App für Kraft, Rad, Wandern und selbstgesetzte Ziele.
 Vanilla JavaScript, keine Frameworks, kein Build-Schritt. Läuft als PWA.
 
 Live: https://gogadon.github.io/all-in-one-app/
@@ -72,11 +72,13 @@ Tests unmöglich (sie laden Module einzeln, ohne DOM).
 | `js/app.js` | App-Shell: Tabs, Dashboard, Daten-Import/Export, Event-Verdrahtung |
 | `js/core/model.js` | Datenmodell + **alle Datums-Helfer** |
 | `js/core/metrics.js` | Messwert-Registry (welche Zahlen es gibt, wie sie formatiert werden) |
+| `js/core/statistik.js` | Zeitraum-Aggregation (Woche/Monat/Jahr) für die Statistik-Ansicht |
 | `js/core/plan.js` | Trainingszyklus, Einheiten, Positionsberechnung |
 | `js/core/library.js` | Übungs-Bibliothek |
 | `js/core/storage.js` | Speichern, Laden, Backup, Migration |
 | `js/modules/kraft.js` | Kraftmodul (das größte — Progression, PRs, Sätze) |
 | `js/modules/rad.js` | Radmodul (freie Touren, kein Plan) |
+| `js/modules/wandern.js` | Wandermodul (freie Touren; Schritte, Höhenmeter, Std:Min) |
 | `js/modules/challenge.js` | Ziele — liest die anderen Module aus, erzeugt kaum eigene Daten |
 | `js/ui/` | Wiederverwendbare Bausteine: Dialoge, Bottom-Sheet, Charts, Teilen-Karte |
 | `sw.js` | Service Worker — nur für Installierbarkeit, **cacht bewusst nichts** |
@@ -160,8 +162,9 @@ Historie, Progression und Einstellungen.
 
 ## Tests
 
-55 Tests, alle ohne Browser lauffähig. Sie decken die Rechenlogik ab:
-Progression, PR-Erkennung, Zyklus-Berechnung, Zeiträume, Datumsgrenzen.
+110 Tests, alle ohne Browser lauffähig. Sie decken die Rechenlogik ab:
+Progression, PR-Erkennung, Zyklus-Berechnung, Zeiträume, Datumsgrenzen,
+Statistik-Aggregation und Challenge-Fortschritt.
 
 ```
 npm test
@@ -207,7 +210,7 @@ deuten die Module an, der Punkt ist der Nutzer.
 
 ## Offene Ideen
 
-- Module: Wandern, Schwimmen
+- Module: Schwimmen
 - Dashboard als kompaktes Kachel-Raster, wenn mehr Module dazukommen
 - Teilen vom Dashboard (Wochen-/Monatsstatistik)
 - App-weiter Kalender: Personal Training, geplante Touren

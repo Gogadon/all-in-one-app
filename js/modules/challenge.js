@@ -32,6 +32,22 @@ export const GROESSEN = {
     label: 'Anzahl Touren', einheit: 'Touren', modul: 'rad',
     wert: s => (s.modul === 'rad' && s.abgeschlossen) ? 1 : 0,
   },
+  wander_km: {
+    label: 'Wander-Kilometer', einheit: 'km', modul: 'wandern',
+    wert: s => (s.modul === 'wandern' && s.abgeschlossen) ? ((tourMw(s).distanz ?? 0) / 1000) : 0,
+  },
+  wander_hm: {
+    label: 'Wander-Höhenmeter', einheit: 'hm', modul: 'wandern',
+    wert: s => (s.modul === 'wandern' && s.abgeschlossen) ? (tourMw(s).hoehenmeter ?? 0) : 0,
+  },
+  wander_schritte: {
+    label: 'Wander-Schritte', einheit: 'Schritte', modul: 'wandern',
+    wert: s => (s.modul === 'wandern' && s.abgeschlossen) ? (tourMw(s).schritte ?? 0) : 0,
+  },
+  wander_touren: {
+    label: 'Anzahl Wanderungen', einheit: 'Wanderungen', modul: 'wandern',
+    wert: s => (s.modul === 'wandern' && s.abgeschlossen) ? 1 : 0,
+  },
   kraft_volumen: {
     label: 'Kraft-Volumen', einheit: 'kg', modul: 'kraft',
     wert: s => (s.modul ?? 'kraft') === 'kraft' ? sessionVolumenErledigt(s) : 0,
