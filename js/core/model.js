@@ -140,6 +140,16 @@ export function neueAktivitaet({ name, kategorie, messwerte = [], einstellungen 
 
 /** Session = was tatsächlich passiert ist. ausPlan leer → spontan. */
 /**
+ * Zählt eine Tour/Session in Summen (Statistik, Dashboard, Challenges) mit?
+ * Nur ABGESCHLOSSENE, nicht übersprungene Sessions. Eine gerade offene (halb
+ * eingetragene) Tour würde Gesamtzahlen sonst verfälschen — genau diese Regel
+ * gilt einheitlich überall, wo aufsummiert wird.
+ */
+export function istWertbareTour(s) {
+  return s.abgeschlossen === true && !s.uebersprungen;
+}
+
+/**
  * Sessions/Touren „neueste zuerst": nach `datum` absteigend, und bei gleichem
  * Tag zuerst die zuletzt EINGETRAGENE. Der Tages-Stichentscheid nutzt
  * `erstelltAm` (Eintrag-Zeitpunkt); fehlt der (alte Daten), zählt die

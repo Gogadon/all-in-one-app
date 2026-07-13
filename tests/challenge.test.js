@@ -112,3 +112,17 @@ test('Datum: tageZwischen rechnet in UTC und ignoriert Zeitanteile', async () =>
   // Zeitanteile dürfen das Ergebnis nicht verschieben (lokales Parsen wäre buggy)
   assert.equal(tageZwischen('2026-07-10T23:30:00', '2026-07-31T01:00:00'), 21);
 });
+
+test('Challenge: offene Radtour zählt NICHT in rad_km/rad_hm', () => {
+  const state = leererZustand();
+  radTour(state, '2026-07-08', 20, 300);           // abgeschlossen
+  // offene Tour: abgeschlossen=false, mit Distanz + Höhenmetern
+  const offen = neueSession({ datum: '2026-07-08' });
+  offen.modul = 'rad'; offen.abgeschlossen = false;
+  const seg = addSegment(offen, neuesSegment('x'));
+  addEintrag(seg, neuerEintrag({ distanz: 99000, hoehenmeter: 5000 }));
+  state.sessions.push(offen);
+
+  assert.equal(fortschritt(state, { was: 'rad_km', zielwert: 100, zeitraum: 'monat' }, HEUTE).ist, 20);
+  assert.equal(fortschritt(state, { was: 'rad_hm', zielwert: 1000, zeitraum: 'monat' }, HEUTE).ist, 300);
+});

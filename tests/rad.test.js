@@ -257,3 +257,17 @@ test('Rad: kein „Alle anzeigen" bei 5 oder weniger Touren', async () => {
   assert.ok(!html.includes('Alle anzeigen'));
   assert.equal((html.match(/data-action="rad\.detail"/g) || []).length, 5);
 });
+
+// ---- Offene Touren zählen nicht in Summen (Review-Fix) ----
+
+test('Rad: offene (nicht abgeschlossene) Tour zählt NICHT in tourStatistik', async () => {
+  const { state, rad } = neuesModul();
+  await rad.actions['rad.neu']();
+  await rad.actions['rad.wert']({ typ: 'distanz' }, { value: '10' });
+  await rad.actions['rad.fertig']();               // abgeschlossen
+  await rad.actions['rad.neu']();
+  await rad.actions['rad.wert']({ typ: 'distanz' }, { value: '99' });  // offen, kein fertig
+  const stat = tourStatistik(state);
+  assert.equal(stat.anzahl, 1);
+  assert.equal(stat.distanz, 10000);               // 99er zählt nicht mit
+});

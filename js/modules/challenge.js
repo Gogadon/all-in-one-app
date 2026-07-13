@@ -22,11 +22,11 @@ export const MODUL = 'challenge';
 export const GROESSEN = {
   rad_km: {
     label: 'Rad-Kilometer', einheit: 'km', modul: 'rad',
-    wert: s => s.modul === 'rad' ? ((tourMw(s).distanz ?? 0) / 1000) : 0,
+    wert: s => (s.modul === 'rad' && s.abgeschlossen) ? ((tourMw(s).distanz ?? 0) / 1000) : 0,
   },
   rad_hm: {
     label: 'Rad-Höhenmeter', einheit: 'hm', modul: 'rad',
-    wert: s => s.modul === 'rad' ? (tourMw(s).hoehenmeter ?? 0) : 0,
+    wert: s => (s.modul === 'rad' && s.abgeschlossen) ? (tourMw(s).hoehenmeter ?? 0) : 0,
   },
   rad_touren: {
     label: 'Anzahl Touren', einheit: 'Touren', modul: 'rad',

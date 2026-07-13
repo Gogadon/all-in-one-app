@@ -332,10 +332,12 @@ function wochenStatistik() {
       if (s.abgeschlossen) einheiten++;
       volumen += sessionVolumenErledigt(s);
     } else if (s.modul === RAD) {
+      if (!s.abgeschlossen) continue;
       touren++;
       const mw = s.segmente[0]?.eintraege[0]?.messwerte ?? {};
       km += (mw.distanz ?? 0) / 1000;
     } else if (s.modul === WANDERN) {
+      if (!s.abgeschlossen) continue;
       touren++;
       const mw = s.segmente[0]?.eintraege[0]?.messwerte ?? {};
       km += (mw.distanz ?? 0) / 1000;

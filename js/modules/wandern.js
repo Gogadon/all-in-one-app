@@ -14,7 +14,7 @@ import { MESSWERTE, formatWert, formatZahl, parseZahl } from '../core/metrics.js
 import {
   heuteIso, neueSession, neuesSegment, neuerEintrag,
   addSegment, addEintrag, findeAktivitaet,
-  zeitraum, verschiebeZeitraum, sortiereNeuesteZuerst,
+  zeitraum, verschiebeZeitraum, sortiereNeuesteZuerst, istWertbareTour,
 } from '../core/model.js';
 import { zeitraumStatistik, zeitraumLabel } from '../core/statistik.js';
 import { addAktivitaet } from '../core/library.js';
@@ -58,7 +58,7 @@ export function wanderWerte(session) {
 
 /** Summen/Kennzahlen über alle Wanderungen (für die Kopf-Statistik). */
 export function wanderStatistik(state) {
-  const touren = alleWanderungen(state);
+  const touren = alleWanderungen(state).filter(istWertbareTour);
   let distanz = 0, dauer = 0, hoehen = 0;
   for (const s of touren) {
     const mw = wanderWerte(s);
