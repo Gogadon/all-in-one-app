@@ -7,7 +7,8 @@
 
 import { load, save, exportBackup, importBackup, leererZustand } from './core/storage.js';
 import { formatZahl, formatWert } from './core/metrics.js';
-import { heuteIso, findeAktivitaet, sessionKategorien, verschiebeZeitraum } from './core/model.js';
+import { heuteIso, findeAktivitaet, sessionKategorien, verschiebeZeitraum,
+  istWertbareTour, sessionWert, loeseSegmentAuf } from './core/model.js';
 import { findeEinheit, naechsteEinheit } from './core/plan.js';
 import { esc, formatDatum, sheet, bestaetige, hinweis } from './ui/components.js';
 import {
@@ -18,7 +19,7 @@ import { erstelleRadModul, MODUL as RAD, tourStatistik } from './modules/rad.js'
 import { erstelleWanderModul, MODUL as WANDERN, wanderStatistik } from './modules/wandern.js';
 import { erstelleChallengeModul, MODUL as CHALLENGE, fortschritt } from './modules/challenge.js';
 import { wochenUebersicht } from './dashboard.js';
-import { wochenStreifen, monatsGitter } from './kalender.js';
+import { wochenStreifen, monatsGitter, tagDetail } from './kalender.js';
 
 const main = document.getElementById('main');
 const nav = document.getElementById('nav');
@@ -44,6 +45,8 @@ let state = null;
 let tab = 'dashboard';
 let unterseite = null;   // null | 'daten' | 'kalender' — Overlay über den Tabs
 let kalenderAnker = heuteIso();   // welchen Monat zeigt das Kalender-Overlay
+let tagSheetIso = null;           // welcher Tag im Tages-Sheet offen ist
+const tagDetailOffen = new Set(); // welche Sessions im Tages-Sheet aufgeklappt sind
 
 // ------------------------------------------------------------
 // Kontext für Module
@@ -72,6 +75,11 @@ const actions = {
   'kalender.auf'() { kalenderAnker = heuteIso(); unterseite = 'kalender'; render(); mainInner.parentElement.scrollTo(0, 0); },
   'kalender.vor'() { kalenderAnker = verschiebeZeitraum('monat', kalenderAnker, +1); render(); },
   'kalender.rueck'() { kalenderAnker = verschiebeZeitraum('monat', kalenderAnker, -1); render(); },
+  'tag.auf'(d) { tagSheetIso = d.iso; tagDetailOffen.clear(); sheet.oeffne(tagSheetHtml()); },
+  'tag.zeile'(d) {
+    tagDetailOffen.has(d.sid) ? tagDetailOffen.delete(d.sid) : tagDetailOffen.add(d.sid);
+    sheet.aktualisiere(tagSheetHtml());
+  },
   'modulOeffne'(d) { aktivesModul = d.m; tab = 'heute'; unterseite = null; render(); window.scrollTo(0, 0); },
   'verlaufSub'(d) { verlaufSub = d.s; render(); mainInner.parentElement.scrollTo(0, 0); },
 
@@ -384,23 +392,26 @@ function kalPunkte(module) {
   return module.map(m => `<span class="punkt ${m}"></span>`).join('');
 }
 
-/** Ebene 1: der antippbare Wochen-Streifen fürs Dashboard. */
+/** Ebene 1: der Wochen-Streifen fürs Dashboard. Jeder Tag → Tages-Sheet,
+ *  der Pfeil rechts → Monats-Overlay. */
 function kalenderStreifenHtml() {
   const { tage } = wochenStreifen(state);
   const zellen = tage.map(t => {
     const klasse = ['kal-tag', t.istHeute ? 'heute' : '', t.istZukunft ? 'zukunft' : '']
       .filter(Boolean).join(' ');
-    return `<span class="${klasse}">
+    return `<button class="${klasse}" data-action="tag.auf" data-iso="${t.iso}">
       <span class="kal-wt">${t.kurz}</span>
       <span class="kal-num">${t.tag}</span>
       <span class="kal-dots">${kalPunkte(t.module)}</span>
-    </span>`;
+    </button>`;
   }).join('');
   return `<p class="sheet-abschnitt zwischen">Kalender</p>
-    <button class="karte kal-streifen" data-action="kalender.auf" aria-label="Monatskalender öffnen">
-      <span class="kal-woche">${zellen}</span>
-      <span class="kal-chevron" aria-hidden="true"></span>
-    </button>`;
+    <div class="karte kal-streifen">
+      <div class="kal-woche">${zellen}</div>
+      <button class="kal-chevron-btn" data-action="kalender.auf" aria-label="Monatskalender öffnen">
+        <span class="kal-chevron" aria-hidden="true"></span>
+      </button>
+    </div>`;
 }
 
 /** Ebene 2: das Monats-Raster im Overlay (mit Monats-Navigation). */
@@ -413,10 +424,10 @@ function kalenderHtml() {
       t.imMonat ? '' : 'aus',
       t.istHeute ? 'heute' : '',
       t.istZukunft ? 'zukunft' : ''].filter(Boolean).join(' ');
-    return `<span class="${klasse}">
+    return `<button class="${klasse}" data-action="tag.auf" data-iso="${t.iso}">
       <span class="kal-num">${t.tag}</span>
       <span class="kal-dots">${kalPunkte(t.module)}</span>
-    </span>`;
+    </button>`;
   }).join('');
   return `<div class="kal-nav">
       <button class="kal-pfeil" data-action="kalender.rueck" aria-label="Voriger Monat"><span class="kal-pfeil-ico links"></span></button>
@@ -425,6 +436,85 @@ function kalenderHtml() {
     </div>
     <div class="kal-kopf-tage">${kopfTage}</div>
     <div class="kal-gitter">${zellen}</div>`;
+}
+
+// ------------------------------------------------------------
+// Kalender Ebene 3 — Tages-Sheet. Öffnet sich beim Antippen eines Tages
+// (Streifen oder Monatsraster). Zeigt je nach „Gesicht":
+//   vergangen → Rückblick (erledigte Aktivitäten, aufklappbar bis ins Detail)
+//   heute     → dasselbe (Planung folgt in Etappe 4)
+//   zukunft   → neutraler Leer-Zustand (Planung folgt in Etappe 4)
+// tagDetail() (kalender.js, Node-getestet) liefert Gesicht + rohe Sessions;
+// hier nur Darstellung + das modul-spezifische Formatieren der Zeilen.
+// ------------------------------------------------------------
+
+/** „Montag, 13. Juli 2026" — voller Kopf fürs Sheet. */
+function langesDatum(iso) {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('de-DE',
+    { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+/** Eine erledigte Session als aufklappbare Zeile im Tages-Sheet. */
+function tagZeileHtml(s) {
+  const modul = s.modul ?? KRAFT;
+  const auf = tagDetailOffen.has(s.id);
+
+  let titel, wert = '';
+  if (modul === KRAFT) {
+    const e = s.ausPlan ? findeEinheit(state, KRAFT, s.ausPlan) : null;
+    titel = e ? e.name : 'Freie Session';
+    const vol = sessionVolumenErledigt(s);
+    if (vol > 0) wert = `${formatZahl(vol, 0)} kg`;
+  } else {
+    titel = s.name || (modul === RAD ? 'Radtour' : 'Wanderung');
+    const dist = sessionWert(s, 'distanz');
+    if (dist) wert = formatWert('distanz', dist);
+  }
+
+  return `<div class="karte tag-zeile-karte">
+    <button class="tour-kopf" data-action="tag.zeile" data-sid="${s.id}">
+      <span class="tz-titel"><span class="punkt ${modul}"></span><strong>${esc(titel)}</strong></span>
+      <span class="tz-rechts">${wert ? `<span class="dim num">${esc(wert)}</span>` : ''}<span class="pfeil-ico ${auf ? 'runter' : ''}"></span></span>
+    </button>
+    ${auf ? tagZeileDetailHtml(s) : ''}
+  </div>`;
+}
+
+/** Aufgeklappte Detail-Zeilen einer Session (Segmente mit Zusammenfassung). */
+function tagZeileDetailHtml(s) {
+  const zeilen = s.segmente.filter(seg => seg.erledigt === true).map(seg => {
+    const { aktivitaet, anzeigeName } = loeseSegmentAuf(state, seg);
+    if (!aktivitaet) return '';
+    const zsf = aktivitaet.kategorie === 'kraft'
+      ? segmentZusammenfassungKraft(seg)
+      : segmentZusammenfassungWerte(aktivitaet, seg);
+    return `<div class="verlauf-zeile"><span class="punkt ${aktivitaet.kategorie}"></span>${esc(anzeigeName)} <span class="dim">${esc(zsf)}</span></div>`;
+  }).join('');
+  const notiz = s.notiz ? `<p class="tz-notiz dim">${esc(s.notiz)}</p>` : '';
+  return `<div class="tz-detail">${zeilen || '<small class="dim">Nichts abgehakt.</small>'}${notiz}</div>`;
+}
+
+/** Der ganze Inhalt des Tages-Sheets für den aktuell gewählten Tag. */
+function tagSheetHtml() {
+  const d = tagDetail(state, tagSheetIso);
+  const erledigt = d.sessions.filter(istWertbareTour);
+
+  let badge = '';
+  if (d.gesicht === 'heute') badge = '<span class="tag-badge heute">Heute</span>';
+  else if (d.gesicht === 'zukunft') badge = '<span class="tag-badge zukunft">Vorschau</span>';
+
+  let koerper;
+  if (erledigt.length) {
+    koerper = erledigt.map(tagZeileHtml).join('');
+  } else {
+    const txt = d.gesicht === 'heute' ? 'Heute noch nichts eingetragen.'
+      : d.gesicht === 'zukunft' ? 'Für diesen Tag ist noch nichts geplant.'
+      : 'An diesem Tag war nichts eingetragen.';
+    koerper = `<div class="tag-leer"><p>${esc(txt)}</p></div>`;
+  }
+
+  return `<div class="tag-sheet-kopf"><h3>${esc(langesDatum(tagSheetIso))}</h3>${badge}</div>${koerper}`;
 }
 
 function dashboardHtml() {

@@ -501,6 +501,24 @@ h1,h2,h3,.num{font-family:var(--font-display);letter-spacing:-.02em}
 .kal-zelle.aus{opacity:.3}
 .kal-zelle.zukunft .kal-num{color:var(--dim)}
 .kal-zelle.heute .kal-num{background:var(--kraft);color:#0C0D0E}
+.kal-chevron-btn{flex:none;display:flex;align-items:center;justify-content:center;padding:8px 2px 8px 8px}
+.kal-tag:active,.kal-zelle:active,.kal-chevron-btn:active{opacity:.55}
+
+/* Ebene 3 — Tages-Sheet */
+.tag-sheet-kopf{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.tag-sheet-kopf h3{font-size:19px}
+.tag-badge{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
+  padding:3px 8px;border-radius:999px}
+.tag-badge.heute{background:var(--kraft);color:#0C0D0E}
+.tag-badge.zukunft{background:var(--surface-2);color:var(--dim);border:1px solid var(--line)}
+.tag-leer{padding:22px 8px;text-align:center;color:var(--dim);font-size:13.5px}
+.tag-zeile-karte{margin:0}
+.tz-titel{display:flex;align-items:center;gap:8px;min-width:0}
+.tz-rechts{display:flex;align-items:center;gap:10px;flex:none}
+.tz-rechts .num{font-size:13.5px}
+.tz-detail{border-top:1px solid var(--line);margin-top:12px;padding-top:12px;
+  display:flex;flex-direction:column;gap:7px}
+.tz-notiz{font-size:13px;margin-top:2px}
 
 /* Dashboard: keine untere Navi → voller Platz, kein Navi-Padding */
 body.ohne-navi main{padding-bottom:16px}
