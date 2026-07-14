@@ -468,6 +468,40 @@ h1,h2,h3,.num{font-family:var(--font-display);letter-spacing:-.02em}
 .wo-leer{padding:20px 16px;text-align:center;color:var(--dim);
   font-size:13.5px;line-height:1.5}
 
+/* ===== Kalender (Werkzeug B) ===== */
+/* Ebene 1 — Wochen-Streifen aufs Dashboard (antippbar → Monats-Overlay) */
+.kal-streifen{display:flex;align-items:center;gap:10px;width:100%;
+  text-align:left;padding:14px 16px}
+.kal-woche{flex:1;display:flex;justify-content:space-between;gap:2px;min-width:0}
+.kal-chevron{flex:none;width:9px;height:9px;border-top:2px solid var(--dim-2);
+  border-right:2px solid var(--dim-2);transform:rotate(45deg)}
+.kal-tag{display:flex;flex-direction:column;align-items:center;gap:5px;flex:1;min-width:0}
+.kal-wt{font-size:10px;color:var(--dim-2);text-align:center}
+.kal-num{font-family:var(--font-display);font-weight:700;font-size:14.5px;
+  color:var(--text);width:30px;height:30px;display:flex;align-items:center;
+  justify-content:center;border-radius:50%;font-variant-numeric:tabular-nums}
+.kal-tag.zukunft .kal-num{color:var(--dim)}
+.kal-tag.heute .kal-num{background:var(--kraft);color:#0C0D0E}
+.kal-dots{display:flex;gap:3px;height:6px;align-items:center;justify-content:center}
+.kal-dots .punkt{width:5px;height:5px}
+
+/* Ebene 2 — Monats-Overlay */
+.kal-nav{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 18px}
+.kal-monat-label{font-family:var(--font-display);font-weight:800;font-size:20px;letter-spacing:-.02em}
+.kal-pfeil{width:40px;height:40px;border-radius:var(--r-icon);
+  background:var(--surface-2);border:1px solid var(--line);
+  display:flex;align-items:center;justify-content:center}
+.kal-pfeil-ico{width:9px;height:9px;border-top:2px solid var(--text);
+  border-right:2px solid var(--text);transform:rotate(45deg);margin-left:-2px}
+.kal-pfeil-ico.links{transform:rotate(225deg);margin-left:2px}
+.kal-kopf-tage{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:6px}
+.kal-kopf-tage .kal-wt{padding:2px 0}
+.kal-gitter{display:grid;grid-template-columns:repeat(7,1fr)}
+.kal-zelle{display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 0 8px}
+.kal-zelle.aus{opacity:.3}
+.kal-zelle.zukunft .kal-num{color:var(--dim)}
+.kal-zelle.heute .kal-num{background:var(--kraft);color:#0C0D0E}
+
 /* Dashboard: keine untere Navi → voller Platz, kein Navi-Padding */
 body.ohne-navi main{padding-bottom:16px}
 body.ohne-navi .nav{display:none}

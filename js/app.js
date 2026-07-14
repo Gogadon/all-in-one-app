@@ -7,7 +7,7 @@
 
 import { load, save, exportBackup, importBackup, leererZustand } from './core/storage.js';
 import { formatZahl, formatWert } from './core/metrics.js';
-import { heuteIso, findeAktivitaet, sessionKategorien } from './core/model.js';
+import { heuteIso, findeAktivitaet, sessionKategorien, verschiebeZeitraum } from './core/model.js';
 import { findeEinheit, naechsteEinheit } from './core/plan.js';
 import { esc, formatDatum, sheet, bestaetige, hinweis } from './ui/components.js';
 import {
@@ -18,6 +18,7 @@ import { erstelleRadModul, MODUL as RAD, tourStatistik } from './modules/rad.js'
 import { erstelleWanderModul, MODUL as WANDERN, wanderStatistik } from './modules/wandern.js';
 import { erstelleChallengeModul, MODUL as CHALLENGE, fortschritt } from './modules/challenge.js';
 import { wochenUebersicht } from './dashboard.js';
+import { wochenStreifen, monatsGitter } from './kalender.js';
 
 const main = document.getElementById('main');
 const nav = document.getElementById('nav');
@@ -41,7 +42,8 @@ const ptr = document.getElementById('ptr');
 
 let state = null;
 let tab = 'dashboard';
-let unterseite = null;   // null | 'daten' — Overlay-Unterseite (übers Zahnrad)
+let unterseite = null;   // null | 'daten' | 'kalender' — Overlay über den Tabs
+let kalenderAnker = heuteIso();   // welchen Monat zeigt das Kalender-Overlay
 
 // ------------------------------------------------------------
 // Kontext für Module
@@ -67,6 +69,9 @@ const actions = {
   'tab'(d) { tab = d.tab; unterseite = null; sheet.schliesse(); render(); window.scrollTo(0, 0); },
   'unterseiteAuf'(d) { unterseite = d.seite; render(); mainInner.parentElement.scrollTo(0, 0); },
   'unterseiteZu'() { unterseite = null; render(); mainInner.parentElement.scrollTo(0, 0); },
+  'kalender.auf'() { kalenderAnker = heuteIso(); unterseite = 'kalender'; render(); mainInner.parentElement.scrollTo(0, 0); },
+  'kalender.vor'() { kalenderAnker = verschiebeZeitraum('monat', kalenderAnker, +1); render(); },
+  'kalender.rueck'() { kalenderAnker = verschiebeZeitraum('monat', kalenderAnker, -1); render(); },
   'modulOeffne'(d) { aktivesModul = d.m; tab = 'heute'; unterseite = null; render(); window.scrollTo(0, 0); },
   'verlaufSub'(d) { verlaufSub = d.s; render(); mainInner.parentElement.scrollTo(0, 0); },
 
@@ -367,6 +372,61 @@ function wochenStatistikHtml() {
     <div class="karte woche-karte">${kopf}<div class="wo-module">${koerper}</div></div>`;
 }
 
+// ------------------------------------------------------------
+// Kalender (Werkzeug B) — Ebene 1: Wochen-Streifen aufs Dashboard,
+// Ebene 2: Monats-Overlay. Die Rechnerei steckt in kalender.js
+// (Node-getestet); hier nur Darstellung. Tag-Antippen → Tages-Sheet
+// folgt in Etappe 3.
+// ------------------------------------------------------------
+
+/** Die Modul-Punkte eines Tages (erledigt = gefüllt). */
+function kalPunkte(module) {
+  return module.map(m => `<span class="punkt ${m}"></span>`).join('');
+}
+
+/** Ebene 1: der antippbare Wochen-Streifen fürs Dashboard. */
+function kalenderStreifenHtml() {
+  const { tage } = wochenStreifen(state);
+  const zellen = tage.map(t => {
+    const klasse = ['kal-tag', t.istHeute ? 'heute' : '', t.istZukunft ? 'zukunft' : '']
+      .filter(Boolean).join(' ');
+    return `<span class="${klasse}">
+      <span class="kal-wt">${t.kurz}</span>
+      <span class="kal-num">${t.tag}</span>
+      <span class="kal-dots">${kalPunkte(t.module)}</span>
+    </span>`;
+  }).join('');
+  return `<p class="sheet-abschnitt zwischen">Kalender</p>
+    <button class="karte kal-streifen" data-action="kalender.auf" aria-label="Monatskalender öffnen">
+      <span class="kal-woche">${zellen}</span>
+      <span class="kal-chevron" aria-hidden="true"></span>
+    </button>`;
+}
+
+/** Ebene 2: das Monats-Raster im Overlay (mit Monats-Navigation). */
+function kalenderHtml() {
+  const g = monatsGitter(state, kalenderAnker);
+  const kopfTage = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So']
+    .map(d => `<span class="kal-wt">${d}</span>`).join('');
+  const zellen = g.wochen.flat().map(t => {
+    const klasse = ['kal-zelle',
+      t.imMonat ? '' : 'aus',
+      t.istHeute ? 'heute' : '',
+      t.istZukunft ? 'zukunft' : ''].filter(Boolean).join(' ');
+    return `<span class="${klasse}">
+      <span class="kal-num">${t.tag}</span>
+      <span class="kal-dots">${kalPunkte(t.module)}</span>
+    </span>`;
+  }).join('');
+  return `<div class="kal-nav">
+      <button class="kal-pfeil" data-action="kalender.rueck" aria-label="Voriger Monat"><span class="kal-pfeil-ico links"></span></button>
+      <span class="kal-monat-label">${esc(g.label)}</span>
+      <button class="kal-pfeil" data-action="kalender.vor" aria-label="Nächster Monat"><span class="kal-pfeil-ico"></span></button>
+    </div>
+    <div class="kal-kopf-tage">${kopfTage}</div>
+    <div class="kal-gitter">${zellen}</div>`;
+}
+
 function dashboardHtml() {
   let html = `<div class="dash-kopf">
     <div><span class="eyebrow"><span class="pip"></span>All-in-One</span><h1>Start</h1></div>
@@ -411,6 +471,9 @@ function dashboardHtml() {
   // Wochen-Statistik (zweistufig: Kopfzeile + Modul-Aufschlüsselung)
   html += wochenStatistikHtml();
 
+  // Kalender-Streifen (Ebene 1): Glance auf die Woche, tippen → Monats-Overlay
+  html += kalenderStreifenHtml();
+
   return html;
 }
 
@@ -427,6 +490,10 @@ function render() {
   // Unterseite (z.B. Daten) liegt über den Tabs, mit Zurück-Pfeil.
   if (unterseite === 'daten') {
     mainInner.innerHTML = unterseiteHtml('Daten & Backup', datenHtml());
+    return;
+  }
+  if (unterseite === 'kalender') {
+    mainInner.innerHTML = unterseiteHtml('Kalender', kalenderHtml());
     return;
   }
 
