@@ -520,6 +520,24 @@ h1,h2,h3,.num{font-family:var(--font-display);letter-spacing:-.02em}
   display:flex;flex-direction:column;gap:7px}
 .tz-notiz{font-size:13px;margin-top:2px}
 
+/* Umriss-Punkte = geplante Termine */
+.punkt.umriss{background:transparent}
+.punkt.umriss.kraft{box-shadow:inset 0 0 0 2px var(--kraft)}
+.punkt.umriss.rad{box-shadow:inset 0 0 0 2px var(--rad)}
+.punkt.umriss.wandern{box-shadow:inset 0 0 0 2px var(--wandern)}
+.punkt.umriss.schwimmen{box-shadow:inset 0 0 0 2px var(--schwimmen)}
+
+/* Planungs-Abschnitt im Tages-Sheet */
+.plan-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:2px}
+.tag-plan-leer{font-size:13px;padding:2px 2px 4px}
+.termin-karte{display:flex;align-items:center;gap:10px;margin:0}
+.termin-karte .tz-titel{flex:none}
+.termin-notiz{flex:1;min-width:0;background:transparent;border:none;
+  color:var(--text);font:inherit;font-size:13.5px;padding:4px 0}
+.termin-notiz::placeholder{color:var(--dim-2)}
+.termin-notiz:focus{outline:none}
+.termin-weg{flex:none;width:32px;height:32px;color:var(--dim);font-size:15px}
+
 /* Dashboard: keine untere Navi → voller Platz, kein Navi-Padding */
 body.ohne-navi main{padding-bottom:16px}
 body.ohne-navi .nav{display:none}

@@ -8,7 +8,7 @@
 import { load, save, exportBackup, importBackup, leererZustand } from './core/storage.js';
 import { formatZahl, formatWert } from './core/metrics.js';
 import { heuteIso, findeAktivitaet, sessionKategorien, verschiebeZeitraum,
-  istWertbareTour, sessionWert, loeseSegmentAuf } from './core/model.js';
+  istWertbareTour, sessionWert, loeseSegmentAuf, neuerTermin } from './core/model.js';
 import { findeEinheit, naechsteEinheit } from './core/plan.js';
 import { esc, formatDatum, sheet, bestaetige, hinweis } from './ui/components.js';
 import {
@@ -65,6 +65,11 @@ const challenge = erstelleChallengeModul(ctx);
 // Welches Modul zeigt der Heute-/Verlauf-Tab gerade? (Plan bleibt Kraft.)
 let aktivesModul = KRAFT;
 
+// Kalender-Planung: welche Module planbar sind (Challenge = Auswertung, kein Tun)
+// und ihre Anzeigenamen.
+const MODUL_LABEL = { [KRAFT]: 'Kraft', [RAD]: 'Rad', [WANDERN]: 'Wandern', [CHALLENGE]: 'Challenge' };
+const PLANBARE_MODULE = [KRAFT, RAD, WANDERN];
+
 // ------------------------------------------------------------
 // Aktionen: App-eigene + Modul-Aktionen in einem Register
 // ------------------------------------------------------------
@@ -79,6 +84,22 @@ const actions = {
   'tag.zeile'(d) {
     tagDetailOffen.has(d.sid) ? tagDetailOffen.delete(d.sid) : tagDetailOffen.add(d.sid);
     sheet.aktualisiere(tagSheetHtml());
+  },
+  async 'termin.neu'(d) {
+    (state.termine ??= []).push(neuerTermin({ datum: d.iso, modul: d.m }));
+    await ctx.save();
+    render();                            // Punkte im Streifen/Raster darunter aktualisieren
+    sheet.aktualisiere(tagSheetHtml());
+  },
+  async 'termin.weg'(d) {
+    state.termine = (state.termine ?? []).filter(t => t.id !== d.id);
+    await ctx.save();
+    render();
+    sheet.aktualisiere(tagSheetHtml());
+  },
+  async 'termin.notiz'(d, el) {
+    const t = (state.termine ?? []).find(x => x.id === d.id);
+    if (t) { t.notiz = el.value; await ctx.save(); }   // kein Re-Render → Fokus bleibt
   },
   'modulOeffne'(d) { aktivesModul = d.m; tab = 'heute'; unterseite = null; render(); window.scrollTo(0, 0); },
   'verlaufSub'(d) { verlaufSub = d.s; render(); mainInner.parentElement.scrollTo(0, 0); },
@@ -387,9 +408,10 @@ function wochenStatistikHtml() {
 // folgt in Etappe 3.
 // ------------------------------------------------------------
 
-/** Die Modul-Punkte eines Tages (erledigt = gefüllt). */
-function kalPunkte(module) {
-  return module.map(m => `<span class="punkt ${m}"></span>`).join('');
+/** Die Modul-Punkte eines Tages: erledigt = gefüllt, geplant = Umriss. */
+function kalPunkte(module, geplant = []) {
+  return module.map(m => `<span class="punkt ${m}"></span>`).join('')
+    + geplant.map(m => `<span class="punkt umriss ${m}"></span>`).join('');
 }
 
 /** Ebene 1: der Wochen-Streifen fürs Dashboard. Jeder Tag → Tages-Sheet,
@@ -402,7 +424,7 @@ function kalenderStreifenHtml() {
     return `<button class="${klasse}" data-action="tag.auf" data-iso="${t.iso}">
       <span class="kal-wt">${t.kurz}</span>
       <span class="kal-num">${t.tag}</span>
-      <span class="kal-dots">${kalPunkte(t.module)}</span>
+      <span class="kal-dots">${kalPunkte(t.module, t.geplant)}</span>
     </button>`;
   }).join('');
   return `<p class="sheet-abschnitt zwischen">Kalender</p>
@@ -426,7 +448,7 @@ function kalenderHtml() {
       t.istZukunft ? 'zukunft' : ''].filter(Boolean).join(' ');
     return `<button class="${klasse}" data-action="tag.auf" data-iso="${t.iso}">
       <span class="kal-num">${t.tag}</span>
-      <span class="kal-dots">${kalPunkte(t.module)}</span>
+      <span class="kal-dots">${kalPunkte(t.module, t.geplant)}</span>
     </button>`;
   }).join('');
   return `<div class="kal-nav">
@@ -499,22 +521,47 @@ function tagZeileDetailHtml(s) {
 function tagSheetHtml() {
   const d = tagDetail(state, tagSheetIso);
   const erledigt = d.sessions.filter(istWertbareTour);
+  const planbar = d.gesicht === 'heute' || d.gesicht === 'zukunft';
 
   let badge = '';
   if (d.gesicht === 'heute') badge = '<span class="tag-badge heute">Heute</span>';
   else if (d.gesicht === 'zukunft') badge = '<span class="tag-badge zukunft">Vorschau</span>';
 
-  let koerper;
-  if (erledigt.length) {
-    koerper = erledigt.map(tagZeileHtml).join('');
-  } else {
-    const txt = d.gesicht === 'heute' ? 'Heute noch nichts eingetragen.'
-      : d.gesicht === 'zukunft' ? 'Für diesen Tag ist noch nichts geplant.'
-      : 'An diesem Tag war nichts eingetragen.';
-    koerper = `<div class="tag-leer"><p>${esc(txt)}</p></div>`;
+  let koerper = '';
+
+  // Rückblick (erledigte Aktivitäten) — bei vergangenen und heutigen Tagen
+  if (d.gesicht !== 'zukunft') {
+    if (erledigt.length) {
+      koerper += erledigt.map(tagZeileHtml).join('');
+    } else if (d.gesicht === 'vergangen') {
+      koerper += '<div class="tag-leer"><p>An diesem Tag war nichts eingetragen.</p></div>';
+    }
   }
 
+  // Planung (Termine) — bei heute und in der Zukunft
+  if (planbar) koerper += planungHtml(d.termine, d.gesicht);
+
   return `<div class="tag-sheet-kopf"><h3>${esc(langesDatum(tagSheetIso))}</h3>${badge}</div>${koerper}`;
+}
+
+/** Planungs-Abschnitt: bestehende Termine + Modul-Chips zum Anlegen. */
+function planungHtml(termine, gesicht) {
+  const rows = termine.map(terminZeileHtml).join('');
+  const chips = PLANBARE_MODULE.map(m =>
+    `<button class="chip" data-action="termin.neu" data-iso="${tagSheetIso}" data-m="${m}">+ ${esc(MODUL_LABEL[m])}</button>`
+  ).join('');
+  return `<p class="sheet-abschnitt zwischen">${gesicht === 'heute' ? 'Geplant' : 'Planung'}</p>
+    ${rows || '<p class="tag-plan-leer dim">Noch nichts geplant.</p>'}
+    <div class="plan-chips">${chips}</div>`;
+}
+
+/** Eine Termin-Zeile: Modul-Umrisspunkt + optionale Notiz + Entfernen. */
+function terminZeileHtml(t) {
+  return `<div class="karte termin-karte">
+    <span class="tz-titel"><span class="punkt umriss ${t.modul}"></span><strong>${esc(MODUL_LABEL[t.modul] ?? t.modul)}</strong></span>
+    <input class="termin-notiz" type="text" data-change="termin.notiz" data-id="${t.id}" value="${esc(t.notiz)}" placeholder="Notiz…">
+    <button class="termin-weg" data-action="termin.weg" data-id="${t.id}" aria-label="Termin entfernen">✕</button>
+  </div>`;
 }
 
 function dashboardHtml() {

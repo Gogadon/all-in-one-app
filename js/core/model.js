@@ -176,6 +176,16 @@ export function neueSession({ datum = heuteIso(), ausPlan = null, notiz = '' } =
   return { id: neueId(), datum, erstelltAm: new Date().toISOString(), ausPlan, notiz, segmente: [] };
 }
 
+/**
+ * Ein geplanter Termin (Werkzeug B): eigene, schlanke Liste `state.termine`,
+ * getrennt von den Sessions. Ein Termin ist reine Absicht — er wird nie
+ * automatisch zur Session und fließt nie in Statistik oder Wochenzahlen ein.
+ * `erstelltAm` sortiert mehrere Termine desselben Tags stabil.
+ */
+export function neuerTermin({ datum, modul, notiz = '' }) {
+  return { id: neueId(), datum, modul, erstelltAm: new Date().toISOString(), notiz };
+}
+
 /** Segment = eine Aktivität innerhalb einer Session. altOf = genutzte Alternative. */
 export function neuesSegment(aktivitaetId, { altOf = null } = {}) {
   if (!aktivitaetId) throw new Error('Segment braucht eine aktivitaetId.');
@@ -280,6 +290,11 @@ export function loeseSegmentAuf(state, segment) {
 /** Alle Sessions eines Tages ("YYYY-MM-DD"). */
 export function sessionsAmTag(state, iso) {
   return state.sessions.filter(s => s.datum === iso);
+}
+
+/** Geplante Termine an einem Tag (Werkzeug B / Kalender-Planung). */
+export function termineAmTag(state, iso) {
+  return (state.termine ?? []).filter(t => t.datum === iso);
 }
 
 /** Sessions, die eine bestimmte Aktivität enthalten — neueste zuerst. */

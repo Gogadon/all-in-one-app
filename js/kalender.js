@@ -10,13 +10,12 @@
 // Welche zählt, entscheidet das Datum — gesichtFuer() liefert
 //   'vergangen' | 'heute' | 'zukunft'.
 //
-// ── Was diese Etappe macht (und was nicht) ─────────────────
-// Diese erste Etappe deckt den RÜCKBLICK ab: sie leitet Raster, Streifen und
-// Tages-Inhalt komplett aus den schon vorhandenen Sessions ab. Die PLANUNG
-// (geplante Termine → Umriss-Punkte, Zukunft eintragen) ist bewusst noch NICHT
-// hier; sie kommt als eigene Etappe mit einer schlanken `termine`-Liste dazu.
-// Die Nahtstellen sind aber schon angelegt: `module`/`anzahl` je Tag und die
-// rohe Session-Liste im Tages-Detail — dort schließt die Planung später an.
+// ── Rückblick + Planung ────────────────────────────────────
+// Raster, Streifen und Tages-Inhalt leiten sich aus den vorhandenen Sessions
+// (Rückblick) UND der getrennten Termin-Liste `state.termine` (Planung) ab.
+// Erledigte Touren → gefüllte Punkte (`module`); geplante Termine → Umriss-
+// Punkte (`geplant`), sofern das Modul an dem Tag nicht schon erledigt ist.
+// Termine fließen nie in Statistik oder Wochenzahlen — sie sind reine Absicht.
 //
 // ── Warum hier und nicht in js/core? ───────────────────────
 // Wie dashboard.js ist das die Orchestrierungs-Schicht ÜBER den Modulen:
@@ -34,7 +33,7 @@
 
 import {
   heuteIso, istWertbareTour, sessionsAmTag, sortiereNeuesteZuerst,
-  naechsterTag, wochenStart, zeitraum, isoZuDatum,
+  naechsterTag, wochenStart, zeitraum, isoZuDatum, termineAmTag,
 } from './core/model.js';
 import { zeitraumLabel } from './core/statistik.js';
 import { DASHBOARD_MODULE } from './dashboard.js';
@@ -69,19 +68,23 @@ function wochenEnde(iso) {
 }
 
 /**
- * Der „Punkt-Steckbrief" eines Tages: welche Module hatten ≥1 wertbare Tour,
- * und wie viele Touren insgesamt.
- * @returns { module: string[], anzahl: number }
+ * Der „Punkt-Steckbrief" eines Tages:
+ *  - `module`  = Module mit ≥1 wertbarer Tour (gefüllte Punkte)
+ *  - `geplant` = Module mit einem Termin, die NICHT schon erledigt sind
+ *                (Umriss-Punkte; ein erfüllter Plan wird zum gefüllten Punkt)
+ *  - `anzahl`  = Zahl der wertbaren Touren
  */
 export function tagMarker(state, iso) {
   const wertbar = (state.sessions ?? []).filter(s => istWertbareTour(s) && s.datum === iso);
-  const vorhanden = new Set(wertbar.map(modulVon));
-  return { module: ordneModule(vorhanden), anzahl: wertbar.length };
+  const erledigt = new Set(wertbar.map(modulVon));
+  const geplant = new Set(
+    termineAmTag(state, iso).map(t => t.modul).filter(m => !erledigt.has(m)));
+  return { module: ordneModule(erledigt), geplant: ordneModule(geplant), anzahl: wertbar.length };
 }
 
 /** Eine Zelle für Streifen/Raster. */
 function zelle(state, iso, { imMonat, heute }) {
-  const { module, anzahl } = tagMarker(state, iso);
+  const { module, geplant, anzahl } = tagMarker(state, iso);
   const wochentag = (isoZuDatum(iso).getUTCDay() + 6) % 7;   // Mo=0
   return {
     iso,
@@ -91,6 +94,7 @@ function zelle(state, iso, { imMonat, heute }) {
     istHeute: iso === heute,
     istZukunft: iso > heute,
     module,
+    geplant,
     anzahl,
   };
 }
@@ -146,11 +150,11 @@ export function monatsGitter(state, anker = heuteIso(), heute = heuteIso()) {
  * (neueste zuerst) plus das Gesicht, aus dem die UI entscheidet, ob Rückblick,
  * beides oder Planung oben steht. Bewusst ROH (inkl. offener/übersprungener
  * Sessions) — welche Zeilen wie dargestellt werden, entscheidet die UI, die die
- * Module kennt. Die Planung (`termine`) reiht sich später hier als zweite Liste
- * ein.
- * @returns { iso, gesicht, sessions }
+ * Module kennt. `termine` ist die (getrennte) Planungs-Liste des Tages.
+ * @returns { iso, gesicht, sessions, termine }
  */
 export function tagDetail(state, iso, heute = heuteIso()) {
   const sessions = sortiereNeuesteZuerst(sessionsAmTag(state, iso));
-  return { iso, gesicht: gesichtFuer(iso, heute), sessions };
+  const termine = termineAmTag(state, iso);
+  return { iso, gesicht: gesichtFuer(iso, heute), sessions, termine };
 }

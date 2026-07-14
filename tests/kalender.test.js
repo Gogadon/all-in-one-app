@@ -3,8 +3,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-const { neueSession, neuesSegment, neuerEintrag, addSegment, addEintrag } =
-  await import('../js/core/model.js');
+const { neueSession, neuesSegment, neuerEintrag, addSegment, addEintrag,
+  neuerTermin, termineAmTag } = await import('../js/core/model.js');
 const { gesichtFuer, tagMarker, wochenStreifen, monatsGitter, tagDetail } =
   await import('../js/kalender.js');
 
@@ -63,13 +63,13 @@ test('tagMarker: Module in Dashboard-Reihenfolge, Anzahl korrekt', () => {
 
 test('tagMarker: offene und übersprungene Touren erzeugen keinen Punkt', () => {
   const state = bauStandardState();
-  assert.deepEqual(tagMarker(state, '2026-07-15'), { module: ['wandern'], anzahl: 1 }); // offenes Rad raus
-  assert.deepEqual(tagMarker(state, '2026-07-20'), { module: [], anzahl: 0 });           // übersprungen raus
+  assert.deepEqual(tagMarker(state, '2026-07-15'), { module: ['wandern'], geplant: [], anzahl: 1 }); // offenes Rad raus
+  assert.deepEqual(tagMarker(state, '2026-07-20'), { module: [], geplant: [], anzahl: 0 });           // übersprungen raus
 });
 
 test('tagMarker: leerer Tag ist sauber leer', () => {
   const state = bauStandardState();
-  assert.deepEqual(tagMarker(state, '2026-07-10'), { module: [], anzahl: 0 });
+  assert.deepEqual(tagMarker(state, '2026-07-10'), { module: [], geplant: [], anzahl: 0 });
 });
 
 test('tagMarker: Alt-Session ohne modul-Feld zählt als Kraft', () => {
@@ -179,4 +179,61 @@ test('tagDetail: leerer Zukunftstag hat Gesicht zukunft und keine Sessions', () 
   const d = tagDetail(state, '2026-09-09', HEUTE);
   assert.equal(d.gesicht, 'zukunft');
   assert.equal(d.sessions.length, 0);
+});
+
+// ------------------------------------------------------------
+// Planung (Termine) — Etappe 4
+// ------------------------------------------------------------
+test('neuerTermin: Grundform mit id, datum, modul, erstelltAm, leerer Notiz', () => {
+  const t = neuerTermin({ datum: '2026-07-16', modul: 'rad' });
+  assert.ok(t.id);
+  assert.equal(t.datum, '2026-07-16');
+  assert.equal(t.modul, 'rad');
+  assert.equal(t.notiz, '');
+  assert.ok(t.erstelltAm);
+});
+
+test('termineAmTag: filtert nach Datum', () => {
+  const state = { sessions: [], bibliothek: [], termine: [
+    neuerTermin({ datum: '2026-07-16', modul: 'kraft' }),
+    neuerTermin({ datum: '2026-07-17', modul: 'rad' }),
+  ] };
+  assert.equal(termineAmTag(state, '2026-07-16').length, 1);
+  assert.equal(termineAmTag(state, '2026-07-16')[0].modul, 'kraft');
+});
+
+test('termineAmTag: ohne termine-Feld liefert leere Liste (robust)', () => {
+  assert.deepEqual(termineAmTag({ sessions: [] }, '2026-07-16'), []);
+});
+
+test('tagMarker: geplante Module erscheinen als geplant, getrennt von erledigt', () => {
+  const state = { sessions: [], bibliothek: [], termine: [
+    neuerTermin({ datum: '2026-07-16', modul: 'wandern' }),
+    neuerTermin({ datum: '2026-07-16', modul: 'kraft' }),
+  ] };
+  const m = tagMarker(state, '2026-07-16');
+  assert.deepEqual(m.module, []);
+  assert.deepEqual(m.geplant, ['kraft', 'wandern']);   // Dashboard-Reihenfolge
+  assert.equal(m.anzahl, 0);
+});
+
+test('tagMarker: erledigt schlägt geplant — kein Doppelpunkt fürs selbe Modul', () => {
+  const state = { sessions: [], bibliothek: [], termine: [
+    neuerTermin({ datum: '2026-07-16', modul: 'rad' }),     // rad geplant …
+    neuerTermin({ datum: '2026-07-16', modul: 'kraft' }),
+  ] };
+  macheTour(state, { modul: 'rad', datum: '2026-07-16' });   // … aber rad auch erledigt
+  const m = tagMarker(state, '2026-07-16');
+  assert.deepEqual(m.module, ['rad']);        // rad gefüllt
+  assert.deepEqual(m.geplant, ['kraft']);     // rad rausgefiltert, nur kraft bleibt Umriss
+});
+
+test('tagDetail: liefert die Termine des Tages', () => {
+  const state = { sessions: [], bibliothek: [], termine: [
+    neuerTermin({ datum: '2026-07-16', modul: 'kraft', notiz: 'Beine' }),
+  ] };
+  const d = tagDetail(state, '2026-07-16', HEUTE);
+  assert.equal(d.gesicht, 'zukunft');
+  assert.equal(d.termine.length, 1);
+  assert.equal(d.termine[0].notiz, 'Beine');
 });

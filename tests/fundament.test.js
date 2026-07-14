@@ -17,7 +17,7 @@ import {
   sessionsMitAktivitaet,
 } from '../js/core/model.js';
 import {
-  load, save, exportBackup, importBackup, leererZustand, STORAGE_KEY,
+  load, save, exportBackup, importBackup, leererZustand, migriere, STORAGE_KEY,
 } from '../js/core/storage.js';
 
 // --- localStorage-Attrappe für Node ------------------------------
@@ -256,4 +256,14 @@ test('Migration V1→V2: Alternativen werden echte Übungen (zusammengeführt)',
   assert.ok(lauf.alternativen.includes('rad'), 'Laufband-Alternative zeigt auf echte Fahrrad-id');
   // Historie: seg.altOf wurde auf die neue Face-Pulls-id umgezogen
   assert.equal(state.sessions[0].segmente[0].altOf, fp[0].id);
+});
+
+test('Grundzustand & Migration: termine-Liste vorhanden bzw. nachgetragen', () => {
+  // Frischer Zustand hat die Liste
+  assert.deepEqual(leererZustand().termine, []);
+  // Alter Stand ohne termine bekommt sie beim Migrieren ergänzt
+  const alt = { schema: 2, bibliothek: [], sessions: [] };
+  const migriert = migriere(alt);
+  assert.ok(Array.isArray(migriert.termine));
+  assert.equal(migriert.termine.length, 0);
 });
