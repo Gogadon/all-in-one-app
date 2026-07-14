@@ -70,6 +70,14 @@ let aktivesModul = KRAFT;
 const MODUL_LABEL = { [KRAFT]: 'Kraft', [RAD]: 'Rad', [WANDERN]: 'Wandern', [CHALLENGE]: 'Challenge' };
 const PLANBARE_MODULE = [KRAFT, RAD, WANDERN];
 
+// Line-Icons (stroke, viewBox 0 0 24 24) für die Dashboard-Kacheln.
+const MODUL_ICON = {
+  [KRAFT]: '<svg viewBox="0 0 24 24"><path d="M3 10v4M6 8v8M18 8v8M21 10v4M6 12h12"/></svg>',
+  [RAD]: '<svg viewBox="0 0 24 24"><circle cx="6" cy="16.5" r="3.3"/><circle cx="18" cy="16.5" r="3.3"/><path d="M6 16.5l5-8 7 8M11 8.5h5"/></svg>',
+  [WANDERN]: '<svg viewBox="0 0 24 24"><path d="M3 19h18M6 19l4-6 3 4M12.5 19l4-7 4.5 7"/></svg>',
+  [CHALLENGE]: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/></svg>',
+};
+
 // ------------------------------------------------------------
 // Aktionen: App-eigene + Modul-Aktionen in einem Register
 // ------------------------------------------------------------
@@ -588,18 +596,22 @@ function dashboardHtml() {
 
   html += `<div class="dash-module">
     <button class="modul-kachel kraft" data-action="modulOeffne" data-m="${KRAFT}">
+      <span class="mk-icon">${MODUL_ICON[KRAFT]}</span>
       <span class="mk-label">Kraft</span>
       <span class="mk-status">${esc(kraftStatus)}</span>
     </button>
     <button class="modul-kachel rad" data-action="modulOeffne" data-m="${RAD}">
+      <span class="mk-icon">${MODUL_ICON[RAD]}</span>
       <span class="mk-label">Rad</span>
       <span class="mk-status">${esc(radStatus)}</span>
     </button>
     <button class="modul-kachel wandern" data-action="modulOeffne" data-m="${WANDERN}">
+      <span class="mk-icon">${MODUL_ICON[WANDERN]}</span>
       <span class="mk-label">Wandern</span>
       <span class="mk-status">${esc(wanderStatus)}</span>
     </button>
     <button class="modul-kachel challenge" data-action="modulOeffne" data-m="${CHALLENGE}">
+      <span class="mk-icon">${MODUL_ICON[CHALLENGE]}</span>
       <span class="mk-label">Challenge</span>
       <span class="mk-status">${esc(chStatus)}</span>
     </button>

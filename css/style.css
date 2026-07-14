@@ -433,19 +433,21 @@ h1,h2,h3,.num{font-family:var(--font-display);letter-spacing:-.02em}
 /* ===== Dashboard ===== */
 .dash-kopf{display:flex;align-items:flex-start;justify-content:space-between;margin:0 0 22px}
 .dash-kopf h1{font-size:32px;margin-top:2px}
-.dash-module{display:flex;flex-direction:column;gap:12px}
-.modul-kachel{display:flex;flex-direction:column;align-items:flex-start;gap:6px;
-  padding:20px;border-radius:var(--r-hero);text-align:left;
-  border:1px solid var(--line);background:var(--surface);position:relative;overflow:hidden}
-.modul-kachel::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px}
-.modul-kachel.kraft::before{background:var(--kraft)}
-.modul-kachel.rad::before{background:var(--rad)}
-.modul-kachel.wandern::before{background:var(--wandern)}
-.modul-kachel .mk-label{font-family:var(--font-display);font-weight:800;font-size:22px}
-.modul-kachel.kraft .mk-label{color:var(--kraft)}
-.modul-kachel.rad .mk-label{color:var(--rad)}
-.modul-kachel.wandern .mk-label{color:var(--wandern)}
-.modul-kachel .mk-status{font-size:13px;color:var(--dim)}
+.dash-module{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.modul-kachel{display:flex;flex-direction:column;align-items:flex-start;gap:10px;
+  padding:16px;border-radius:var(--r-tile);text-align:left;
+  border:1px solid var(--line);background:var(--surface)}
+.mk-icon{width:44px;height:44px;border-radius:var(--r-icon);flex:none;
+  display:flex;align-items:center;justify-content:center}
+.mk-icon svg{width:24px;height:24px;fill:none;stroke:currentColor;
+  stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.modul-kachel.kraft .mk-icon{color:var(--kraft);background:rgba(205,253,52,.14)}
+.modul-kachel.rad .mk-icon{color:var(--rad);background:rgba(55,215,244,.14)}
+.modul-kachel.wandern .mk-icon{color:var(--wandern);background:rgba(252,180,75,.14)}
+.modul-kachel.challenge .mk-icon{color:var(--challenge);background:rgba(255,107,157,.14)}
+.modul-kachel .mk-label{font-family:var(--font-display);font-weight:800;font-size:18px;color:var(--text)}
+.modul-kachel .mk-status{font-size:12.5px;color:var(--dim);line-height:1.35}
+.modul-kachel:active{border-color:rgba(255,255,255,.16)}
 /* Wochenstatistik — zweistufig: universelle Kopfzeile + Modul-Zeilen.
    Jede Modul-Zeile setzt --akzent auf ihre Modulfarbe (wie im Statistik-Tab). */
 .woche-karte{padding:0;overflow:hidden}
@@ -543,8 +545,6 @@ body.ohne-navi main{padding-bottom:16px}
 body.ohne-navi .nav{display:none}
 
 /* ===== Challenge-Modul ===== */
-.modul-kachel.challenge::before{background:var(--challenge)}
-.modul-kachel.challenge .mk-label{color:var(--challenge)}
 .eyebrow .pip.challenge{background:var(--challenge);box-shadow:0 0 10px var(--challenge)}
 .ch-karte{padding:16px}
 .ch-karte.fertig{border-color:rgba(205,253,52,.35)}
