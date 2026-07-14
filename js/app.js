@@ -6,8 +6,8 @@
 // ============================================================
 
 import { load, save, exportBackup, importBackup, leererZustand } from './core/storage.js';
-import { formatZahl } from './core/metrics.js';
-import { heuteIso, findeAktivitaet, sessionKategorien, wochenStart } from './core/model.js';
+import { formatZahl, formatWert } from './core/metrics.js';
+import { heuteIso, findeAktivitaet, sessionKategorien } from './core/model.js';
 import { findeEinheit, naechsteEinheit } from './core/plan.js';
 import { esc, formatDatum, sheet, bestaetige, hinweis } from './ui/components.js';
 import {
@@ -17,6 +17,7 @@ import {
 import { erstelleRadModul, MODUL as RAD, tourStatistik } from './modules/rad.js';
 import { erstelleWanderModul, MODUL as WANDERN, wanderStatistik } from './modules/wandern.js';
 import { erstelleChallengeModul, MODUL as CHALLENGE, fortschritt } from './modules/challenge.js';
+import { wochenUebersicht } from './dashboard.js';
 
 const main = document.getElementById('main');
 const nav = document.getElementById('nav');
@@ -319,31 +320,51 @@ function importiereDatei(input) {
 // Dashboard (Start-Tab): Module wählen + Wochen-Übersicht
 // ------------------------------------------------------------
 
-/** Wochen-Statistik (diese Woche, modulübergreifend).
- *  Nutzt die robuste wochenStart-Funktion aus challenge.js: sie rechnet rein
- *  in UTC auf Basis des lokal ermittelten heuteIso() und kann deshalb an
- *  Tagesgrenzen nicht kippen (toISOString() auf ein lokales Date wäre buggy). */
-function wochenStatistik() {
-  const abMo = wochenStart();
-  let einheiten = 0, touren = 0, km = 0, volumen = 0;
-  for (const s of state.sessions) {
-    if (s.datum < abMo || s.uebersprungen) continue;
-    if ((s.modul ?? KRAFT) === KRAFT) {
-      if (s.abgeschlossen) einheiten++;
-      volumen += sessionVolumenErledigt(s);
-    } else if (s.modul === RAD) {
-      if (!s.abgeschlossen) continue;
-      touren++;
-      const mw = s.segmente[0]?.eintraege[0]?.messwerte ?? {};
-      km += (mw.distanz ?? 0) / 1000;
-    } else if (s.modul === WANDERN) {
-      if (!s.abgeschlossen) continue;
-      touren++;
-      const mw = s.segmente[0]?.eintraege[0]?.messwerte ?? {};
-      km += (mw.distanz ?? 0) / 1000;
-    }
-  }
-  return { einheiten, touren, km, volumen };
+// Anzeige-Konfig je Modul für die Wochen-Aufschlüsselung. Reine UI-Sache:
+// Name, Zählwort (Ein-/Mehrzahl) und die Sekundär-Kennzahl als fertiger Text.
+// Rechnen tut die Kern-Funktion wochenUebersicht() — hier nur formatieren.
+// Reihenfolge/Farbe kommen aus dem Ergebnis (module[]) bzw. via --<modul>.
+const WOCHE_MODUL = {
+  kraft:   { name: 'Kraft',   ein: 'Einheit', mehr: 'Einheiten',
+             metrik: m => `${formatZahl0(m.kennzahlen.volumen ?? 0)} kg` },
+  rad:     { name: 'Rad',     ein: 'Tour',    mehr: 'Touren',
+             metrik: m => formatWert('distanz', m.kennzahlen.distanz ?? 0) },
+  wandern: { name: 'Wandern', ein: 'Tour',    mehr: 'Touren',
+             metrik: m => formatWert('distanz', m.kennzahlen.distanz ?? 0) },
+};
+
+/**
+ * Zweistufige Wochen-Statistik fürs Dashboard.
+ *   Stufe 1: universelle Kopfzeile (Aktivitäten + aktive Tage).
+ *   Stufe 2: pro Modul eine Zeile in Akzentfarbe — nur Module mit Aktivität,
+ *            leere werden ausgeblendet (der Kopf zeigt die Summen ohnehin).
+ * Die Zahlen liefert wochenUebersicht() aus dashboard.js (modulübergreifend,
+ * Node-getestet); hier passiert nur noch die Darstellung.
+ */
+function wochenStatistikHtml() {
+  const u = wochenUebersicht(state);
+
+  const kopf = `<div class="wo-kopf">
+      <div class="wo-stat"><span class="wo-zahl">${u.aktivitaeten}</span><span class="dim">Aktivitäten</span></div>
+      <div class="wo-stat"><span class="wo-zahl">${u.aktiveTage}</span><span class="dim">aktive Tage</span></div>
+    </div>`;
+
+  const zeilen = u.module
+    .filter(m => m.anzahl > 0 && WOCHE_MODUL[m.modul])
+    .map(m => {
+      const cfg = WOCHE_MODUL[m.modul];
+      const zaehlwort = m.anzahl === 1 ? cfg.ein : cfg.mehr;
+      return `<div class="wo-modul" style="--akzent:var(--${m.modul})">
+        <span class="wo-name">${cfg.name}</span>
+        <span class="wo-werte"><b>${m.anzahl}</b> ${zaehlwort} <span class="wo-trenn">·</span> <b>${cfg.metrik(m)}</b></span>
+      </div>`;
+    }).join('');
+
+  const koerper = zeilen ||
+    `<p class="wo-leer">Diese Woche noch nichts eingetragen. Zeit für die erste Einheit. 💪</p>`;
+
+  return `<p class="sheet-abschnitt zwischen">Diese Woche</p>
+    <div class="karte woche-karte">${kopf}<div class="wo-module">${koerper}</div></div>`;
 }
 
 function dashboardHtml() {
@@ -387,15 +408,8 @@ function dashboardHtml() {
     </button>
   </div>`;
 
-  // Wochen-Statistik
-  const w = wochenStatistik();
-  html += `<p class="sheet-abschnitt zwischen">Diese Woche</p>
-    <div class="karte dash-stats">
-      <div class="dash-stat"><span class="ds-zahl">${w.einheiten}</span><span class="dim">Einheiten</span></div>
-      <div class="dash-stat"><span class="ds-zahl">${w.touren}</span><span class="dim">Touren</span></div>
-      <div class="dash-stat"><span class="ds-zahl">${formatZahl0(w.km)}</span><span class="dim">km</span></div>
-      <div class="dash-stat"><span class="ds-zahl">${formatZahl0(w.volumen)}</span><span class="dim">kg bewegt</span></div>
-    </div>`;
+  // Wochen-Statistik (zweistufig: Kopfzeile + Modul-Aufschlüsselung)
+  html += wochenStatistikHtml();
 
   return html;
 }
