@@ -111,6 +111,11 @@ export function importBackup(jsonString) {
   } catch {
     throw new Error('Diese Datei sieht nicht wie ein Backup dieser App aus.');
   }
+  // Kaputte Einzel-Sessions (z.B. aus einem von Hand bearbeiteten Backup) still
+  // rauswerfen, BEVOR migriert wird — so kann ein defekter Datensatz weder die
+  // Migration noch später das UI zum Absturz bringen, ohne das ganze Backup
+  // unbrauchbar zu machen.
+  normalisiereSessions(state);
   return migriere(state);
 }
 
@@ -151,6 +156,50 @@ function pruefeGrundform(state) {
   if (!Array.isArray(state.bibliothek) || !Array.isArray(state.sessions)) {
     throw new Error('Zustand hat nicht die erwartete Form (bibliothek/sessions fehlen).');
   }
+}
+
+/** Ist das ein reines Objekt (kein null, kein Array)? Kleiner Helfer. */
+function istObjekt(x) {
+  return x != null && typeof x === 'object' && !Array.isArray(x);
+}
+
+/**
+ * Kann die App diese Session gefahrlos rendern und aggregieren?
+ * Prüft nur die Struktur, die der restliche Code voraussetzt:
+ *   datum = nicht-leerer String (Datums-Helfer/Sortierung vergleichen Strings),
+ *   segmente = Array, jedes Segment ein Objekt mit eintraege-Array,
+ *   jeder Eintrag ein Objekt, dessen messwerte (falls vorhanden) ein Objekt ist.
+ * Bewusst nicht strenger — es geht ums Verhindern von Abstürzen, nicht ums
+ * Aussortieren inhaltlich fragwürdiger, aber strukturell heiler Daten.
+ */
+function istGueltigeSession(s) {
+  if (!istObjekt(s)) return false;
+  if (typeof s.datum !== 'string' || s.datum === '') return false;
+  if (!Array.isArray(s.segmente)) return false;
+  for (const seg of s.segmente) {
+    if (!istObjekt(seg) || !Array.isArray(seg.eintraege)) return false;
+    for (const e of seg.eintraege) {
+      if (!istObjekt(e)) return false;
+      if (e.messwerte != null && !istObjekt(e.messwerte)) return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Wirft strukturell kaputte Sessions still raus (z.B. aus einem von Hand
+ * bearbeiteten Backup) und behält nur, was die App gefahrlos verarbeiten kann.
+ * Meldet die Anzahl entfernter Sessions in der Konsole. Mutiert state.sessions.
+ */
+export function normalisiereSessions(state) {
+  if (!Array.isArray(state?.sessions)) return state;
+  const vorher = state.sessions.length;
+  state.sessions = state.sessions.filter(istGueltigeSession);
+  const entfernt = vorher - state.sessions.length;
+  if (entfernt > 0) {
+    console.warn(`Import: ${entfernt} kaputte Session(s) übersprungen.`);
+  }
+  return state;
 }
 
 // ============================================================

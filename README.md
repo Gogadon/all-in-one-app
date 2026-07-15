@@ -162,7 +162,7 @@ Historie, Progression und Einstellungen.
 
 ## Tests
 
-149 Tests, alle ohne Browser lauffähig. Sie decken die Rechenlogik ab:
+150 Tests, alle ohne Browser lauffähig. Sie decken die Rechenlogik ab:
 Progression, PR-Erkennung, Zyklus-Berechnung, Zeiträume, Datumsgrenzen,
 Statistik-Aggregation und Challenge-Fortschritt.
 
