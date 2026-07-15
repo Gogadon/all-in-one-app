@@ -203,6 +203,44 @@ test('Rad: leerer Zeitraum zeigt einen Hinweis', async () => {
   assert.ok(html.includes('Keine Touren'));
 });
 
+// ---- Ø-Gewichtung (Statistik) ----
+
+test('Rad: Ø-Gewichtung-Umschalter wechselt zwischen einfachem und gewichtetem Schnitt', async () => {
+  const { rad } = neuesModul();
+  // 10 km @ 20 km/h und 30 km @ 30 km/h — beide „heute", also im Default-Zeitraum
+  for (const [km, tempo] of [['10', '20'], ['30', '30']]) {
+    await rad.actions['rad.neu']();
+    await rad.actions['rad.wert']({ typ: 'distanz' }, { value: km });
+    await rad.actions['rad.wert']({ typ: 'tempo_avg' }, { value: tempo });
+    await rad.actions['rad.fertig']();
+  }
+
+  // Default: einfacher Schnitt (20+30)/2 = 25 km/h, Umschalter ist sichtbar
+  let html = rad.statistikHtml();
+  assert.ok(html.includes('rad.statGewicht'));
+  assert.ok(html.includes('25 km/h'));
+
+  // Umschalten → nach Distanz gewichtet: (20·10 + 30·30)/40 = 27,5 km/h
+  await rad.actions['rad.statGewicht']();
+  html = rad.statistikHtml();
+  assert.ok(html.includes('27,5 km/h'));
+  assert.ok(/class="chip[^"]*aktiv[^"]*stat-gewicht|stat-gewicht[^"]*aktiv/.test(html));
+
+  // Zurückschalten → wieder einfacher Schnitt
+  await rad.actions['rad.statGewicht']();
+  html = rad.statistikHtml();
+  assert.ok(html.includes('25 km/h'));
+});
+
+test('Rad: kein Ø-Umschalter, wenn es keine Ø-Kennzahl gibt', async () => {
+  const { rad } = neuesModul();
+  await rad.actions['rad.neu']();
+  await rad.actions['rad.wert']({ typ: 'distanz' }, { value: '10' });  // nur Summen-Metrik
+  await rad.actions['rad.fertig']();
+  const html = rad.statistikHtml();
+  assert.ok(!html.includes('rad.statGewicht'));
+});
+
 test('Rad: Bearbeiten wechselt in den Heute-Tab und speichert wieder', async () => {
   const { state, rad, tabs } = neuesModulMitTab();
   await rad.actions['rad.neu']();

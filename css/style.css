@@ -603,3 +603,8 @@ body.ohne-navi .nav{display:none}
 .sk-wert{font-family:var(--font-display);font-variant-numeric:tabular-nums;
   font-weight:700;font-size:19px;color:var(--akzent)}
 .sk-label{font-size:11px}
+
+/* Ø-Gewichtung: dezenter Umschalter unter den Kennzahlen */
+.stat-gewicht{display:inline-block;margin:12px 2px 0}
+.stat-gewicht.aktiv{
+  background:var(--surface-2);border-color:var(--akzent);color:var(--akzent)}
