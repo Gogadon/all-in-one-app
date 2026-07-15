@@ -192,6 +192,35 @@ test('Backup: Export → Import Runde; Müll wird sauber abgelehnt', () => {
   assert.throws(() => importBackup('{"foo": 1}'), /nicht wie ein Backup/);
 });
 
+test('Backup: kaputte Sessions werden still rausgeworfen, heile bleiben', () => {
+  const stillWarn = console.warn; console.warn = () => {};   // Konsole ruhig halten
+  try {
+    const gut = neueSession({ datum: '2026-07-04' });
+    addEintrag(addSegment(gut, neuesSegment('akt1')), neuerEintrag({ distanz: 1000 }));
+
+    const backup = {
+      bibliothek: [],
+      sessions: [
+        gut,
+        { datum: 123, segmente: 'kaputt' },          // datum kein String, segmente kein Array
+        null,                                          // gar kein Objekt
+        { datum: '2026-07-05', segmente: [{ eintraege: 'nope' }] }, // eintraege kein Array
+        { datum: '2026-07-06', segmente: [] },         // leere Segmente sind OK
+      ],
+    };
+
+    const zurueck = importBackup(JSON.stringify(backup));
+    // Nur die zwei strukturell heilen Sessions bleiben übrig.
+    assert.equal(zurueck.sessions.length, 2);
+    assert.deepEqual(zurueck.sessions.map(s => s.datum).sort(), ['2026-07-04', '2026-07-06']);
+    // Der heile Datensatz ist unversehrt durchgekommen.
+    assert.equal(zurueck.sessions.find(s => s.datum === '2026-07-04')
+      .segmente[0].eintraege[0].messwerte.distanz, 1000);
+  } finally {
+    console.warn = stillWarn;
+  }
+});
+
 test('Parsen & Formatieren: deutsches Komma, Dauer-Eingabe', () => {
   assert.equal(parseZahl('82,5'), 82.5);
   assert.equal(parseZahl('82.5'), 82.5);
