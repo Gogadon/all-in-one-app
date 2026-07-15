@@ -134,7 +134,7 @@ export function neueAktivitaet({ name, kategorie, messwerte = [], einstellungen 
     kategorie,
     messwerte: [...messwerte],   // welche Typen diese Aktivität nutzt (Reihenfolge = Eingabe-Reihenfolge)
     einstellungen: { ...einstellungen },   // Progression, einarmig, assistiert … (v.a. Kraft)
-    alternativen: [...alternativen],       // [{id, name, einstellungen?}]
+    alternativen: [...alternativen],       // Verweise: [uebungsId, …] (Schema 2 — echte Bibliotheks-Übungen)
   };
 }
 
