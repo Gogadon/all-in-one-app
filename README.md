@@ -163,7 +163,7 @@ Historie, Progression und Einstellungen.
 
 ## Tests
 
-161 Tests, alle ohne Browser lauffähig. Sie decken die Rechenlogik ab:
+166 Tests, alle ohne Browser lauffähig. Sie decken die Rechenlogik ab:
 Progression, PR-Erkennung, Zyklus-Berechnung, Zeiträume, Datumsgrenzen,
 Statistik-Aggregation und Challenge-Fortschritt.
 
@@ -212,7 +212,6 @@ deuten die Module an, der Punkt ist der Nutzer.
 ## Offene Ideen
 
 - Module: Joggen/Laufen
-- Schwimmen: optionale Meter-Umrechnung (Bahnen × Beckenlänge)
 - Dashboard als kompaktes Kachel-Raster, wenn mehr Module dazukommen
 - Teilen vom Dashboard (Wochen-/Monatsstatistik)
 - App-weiter Kalender: Personal Training, geplante Touren

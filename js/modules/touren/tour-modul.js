@@ -335,7 +335,10 @@ export function erstelleTourModul(ctx, config) {
 
   /** Detail-Anzeige einer fertigen Tour (alle Werte schön dargestellt). */
   function tourDetailHtml(akt, mw) {
-    const zeilen = (akt.messwerte ?? []).filter(typ => mw[typ] != null).map(typ => {
+    // Eingetragene Messwerte + abgeleitete (z.B. berechnete Distanz), ohne Dopplung.
+    const typen = [...(akt.messwerte ?? []), ...(config.abgeleitet ?? [])]
+      .filter((t, i, a) => a.indexOf(t) === i);
+    const zeilen = typen.filter(typ => mw[typ] != null).map(typ => {
       const def = MESSWERTE[typ];
       return `<div class="detail-zeile">
         <span class="dim">${esc(def.label)}</span>
@@ -432,6 +435,7 @@ export function erstelleTourModul(ctx, config) {
       else if (def.anzeige === 'distanz') { const n = parseZahl(el.value); wert = n == null ? null : Math.round(n * 1000); }
       else wert = parseZahl(el.value);
       if (wert == null) delete e.messwerte[d.typ]; else e.messwerte[d.typ] = wert;
+      config.ableiten?.(e.messwerte);   // abgeleitete Werte (z.B. Schwimm-Distanz) nachziehen
       await ctx.save();  // kein Render → Fokus bleibt
     },
     async [`${M}.mwPlus`](d) {
@@ -443,7 +447,11 @@ export function erstelleTourModul(ctx, config) {
       const akt = tourAktivitaet();
       akt.messwerte = akt.messwerte.filter(t => t !== d.typ);
       const s = aktuelleTour();
-      if (s) delete s.segmente[0].eintraege[0].messwerte[d.typ];
+      if (s) {
+        const mw = s.segmente[0].eintraege[0].messwerte;
+        delete mw[d.typ];
+        config.ableiten?.(mw);   // z.B. Bahnlänge entfernt → Distanz mit rausnehmen
+      }
       await speichernUndZeigen();
     },
     async [`${M}.fertig`]() {
@@ -512,7 +520,8 @@ export function erstelleTourModul(ctx, config) {
       const akt = findeAktivitaet(S(), s.segmente[0]?.aktivitaetId) ?? tourAktivitaet();
       const mw = werteVon(s);
 
-      const zeilen = (akt.messwerte ?? config.standardMesswerte)
+      const zeilen = [...(akt.messwerte ?? config.standardMesswerte), ...(config.abgeleitet ?? [])]
+        .filter((t, i, a) => a.indexOf(t) === i)
         .filter(typ => typ !== config.hero && mw[typ] != null)   // Hero-Wert ist die große Zahl
         .map(typ => ({
           name: MESSWERTE[typ].label,

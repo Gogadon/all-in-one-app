@@ -107,6 +107,47 @@ test('Schwimmen: Statistik-Ansicht zeigt Umschalter, Einheiten-Zahl und Bahnen',
   assert.ok(html.includes('Bahnen'));
 });
 
+// ---- Meter-Umrechnung über die Bahnlänge (Etappe 2) ----
+
+test('Schwimmen: Bahnlänge berechnet die Distanz (Bahnen × Länge)', async () => {
+  const { state, schwimmen } = neuesModul();
+  await schwimmen.actions['schwimmen.neu']();
+  await schwimmen.actions['schwimmen.wert']({ typ: 'bahnen' }, { value: '20' });
+  await schwimmen.actions['schwimmen.wert']({ typ: 'bahnlaenge' }, { value: '25' });
+  assert.equal(schwimmWerte(state.sessions[0]).distanz, 500);   // 20 × 25 m
+});
+
+test('Schwimmen: ohne Bahnlänge gibt es keine Distanz', async () => {
+  const { state, schwimmen } = neuesModul();
+  await schwimmen.actions['schwimmen.neu']();
+  await schwimmen.actions['schwimmen.wert']({ typ: 'bahnen' }, { value: '20' });
+  assert.equal(schwimmWerte(state.sessions[0]).distanz, undefined);
+});
+
+test('Schwimmen: Änderung von Bahnen/Bahnlänge zieht die Distanz nach', async () => {
+  const { state, schwimmen } = neuesModul();
+  await schwimmen.actions['schwimmen.neu']();
+  await schwimmen.actions['schwimmen.wert']({ typ: 'bahnen' }, { value: '20' });
+  await schwimmen.actions['schwimmen.wert']({ typ: 'bahnlaenge' }, { value: '25' });
+  assert.equal(schwimmWerte(state.sessions[0]).distanz, 500);
+  // Bahnen erhöhen → Distanz neu berechnet
+  await schwimmen.actions['schwimmen.wert']({ typ: 'bahnen' }, { value: '30' });
+  assert.equal(schwimmWerte(state.sessions[0]).distanz, 750);
+  // Bahnlänge leeren → Distanz verschwindet (kein geratener Wert)
+  await schwimmen.actions['schwimmen.wert']({ typ: 'bahnlaenge' }, { value: '' });
+  assert.equal(schwimmWerte(state.sessions[0]).distanz, undefined);
+});
+
+test('Schwimmen: berechnete Distanz erscheint in der Statistik (Meter)', async () => {
+  const { schwimmen } = neuesModul();
+  await schwimmen.actions['schwimmen.neu']();
+  await schwimmen.actions['schwimmen.wert']({ typ: 'bahnen' }, { value: '20' });
+  await schwimmen.actions['schwimmen.wert']({ typ: 'bahnlaenge' }, { value: '25' });
+  await schwimmen.actions['schwimmen.fertig']();
+  const html = schwimmen.statistikHtml();
+  assert.ok(html.includes('500 m'));   // als Meter, nicht km
+});
+
 test('Schwimmen: leerer Zeitraum zeigt einen Hinweis', async () => {
   const { schwimmen } = neuesModul();
   await schwimmen.actions['schwimmen.neu']();

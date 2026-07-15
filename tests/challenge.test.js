@@ -182,3 +182,16 @@ test('Challenge: offene Schwimmeinheit zählt nicht in Schwimm-Größen', () => 
   schwimmEinheit(state, '2026-07-08', 99, { abgeschlossen: false });
   assert.equal(fortschritt(state, { was: 'schwimm_bahnen', zielwert: 200, zeitraum: 'monat' }, HEUTE).ist, 20);
 });
+
+test('Challenge: Schwimm-Meter zählt die berechnete Distanz', () => {
+  const state = leererZustand();
+  const mk = (datum, bahnen, distanz) => {
+    const s = neueSession({ datum }); s.modul = 'schwimmen'; s.abgeschlossen = true;
+    const seg = addSegment(s, neuesSegment('x')); seg.erledigt = true;
+    addEintrag(seg, neuerEintrag({ bahnen, distanz }));   // distanz = Bahnen × Bahnlänge
+    state.sessions.push(s);
+  };
+  mk('2026-07-06', 20, 500);
+  mk('2026-07-08', 30, 750);
+  assert.equal(fortschritt(state, { was: 'schwimm_meter', zielwert: 5000, zeitraum: 'monat' }, HEUTE).ist, 1250);
+});

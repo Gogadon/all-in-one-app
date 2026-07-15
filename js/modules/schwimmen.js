@@ -27,13 +27,28 @@ const CONFIG = {
   akzentVar: '--schwimmen',
 
   standardMesswerte: ['dauer', 'bahnen', 'kalorien', 'puls_avg'],
-  optionalMesswerte: ['puls_max'],
+  optionalMesswerte: ['bahnlaenge', 'puls_max'],
 
   hero: 'bahnen',
   heroEinheit: 'Bahnen',
   heroFormat: v => formatZahl(v, 0),        // Bahnen sind eine reine Anzahl
   dauerModus: 'minSek',                     // eine Einheit dauert Minuten: Min:Sek
   zeileNeben: ['bahnen', 'dauer'],          // kompakte Verlaufszeile
+
+  // Abgeleitete (berechnete, nicht eingegebene) Werte: die Distanz in Metern.
+  // Bekommt kein Eingabefeld, erscheint aber in Detail/Share/Statistik.
+  abgeleitet: ['distanz'],
+
+  // Kennt man die Bahnlänge, wird die Gesamt-Distanz berechnet:
+  //   Distanz (m) = Bahnen × Bahnlänge (m). Fehlt eine der beiden, gibt es
+  //   keine Distanz (kein geratener Wert). Distanz ist intern immer in Metern.
+  ableiten: mw => {
+    if (typeof mw.bahnen === 'number' && typeof mw.bahnlaenge === 'number') {
+      mw.distanz = mw.bahnen * mw.bahnlaenge;
+    } else {
+      delete mw.distanz;
+    }
+  },
 
   // Kopf-Statistik (Start-Tab): Bahnen gesamt + Gesamt-Schwimmzeit statt km/hm.
   kopfStat: [
@@ -46,7 +61,7 @@ const CONFIG = {
   leerZeitraumText: 'Keine Einheiten in diesem Zeitraum. Blätter zurück oder wechsle den Zeitraum. 🏊',
 
   platzhalter: {
-    bahnen: '20', kalorien: '350', puls_avg: '120', puls_max: '120',
+    bahnen: '20', bahnlaenge: '25', kalorien: '350', puls_avg: '120', puls_max: '120',
   },
 
   rekorde: [

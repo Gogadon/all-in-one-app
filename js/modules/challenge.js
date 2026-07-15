@@ -52,6 +52,10 @@ export const GROESSEN = {
     label: 'Schwimm-Bahnen', einheit: 'Bahnen', modul: 'schwimmen',
     wert: s => (s.modul === 'schwimmen' && s.abgeschlossen) ? (tourMw(s).bahnen ?? 0) : 0,
   },
+  schwimm_meter: {
+    label: 'Schwimm-Meter', einheit: 'm', modul: 'schwimmen',
+    wert: s => (s.modul === 'schwimmen' && s.abgeschlossen) ? (tourMw(s).distanz ?? 0) : 0,
+  },
   schwimm_einheiten: {
     label: 'Anzahl Schwimmeinheiten', einheit: 'Einheiten', modul: 'schwimmen',
     wert: s => (s.modul === 'schwimmen' && s.abgeschlossen) ? 1 : 0,
