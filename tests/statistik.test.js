@@ -186,6 +186,23 @@ test('Seam: gewichtGleich ist der Default', () => {
   assert.deepEqual(default_.kennzahlen, explizit.kennzahlen);
 });
 
+test('Seam: Ø-Bahnlänge gewichtet nach Bahnen = Gesamt-Meter / Gesamt-Bahnen', () => {
+  const state = leererState();
+  // 5 Bahnen à 10 m (kleines Becken) + 50 Bahnen à 25 m (großes Becken)
+  macheTour(state, { modul: 'schwimmen', datum: '2026-07-06', mw: { bahnen: 5, bahnlaenge: 10, distanz: 50 } });
+  macheTour(state, { modul: 'schwimmen', datum: '2026-07-12', mw: { bahnen: 50, bahnlaenge: 25, distanz: 1250 } });
+
+  // Einfach: (10 + 25) / 2 = 17,5 m — als hätte man beide Becken gleich viel genutzt.
+  const einfach = zeitraumStatistik(state, 'schwimmen', 'woche', '2026-07-08');
+  assert.equal(einfach.kennzahlen.bahnlaenge, 17.5);
+
+  // Nach Bahnen gewichtet: (10·5 + 25·50) / 55 = 1300/55 ≈ 23,6 m.
+  const gewichtet = zeitraumStatistik(state, 'schwimmen', 'woche', '2026-07-08', { gewicht: gewichtNachGroesse });
+  assert.equal(gewichtet.kennzahlen.bahnlaenge, 1300 / 55);
+  // … und das ist exakt Gesamt-Meter ÷ Gesamt-Bahnen.
+  assert.equal(gewichtet.kennzahlen.bahnlaenge, gewichtet.kennzahlen.distanz / gewichtet.kennzahlen.bahnen);
+});
+
 // ============================================================
 // aggregiereTouren direkt (untere Ebene)
 // ============================================================

@@ -48,17 +48,20 @@ export function gewichtGleich(/* typ, tourKennzahlen */) {
 }
 
 /**
- * VORSCHAU / später — noch NICHT in der UI aktiv.
  * Längere/größere Touren stärker gewichten:
- *   Ø-Geschw. → nach Distanz (eine 40-km-Runde prägt den Schnitt mehr als 5 km)
- *   Ø-Puls    → nach Dauer   (zeitlich länger = mehr Herzschläge im Mittel)
- * Fehlt die Gewichts-Basis (kein distanz/dauer eingetragen), zählt die Tour
- * mit Gewicht 0 — sie fließt dann NICHT in den gewichteten Schnitt ein.
+ *   Ø-Geschw.  → nach Distanz (eine 40-km-Runde prägt den Schnitt mehr als 5 km)
+ *   Ø-Puls     → nach Dauer   (zeitlich länger = mehr Herzschläge im Mittel)
+ *   Ø-Bahnlänge → nach Bahnen (mehr Bahnen im 25-m-Becken prägen den Schnitt
+ *                mehr als 5 Bahnen im 10-m-Becken). Ergibt exakt
+ *                Gesamt-Meter ÷ Gesamt-Bahnen — die ehrliche Ø-Bahnlänge.
+ * Fehlt die Gewichts-Basis (kein distanz/dauer/bahnen eingetragen), zählt die
+ * Tour mit Gewicht 0 — sie fließt dann NICHT in den gewichteten Schnitt ein.
  * Das ist eine bewusste Entscheidung: ohne Basis kein sinnvolles Gewicht.
  */
 export function gewichtNachGroesse(typ, k) {
   if (typ === 'tempo_avg' || typ === 'tempo_max') return k.distanz ?? 0;
   if (typ === 'puls_avg' || typ === 'watt_avg')   return k.dauer ?? 0;
+  if (typ === 'bahnlaenge')                        return k.bahnen ?? 0;
   return 1;
 }
 
