@@ -29,8 +29,8 @@ import {
   planFuer, erstellePlan, addEinheit, benenneEinheitUm, loescheEinheit,
   einheitenBibliothek, findeEinheit,
   addAktivitaetZuEinheit, entferneAktivitaetAusEinheit, verschiebeAktivitaetInEinheit,
-  zyklusEinheiten, addZuZyklus, entferneAusZyklus, verschiebeImZyklus, setzePosition, setzeAnker,
-  naechsteEinheit, schalteWeiter, sessionAusEinheit, aktuelleEinheit,
+  zyklusEinheiten, addZuZyklus, entferneAusZyklus, verschiebeImZyklus, setzeAnker,
+  naechsteEinheit, sessionAusEinheit, aktuelleEinheit,
 } from '../core/plan.js';
 import { sparkline, balken, trend } from '../ui/charts.js';
 import { teileKarte } from '../ui/share.js';

@@ -21,8 +21,8 @@ import {
   planFuer, erstellePlan, entfernePlan,
   addEinheit, benenneEinheitUm, loescheEinheit, einheitenBibliothek, findeEinheit,
   addAktivitaetZuEinheit, entferneAktivitaetAusEinheit, verschiebeAktivitaetInEinheit,
-  zyklusEinheiten, addZuZyklus, entferneAusZyklus, verschiebeImZyklus, setzePosition,
-  naechsteEinheit, schalteWeiter, sessionAusEinheit,
+  zyklusEinheiten, addZuZyklus, entferneAusZyklus, verschiebeImZyklus,
+  naechsteEinheit, sessionAusEinheit,
 } from '../js/core/plan.js';
 
 // ==================================================================
@@ -221,7 +221,7 @@ test('Plan → Session: Brücke füllt Segmente vor, schaltet aber NICHT weiter'
 
 test('Plan + Bibliothek überleben die Backup-Runde', () => {
   const { state, push } = baueKraftWelt();
-  schalteWeiter(state, 'kraft');
+  state.plaene.kraft.position = 1;   // Cache-Wert setzen; der Test prüft die Backup-Runde
   const zurueck = importBackup(exportBackup(state));
   assert.equal(zurueck.plaene.kraft.position, 1);
   assert.equal(zurueck.plaene.kraft.einheiten.length, 3);

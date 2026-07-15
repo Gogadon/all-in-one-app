@@ -180,20 +180,6 @@ export function verschiebeImZyklus(state, modul, index, richtung) {
 }
 
 /**
- * ⚠️ LEGACY — NICHT MEHR VERWENDEN.
- * Setzt nur den Cache-Wert `plan.position`. Da die Position dynamisch aus dem
- * Anker berechnet wird, überschreibt aktuelleEinheit() diesen Wert beim
- * nächsten Rendern sofort wieder. Für „Heute korrigieren" gibt es setzeAnker(),
- * das dauerhaft wirkt. Diese Funktion bleibt nur, um alte Importe nicht zu
- * brechen; sie hat keinen echten Effekt mehr auf die angezeigte Position.
- */
-export function setzePosition(state, modul, index) {
-  const plan = mussPlan(state, modul);
-  if (plan.zyklus.length === 0) return;
-  plan.position = ((index % plan.zyklus.length) + plan.zyklus.length) % plan.zyklus.length;
-}
-
-/**
  * „Heute korrigieren": verankert den gewählten Zyklus-Index auf HEUTE.
  * Ab heute rechnet die dynamische Berechnung von diesem Anker weiter —
  * dadurch bleibt die manuelle Korrektur bestehen (im Gegensatz zu
@@ -208,21 +194,13 @@ export function setzeAnker(state, modul, index, heute = heuteIso()) {
 }
 
 // ------------------------------------------------------------
-// Zyklus: nächste Einheit, weiterschalten, Plan → Session
+// Zyklus: nächste Einheit, Plan → Session
 // ------------------------------------------------------------
 
 /** Die als Nächstes anstehende Einheit — null ohne Plan/Zyklus. */
 export function naechsteEinheit(state, modul) {
   // Nutzt jetzt die dynamische Positionsberechnung (Anker + Verlauf).
   return aktuelleEinheit(state, modul);
-}
-
-/** Zyklus eins vorschalten (nach absolvierter ODER übersprungener Einheit). */
-export function schalteWeiter(state, modul) {
-  const plan = mussPlan(state, modul);
-  if (plan.zyklus.length === 0) return null;
-  plan.position = (plan.position + 1) % plan.zyklus.length;
-  return naechsteEinheit(state, modul);
 }
 
 /**
