@@ -73,6 +73,11 @@ export const MESSWERTE = Object.freeze({
     agg: 'summe', summierbar: true,
     schritt: 100, dezimal: 0, optional: true,
   }),
+  bahnen: Object.freeze({
+    label: 'Bahnen', einheit: 'Bahnen',
+    agg: 'summe', summierbar: true,
+    schritt: 1, dezimal: 0,
+  }),
   tempo_avg: Object.freeze({
     label: 'Ø-Geschw.', kurz: 'km/h', einheit: 'km/h',
     agg: 'mittel', summierbar: false,

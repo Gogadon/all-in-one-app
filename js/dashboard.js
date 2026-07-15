@@ -40,7 +40,7 @@ import { sessionVolumenErledigt } from './modules/kraft.js';
 // (liest nur fremde) und ist deshalb hier bewusst NICHT dabei; ob es als
 // vierte Zeile mit rein soll, wird in Etappe 2 entschieden. Schwimmen o.Ä.
 // später = eine Zeile hier ergänzen.
-export const DASHBOARD_MODULE = Object.freeze(['kraft', 'rad', 'wandern']);
+export const DASHBOARD_MODULE = Object.freeze(['kraft', 'rad', 'wandern', 'schwimmen']);
 
 /**
  * Gehört die Session zu diesem Modul? Alt-Sessions ohne `modul`-Feld zählen

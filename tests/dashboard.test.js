@@ -66,12 +66,12 @@ test('leerer Zustand: alles 0, alle Module vorhanden und leer', () => {
   assert.equal(u.bis, '2026-07-13');   // exklusiv
   assert.equal(u.aktivitaeten, 0);
   assert.equal(u.aktiveTage, 0);
-  assert.deepEqual(u.module.map(m => m.modul), ['kraft', 'rad', 'wandern']);
+  assert.deepEqual(u.module.map(m => m.modul), ['kraft', 'rad', 'wandern', 'schwimmen']);
   for (const m of u.module) assert.equal(m.anzahl, 0);
 });
 
-test('Modul-Reihenfolge ist stabil (kraft, rad, wandern)', () => {
-  assert.deepEqual([...DASHBOARD_MODULE], ['kraft', 'rad', 'wandern']);
+test('Modul-Reihenfolge ist stabil (kraft, rad, wandern, schwimmen)', () => {
+  assert.deepEqual([...DASHBOARD_MODULE], ['kraft', 'rad', 'wandern', 'schwimmen']);
   const u = wochenUebersicht(leererState(), MI);
   assert.deepEqual(u.module.map(m => m.modul), [...DASHBOARD_MODULE]);
 });
