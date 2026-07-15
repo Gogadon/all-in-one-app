@@ -20,7 +20,7 @@ import {
   addSegment, addEintrag, findeAktivitaet,
   zeitraum, verschiebeZeitraum, sortiereNeuesteZuerst, istWertbareTour,
 } from '../../core/model.js';
-import { zeitraumStatistik, zeitraumLabel } from '../../core/statistik.js';
+import { zeitraumStatistik, zeitraumLabel, gewichtNachGroesse } from '../../core/statistik.js';
 import { addAktivitaet } from '../../core/library.js';
 import { bestaetige, hinweis } from '../../ui/components.js';
 import { teileKarte } from '../../ui/share.js';
@@ -147,6 +147,7 @@ export function erstelleTourModul(ctx, config) {
   let statArt = 'monat';       // 'woche' | 'monat' | 'jahr'
   let statAnker = heuteIso();
   let alleTourenAuf = false;    // Touren-Tab: ganze Liste aus-/eingeklappt
+  let statGewichtet = false;    // Statistik: Ø-Kennzahlen nach Größe gewichten
 
   async function speichernUndZeigen() { await ctx.save(); ctx.render(); }
 
@@ -338,7 +339,8 @@ export function erstelleTourModul(ctx, config) {
   const PFEIL_RECHTS = '<svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>';
 
   function statistikHtml() {
-    const r = zeitraumStatistik(S(), M, statArt, statAnker);
+    const r = zeitraumStatistik(S(), M, statArt, statAnker,
+      statGewichtet ? { gewicht: gewichtNachGroesse } : {});
     const aktuellerStart = zeitraum(statArt, heuteIso()).von;
     const istAktuell = r.von >= aktuellerStart;
 
@@ -368,6 +370,13 @@ export function erstelleTourModul(ctx, config) {
         <span class="sk-label dim">${esc(MESSWERTE[typ].label)}</span>
       </div>`).join('')
     }</div>`;
+
+    // Umschalter nur zeigen, wenn es überhaupt eine Ø-Kennzahl gibt, die
+    // sich gewichten lässt (registry-getrieben, kein Metrik-Sonderfall).
+    const hatMittel = Object.keys(r.kennzahlen).some(typ => MESSWERTE[typ].agg === 'mittel');
+    if (hatMittel) {
+      html += `<button class="chip klein stat-gewicht ${statGewichtet ? 'aktiv' : ''}" data-action="${M}.statGewicht" aria-pressed="${statGewichtet}">Ø nach Größe gewichten</button>`;
+    }
 
     html += `<p class="sheet-abschnitt zwischen">${esc(config.nomenMehrzahl)}</p>`;
     html += r.sessions.map(t => tourZeileHtml(t)).join('');
@@ -478,6 +487,10 @@ export function erstelleTourModul(ctx, config) {
     },
     [`${M}.alleTouren`]() {
       alleTourenAuf = !alleTourenAuf;
+      ctx.render();
+    },
+    [`${M}.statGewicht`]() {
+      statGewichtet = !statGewichtet;
       ctx.render();
     },
     async [`${M}.teilen`](d) {
