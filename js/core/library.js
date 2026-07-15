@@ -154,7 +154,7 @@ export function vorschlagMesswerte(kategorie) {
     case 'kraft':     return ['gewicht', 'wdh'];
     case 'rad':       return ['distanz', 'hoehenmeter', 'dauer', 'puls_avg', 'puls_max'];
     case 'wandern':   return ['distanz', 'hoehenmeter', 'dauer', 'puls_avg', 'puls_max'];
-    case 'schwimmen': return ['dauer', 'puls_avg', 'puls_max']; // Distanz kommt in Etappe 3 dazu
+    case 'schwimmen': return ['bahnen', 'dauer', 'puls_avg', 'puls_max']; // Meter-Umrechnung (Bahnen × Länge) folgt später
     case 'sonstiges': return ['dauer', 'puls_avg', 'puls_max']; // Cardio: Zeit, Ø-Puls, Max-Puls
     default:          return ['dauer'];
   }

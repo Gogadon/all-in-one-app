@@ -48,6 +48,18 @@ export const GROESSEN = {
     label: 'Anzahl Wanderungen', einheit: 'Wanderungen', modul: 'wandern',
     wert: s => (s.modul === 'wandern' && s.abgeschlossen) ? 1 : 0,
   },
+  schwimm_bahnen: {
+    label: 'Schwimm-Bahnen', einheit: 'Bahnen', modul: 'schwimmen',
+    wert: s => (s.modul === 'schwimmen' && s.abgeschlossen) ? (tourMw(s).bahnen ?? 0) : 0,
+  },
+  schwimm_meter: {
+    label: 'Schwimm-Meter', einheit: 'm', modul: 'schwimmen',
+    wert: s => (s.modul === 'schwimmen' && s.abgeschlossen) ? (tourMw(s).distanz ?? 0) : 0,
+  },
+  schwimm_einheiten: {
+    label: 'Anzahl Schwimmeinheiten', einheit: 'Einheiten', modul: 'schwimmen',
+    wert: s => (s.modul === 'schwimmen' && s.abgeschlossen) ? 1 : 0,
+  },
   kraft_volumen: {
     label: 'Kraft-Volumen', einheit: 'kg', modul: 'kraft',
     wert: s => (s.modul ?? 'kraft') === 'kraft' ? sessionVolumenErledigt(s) : 0,

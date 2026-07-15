@@ -58,14 +58,15 @@ export function werteVon(session) {
 /** Summen/Kennzahlen über alle (abgeschlossenen) Touren — für die Kopf-Statistik. */
 export function statistikFuer(state, config) {
   const touren = tourenFuer(state, config).filter(istWertbareTour);
-  let distanz = 0, dauer = 0, hoehen = 0;
+  let distanz = 0, dauer = 0, hoehen = 0, bahnen = 0;
   for (const s of touren) {
     const mw = werteVon(s);
     distanz += mw.distanz ?? 0;
     dauer += mw.dauer ?? 0;
     hoehen += mw.hoehenmeter ?? 0;
+    bahnen += mw.bahnen ?? 0;
   }
-  return { anzahl: touren.length, distanz, dauer, hoehen };
+  return { anzahl: touren.length, distanz, dauer, hoehen, bahnen };
 }
 
 /** Highlights einer Tour: persönliche Rekorde (aus config.rekorde). */
@@ -141,6 +142,20 @@ export function erstelleTourModul(ctx, config) {
   const parseDauer = (str) => parseDauerModus(str, config.dauerModus);
   const dauerInput = (sek) => dauerInputModus(sek, config.dauerModus);
 
+  // Hero-Zahl formatieren. Default: Meter → km (Rad/Wandern). Module mit einem
+  // anderen Hero (z.B. Schwimmen: Bahnen als reine Anzahl) überschreiben das
+  // per config.heroFormat. Bekommt den Rohwert, gibt die reine Zahl als Text
+  // zurück (die Einheit hängt config.heroEinheit separat dran).
+  const heroFormat = config.heroFormat ?? (roh => formatZahl(roh / 1000, 1));
+
+  // Kopf-Statistik-Karte (Start-Tab): zwei Kennwerte neben der Anzahl. Default
+  // ist Rad/Wandern (km gesamt + Höhenmeter); andere Module liefern eigene
+  // Zellen über config.kopfStat. Jede Zelle: { zahl:(stat)=>Text, label }.
+  const kopfStat = config.kopfStat ?? [
+    { zahl: st => formatZahl(st.distanz / 1000, 0), label: 'km gesamt' },
+    { zahl: st => formatZahl(st.hoehen, 0),         label: 'Höhenmeter' },
+  ];
+
   // UI-Zustand (nicht persistiert)
   let offeneTour = null;
   const detailOffen = new Set();
@@ -190,8 +205,7 @@ export function erstelleTourModul(ctx, config) {
       html += `<div class="karte anim stat-karte">
         <div class="stat-3">
           <div><span class="stat-zahl">${stat.anzahl}</span><span class="dim">${esc(config.nomenMehrzahl)}</span></div>
-          <div><span class="stat-zahl">${formatZahl(stat.distanz / 1000, 0)}</span><span class="dim">km gesamt</span></div>
-          <div><span class="stat-zahl">${formatZahl(stat.hoehen, 0)}</span><span class="dim">Höhenmeter</span></div>
+          ${kopfStat.map(c => `<div><span class="stat-zahl">${esc(c.zahl(stat))}</span><span class="dim">${esc(c.label)}</span></div>`).join('')}
         </div>
       </div>`;
     }
@@ -244,7 +258,7 @@ export function erstelleTourModul(ctx, config) {
     const mw = e.messwerte;
 
     const heroRoh = mw[config.hero];
-    const heroText = heroRoh != null ? formatZahl(heroRoh / 1000, 1) : '0';
+    const heroText = heroRoh != null ? heroFormat(heroRoh) : '0';
 
     let html = `<div class="session-kopf anim">
       <div>
@@ -321,7 +335,10 @@ export function erstelleTourModul(ctx, config) {
 
   /** Detail-Anzeige einer fertigen Tour (alle Werte schön dargestellt). */
   function tourDetailHtml(akt, mw) {
-    const zeilen = (akt.messwerte ?? []).filter(typ => mw[typ] != null).map(typ => {
+    // Eingetragene Messwerte + abgeleitete (z.B. berechnete Distanz), ohne Dopplung.
+    const typen = [...(akt.messwerte ?? []), ...(config.abgeleitet ?? [])]
+      .filter((t, i, a) => a.indexOf(t) === i);
+    const zeilen = typen.filter(typ => mw[typ] != null).map(typ => {
       const def = MESSWERTE[typ];
       return `<div class="detail-zeile">
         <span class="dim">${esc(def.label)}</span>
@@ -418,6 +435,7 @@ export function erstelleTourModul(ctx, config) {
       else if (def.anzeige === 'distanz') { const n = parseZahl(el.value); wert = n == null ? null : Math.round(n * 1000); }
       else wert = parseZahl(el.value);
       if (wert == null) delete e.messwerte[d.typ]; else e.messwerte[d.typ] = wert;
+      config.ableiten?.(e.messwerte);   // abgeleitete Werte (z.B. Schwimm-Distanz) nachziehen
       await ctx.save();  // kein Render → Fokus bleibt
     },
     async [`${M}.mwPlus`](d) {
@@ -429,7 +447,11 @@ export function erstelleTourModul(ctx, config) {
       const akt = tourAktivitaet();
       akt.messwerte = akt.messwerte.filter(t => t !== d.typ);
       const s = aktuelleTour();
-      if (s) delete s.segmente[0].eintraege[0].messwerte[d.typ];
+      if (s) {
+        const mw = s.segmente[0].eintraege[0].messwerte;
+        delete mw[d.typ];
+        config.ableiten?.(mw);   // z.B. Bahnlänge entfernt → Distanz mit rausnehmen
+      }
       await speichernUndZeigen();
     },
     async [`${M}.fertig`]() {
@@ -498,14 +520,15 @@ export function erstelleTourModul(ctx, config) {
       const akt = findeAktivitaet(S(), s.segmente[0]?.aktivitaetId) ?? tourAktivitaet();
       const mw = werteVon(s);
 
-      const zeilen = (akt.messwerte ?? config.standardMesswerte)
+      const zeilen = [...(akt.messwerte ?? config.standardMesswerte), ...(config.abgeleitet ?? [])]
+        .filter((t, i, a) => a.indexOf(t) === i)
         .filter(typ => typ !== config.hero && mw[typ] != null)   // Hero-Wert ist die große Zahl
         .map(typ => ({
           name: MESSWERTE[typ].label,
           detail: formatWert(typ, mw[typ], { kategorie: M }),
         }));
 
-      const heroText = mw[config.hero] != null ? `${formatZahl(mw[config.hero] / 1000, 1)} ${config.heroEinheit}` : '–';
+      const heroText = mw[config.hero] != null ? `${heroFormat(mw[config.hero])} ${config.heroEinheit}` : '–';
       const hl = highlightsFuer(S(), config, s);
 
       const rueckblick = [];

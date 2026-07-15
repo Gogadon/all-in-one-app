@@ -386,6 +386,7 @@ h1,h2,h3,.num{font-family:var(--font-display);letter-spacing:-.02em}
 /* ===== Rad-Modul ===== */
 .eyebrow .pip.rad{background:var(--rad);box-shadow:0 0 10px var(--rad)}
 .eyebrow .pip.wandern{background:var(--wandern);box-shadow:0 0 10px var(--wandern)}
+.eyebrow .pip.schwimmen{background:var(--schwimmen);box-shadow:0 0 10px var(--schwimmen)}
 .stat-karte{padding:16px}
 .stat-3{display:flex;justify-content:space-between;text-align:center}
 .stat-3>div{display:flex;flex-direction:column;gap:2px;flex:1}
@@ -444,6 +445,7 @@ h1,h2,h3,.num{font-family:var(--font-display);letter-spacing:-.02em}
 .modul-kachel.kraft .mk-icon{color:var(--kraft);background:rgba(205,253,52,.14)}
 .modul-kachel.rad .mk-icon{color:var(--rad);background:rgba(55,215,244,.14)}
 .modul-kachel.wandern .mk-icon{color:var(--wandern);background:rgba(252,180,75,.14)}
+.modul-kachel.schwimmen .mk-icon{color:var(--schwimmen);background:rgba(167,139,250,.14)}
 .modul-kachel.challenge .mk-icon{color:var(--challenge);background:rgba(255,107,157,.14)}
 .modul-kachel .mk-label{font-family:var(--font-display);font-weight:800;font-size:18px;color:var(--text)}
 .modul-kachel .mk-status{font-size:12.5px;color:var(--dim);line-height:1.35}

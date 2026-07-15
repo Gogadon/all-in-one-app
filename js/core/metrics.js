@@ -73,6 +73,16 @@ export const MESSWERTE = Object.freeze({
     agg: 'summe', summierbar: true,
     schritt: 100, dezimal: 0, optional: true,
   }),
+  bahnen: Object.freeze({
+    label: 'Bahnen', einheit: 'Bahnen',
+    agg: 'summe', summierbar: true,
+    schritt: 1, dezimal: 0,
+  }),
+  bahnlaenge: Object.freeze({
+    label: 'Bahnlänge', einheit: 'm',   // Meter pro Bahn — Basis für die Distanz-Umrechnung
+    agg: 'mittel', summierbar: false,
+    schritt: 5, dezimal: 0, optional: true,
+  }),
   tempo_avg: Object.freeze({
     label: 'Ø-Geschw.', kurz: 'km/h', einheit: 'km/h',
     agg: 'mittel', summierbar: false,

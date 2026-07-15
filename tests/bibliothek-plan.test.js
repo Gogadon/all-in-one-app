@@ -108,7 +108,7 @@ test('Bibliothek: Suche und Kategorie-Vorschläge', () => {
   assert.equal(sucheAktivitaet(state, 'bank').length, 2);
   assert.equal(sucheAktivitaet(state, 'BIKE').length, 1);
   assert.deepEqual(sucheAktivitaet(state, '  '), []);
-  assert.deepEqual(vorschlagMesswerte('schwimmen'), ['dauer', 'puls_avg', 'puls_max']);
+  assert.deepEqual(vorschlagMesswerte('schwimmen'), ['bahnen', 'dauer', 'puls_avg', 'puls_max']);
 });
 
 // ==================================================================

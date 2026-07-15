@@ -17,6 +17,7 @@ import {
 } from './modules/kraft.js';
 import { erstelleRadModul, MODUL as RAD, tourStatistik } from './modules/rad.js';
 import { erstelleWanderModul, MODUL as WANDERN, wanderStatistik } from './modules/wandern.js';
+import { erstelleSchwimmModul, MODUL as SCHWIMMEN, schwimmStatistik } from './modules/schwimmen.js';
 import { erstelleChallengeModul, MODUL as CHALLENGE, fortschritt } from './modules/challenge.js';
 import { wochenUebersicht } from './dashboard.js';
 import { wochenStreifen, monatsGitter, tagDetail } from './kalender.js';
@@ -60,6 +61,7 @@ const ctx = {
 const kraft = erstelleKraftModul(ctx);
 const rad = erstelleRadModul(ctx);
 const wandern = erstelleWanderModul(ctx);
+const schwimmen = erstelleSchwimmModul(ctx);
 const challenge = erstelleChallengeModul(ctx);
 
 // Welches Modul zeigt der Heute-/Verlauf-Tab gerade? (Plan bleibt Kraft.)
@@ -67,14 +69,18 @@ let aktivesModul = KRAFT;
 
 // Kalender-Planung: welche Module planbar sind (Challenge = Auswertung, kein Tun)
 // und ihre Anzeigenamen.
-const MODUL_LABEL = { [KRAFT]: 'Kraft', [RAD]: 'Rad', [WANDERN]: 'Wandern', [CHALLENGE]: 'Challenge' };
-const PLANBARE_MODULE = [KRAFT, RAD, WANDERN];
+const MODUL_LABEL = { [KRAFT]: 'Kraft', [RAD]: 'Rad', [WANDERN]: 'Wandern', [SCHWIMMEN]: 'Schwimmen', [CHALLENGE]: 'Challenge' };
+const PLANBARE_MODULE = [KRAFT, RAD, WANDERN, SCHWIMMEN];
+// Module, die über die gemeinsame Touren-Fabrik laufen (spontanes Loggen,
+// „Heute" = Liste, Verlauf = Statistik). Schwimmen zählt in Einheiten.
+const TOUREN_MODULE = [RAD, WANDERN, SCHWIMMEN];
 
 // Line-Icons (stroke, viewBox 0 0 24 24) für die Dashboard-Kacheln.
 const MODUL_ICON = {
   [KRAFT]: '<svg viewBox="0 0 24 24"><path d="M3 10v4M6 8v8M18 8v8M21 10v4M6 12h12"/></svg>',
   [RAD]: '<svg viewBox="0 0 24 24"><circle cx="6" cy="16.5" r="3.3"/><circle cx="18" cy="16.5" r="3.3"/><path d="M6 16.5l5-8 7 8M11 8.5h5"/></svg>',
   [WANDERN]: '<svg viewBox="0 0 24 24"><path d="M3 19h18M6 19l4-6 3 4M12.5 19l4-7 4.5 7"/></svg>',
+  [SCHWIMMEN]: '<svg viewBox="0 0 24 24"><path d="M2 8c2 0 2 2 4 2s2-2 4-2 2 2 4 2 2-2 4-2 2 2 4 2M2 14c2 0 2 2 4 2s2-2 4-2 2 2 4 2 2-2 4-2 2 2 4 2"/></svg>',
   [CHALLENGE]: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/></svg>',
 };
 
@@ -137,6 +143,7 @@ const actions = {
   ...kraft.actions,
   ...rad.actions,
   ...wandern.actions,
+  ...schwimmen.actions,
   ...challenge.actions,
 };
 
@@ -200,6 +207,7 @@ function navHtml() {
     [KRAFT]:     ['dashboard', 'heute', 'plan', 'verlauf'],
     [RAD]:       ['dashboard', 'heute', 'verlauf'],
     [WANDERN]:   ['dashboard', 'heute', 'verlauf'],
+    [SCHWIMMEN]: ['dashboard', 'heute', 'verlauf'],
     [CHALLENGE]: ['dashboard', 'heute'],
   };
   const erlaubt = modulTabs[aktivesModul] ?? ['dashboard', 'heute'];
@@ -208,13 +216,14 @@ function navHtml() {
   // Rad/Wandern: „Heute" → „Touren" (der Tab ist die Tour-Übersicht mit
   // Knopf zum Neu-Eintragen; „Heute" wäre irreführend, da man auch ältere
   // Touren sieht).
-  const heisstTouren = aktivesModul === RAD || aktivesModul === WANDERN;
+  const heisstTouren = TOUREN_MODULE.includes(aktivesModul);
   const labelFuer = (t) => {
-    // Rad/Wandern: der Verlauf-Tab ist die Statistik-Ansicht.
+    // Rad/Wandern/Schwimmen: der Verlauf-Tab ist die Statistik-Ansicht.
     if (t.id === 'verlauf' && heisstTouren) return 'Statistik';
     if (t.id !== 'heute') return t.label;
     if (aktivesModul === CHALLENGE) return 'Ziele';
-    if (heisstTouren) return 'Touren';
+    // Schwimmen zählt in Einheiten, Rad/Wandern in Touren.
+    if (heisstTouren) return aktivesModul === SCHWIMMEN ? 'Einheiten' : 'Touren';
     return t.label;
   };
 
@@ -252,6 +261,10 @@ function verlaufHtml() {
   // Wandern: eigene Statistik-Ansicht
   if (aktivesModul === WANDERN) {
     return wandern.statistikHtml();
+  }
+  // Schwimmen: eigene Statistik-Ansicht
+  if (aktivesModul === SCHWIMMEN) {
+    return schwimmen.statistikHtml();
   }
 
   // Kraft: Feed + Fortschritt wie gehabt
@@ -373,6 +386,8 @@ const WOCHE_MODUL = {
              metrik: m => formatWert('distanz', m.kennzahlen.distanz ?? 0) },
   wandern: { name: 'Wandern', ein: 'Tour',    mehr: 'Touren',
              metrik: m => formatWert('distanz', m.kennzahlen.distanz ?? 0) },
+  schwimmen: { name: 'Schwimmen', ein: 'Einheit', mehr: 'Einheiten',
+             metrik: m => `${formatZahl0(m.kennzahlen.bahnen ?? 0)} Bahnen` },
 };
 
 /**
@@ -587,6 +602,8 @@ function dashboardHtml() {
   const radStatus = radStat.anzahl > 0 ? `${radStat.anzahl} Touren · ${Math.round(radStat.distanz / 1000)} km` : 'Noch keine Tour';
   const wanderStat = wanderStatistik(state);
   const wanderStatus = wanderStat.anzahl > 0 ? `${wanderStat.anzahl} Touren · ${Math.round(wanderStat.distanz / 1000)} km` : 'Noch keine Tour';
+  const schwimmStat = schwimmStatistik(state);
+  const schwimmStatus = schwimmStat.anzahl > 0 ? `${schwimmStat.anzahl} Einheiten · ${schwimmStat.bahnen} Bahnen` : 'Noch keine Einheit';
   const chStatus = (() => {
     const ziele = state.challenges ?? [];
     if (!ziele.length) return 'Keine Ziele';
@@ -609,6 +626,11 @@ function dashboardHtml() {
       <span class="mk-icon">${MODUL_ICON[WANDERN]}</span>
       <span class="mk-label">Wandern</span>
       <span class="mk-status">${esc(wanderStatus)}</span>
+    </button>
+    <button class="modul-kachel schwimmen" data-action="modulOeffne" data-m="${SCHWIMMEN}">
+      <span class="mk-icon">${MODUL_ICON[SCHWIMMEN]}</span>
+      <span class="mk-label">Schwimmen</span>
+      <span class="mk-status">${esc(schwimmStatus)}</span>
     </button>
     <button class="modul-kachel challenge" data-action="modulOeffne" data-m="${CHALLENGE}">
       <span class="mk-icon">${MODUL_ICON[CHALLENGE]}</span>
@@ -654,6 +676,7 @@ function render() {
       mainInner.innerHTML =
         aktivesModul === RAD ? rad.heuteHtml()
         : aktivesModul === WANDERN ? wandern.heuteHtml()
+        : aktivesModul === SCHWIMMEN ? schwimmen.heuteHtml()
         : aktivesModul === CHALLENGE ? challenge.heuteHtml()
         : kraft.heuteHtml();
       break;

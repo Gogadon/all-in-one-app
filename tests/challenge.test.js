@@ -157,3 +157,41 @@ test('Challenge: offene Wanderung zählt nicht in Wander-Größen', () => {
   state.sessions.push(offen);
   assert.equal(fortschritt(state, { was: 'wander_km', zielwert: 100, zeitraum: 'monat' }, HEUTE).ist, 10);
 });
+
+// ---- Schwimmen in Challenges ----
+
+function schwimmEinheit(state, datum, bahnen, { abgeschlossen = true } = {}) {
+  const s = neueSession({ datum }); s.modul = 'schwimmen'; s.abgeschlossen = abgeschlossen;
+  const seg = addSegment(s, neuesSegment('x')); seg.erledigt = abgeschlossen;
+  addEintrag(seg, neuerEintrag({ bahnen }));
+  state.sessions.push(s);
+}
+
+test('Challenge: Schwimm-Größen (bahnen/einheiten) zählen korrekt', () => {
+  const state = leererZustand();
+  schwimmEinheit(state, '2026-07-06', 20);
+  schwimmEinheit(state, '2026-07-08', 30);
+  radTour(state, '2026-07-08', 30, 400);   // anderes Modul darf nicht mitzählen
+  assert.equal(fortschritt(state, { was: 'schwimm_bahnen', zielwert: 200, zeitraum: 'monat' }, HEUTE).ist, 50);
+  assert.equal(fortschritt(state, { was: 'schwimm_einheiten', zielwert: 10, zeitraum: 'monat' }, HEUTE).ist, 2);
+});
+
+test('Challenge: offene Schwimmeinheit zählt nicht in Schwimm-Größen', () => {
+  const state = leererZustand();
+  schwimmEinheit(state, '2026-07-08', 20);
+  schwimmEinheit(state, '2026-07-08', 99, { abgeschlossen: false });
+  assert.equal(fortschritt(state, { was: 'schwimm_bahnen', zielwert: 200, zeitraum: 'monat' }, HEUTE).ist, 20);
+});
+
+test('Challenge: Schwimm-Meter zählt die berechnete Distanz', () => {
+  const state = leererZustand();
+  const mk = (datum, bahnen, distanz) => {
+    const s = neueSession({ datum }); s.modul = 'schwimmen'; s.abgeschlossen = true;
+    const seg = addSegment(s, neuesSegment('x')); seg.erledigt = true;
+    addEintrag(seg, neuerEintrag({ bahnen, distanz }));   // distanz = Bahnen × Bahnlänge
+    state.sessions.push(s);
+  };
+  mk('2026-07-06', 20, 500);
+  mk('2026-07-08', 30, 750);
+  assert.equal(fortschritt(state, { was: 'schwimm_meter', zielwert: 5000, zeitraum: 'monat' }, HEUTE).ist, 1250);
+});
