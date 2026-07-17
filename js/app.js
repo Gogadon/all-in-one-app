@@ -177,13 +177,47 @@ document.addEventListener('change', e => {
   if (fn) fuehreAktionAus(fn, el.dataset, el, e);
 });
 
-// Komfort: beim Antippen eines Zahlen-/Wertfelds den Inhalt sofort markieren,
-// damit man direkt die neue Zahl tippt, statt erst die alte zu löschen.
+// Sichtbare Eingabefelder des Inhaltsbereichs, in DOM-Reihenfolge.
+// (Bottom-Sheets liegen außerhalb von #main und sind bewusst nicht dabei.)
+function eingabeFelder() {
+  return [...main.querySelectorAll('input[data-change]')].filter(el =>
+    el.type !== 'file' && el.type !== 'hidden' && el.offsetParent !== null);
+}
+function naechstesFeld(el) {
+  const felder = eingabeFelder();
+  const i = felder.indexOf(el);
+  return (i >= 0 && i < felder.length - 1) ? felder[i + 1] : null;
+}
+
 document.addEventListener('focusin', e => {
   const el = e.target;
-  if (el.tagName === 'INPUT' && el.dataset.change === 'k.wert') {
-    // kurz warten, bis der Cursor gesetzt ist, dann alles markieren
+  if (el.tagName !== 'INPUT') return;
+  // Komfort: beim Antippen eines Kraft-Wertfelds den Inhalt sofort markieren,
+  // damit man direkt die neue Zahl tippt, statt erst die alte zu löschen.
+  if (el.dataset.change === 'k.wert') {
     requestAnimationFrame(() => { try { el.select(); } catch {} });
+  }
+  // Tastatur-Aktionstaste passend beschriften: „Weiter" solange noch ein Feld
+  // folgt, sonst „Fertig" (schließt die Tastatur).
+  if (el.dataset.change) {
+    el.setAttribute('enterkeyhint', naechstesFeld(el) ? 'next' : 'done');
+  }
+});
+
+// „Weiter"/Enter auf der Tastatur → nächstes Eingabefeld fokussieren und sanft
+// in die Bildmitte holen. Danach frei scrollbar (kein Re-Render → kein Snap
+// zurück). Am letzten Feld schließt „Fertig" die Tastatur.
+main.addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  const el = e.target;
+  if (el.tagName !== 'INPUT' || !el.dataset.change) return;
+  e.preventDefault();
+  const next = naechstesFeld(el);
+  if (next) {
+    next.focus({ preventScroll: true });
+    next.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  } else {
+    el.blur();
   }
 });
 
