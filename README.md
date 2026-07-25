@@ -163,7 +163,7 @@ Historie, Progression und Einstellungen.
 
 ## Tests
 
-180 Tests, alle ohne Browser lauffähig. Sie decken die Rechenlogik ab:
+183 Tests, alle ohne Browser lauffähig. Sie decken die Rechenlogik ab:
 Progression, PR-Erkennung, Zyklus-Berechnung, Zeiträume, Datumsgrenzen,
 Statistik-Aggregation und Challenge-Fortschritt.
 
@@ -197,8 +197,14 @@ Versehen zurückhaben will. Zurückholen unter Daten → Wiederherstellungspunkt
 Wichtig: Snapshots liegen im selben localStorage wie die Daten. Sie retten vor
 versehentlichem Löschen **in** der App, aber nicht vor Handy-Wechsel, App-Neu-
 installation oder gelöschten Browserdaten. Dagegen hilft nur der Datei-Export —
-deshalb erinnert das Dashboard nach 30 Tagen ohne Export dezent daran
+deshalb erinnert das Dashboard nach 30 Tagen ohne Export daran
 (`state.einstellungen.letzterExport` hält das Datum fest).
+
+Der Hinweis steht **oben** auf dem Dashboard, nicht unten: einen Hinweis, den
+man erst erscrollen muss, sieht niemand. Bewusst **kein** Modal — er käme bei
+jedem Start wieder, bis exportiert ist, und würde sich zum Wegklick-Reflex
+abnutzen. Als Ventil gibt es „Später" (`erinnerungPause`, 7 Tage Ruhe); ein
+echter Export löscht die Pause wieder.
 
 ---
 
