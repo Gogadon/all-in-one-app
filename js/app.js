@@ -8,7 +8,8 @@
 import {
   load, save, exportBackup, importBackup, leererZustand,
   snapshots, sichereSnapshot, ladeSnapshot, loescheSnapshots,
-  merkeExport, tageSeitExport, brauchtExportErinnerung, MAX_SNAPSHOTS,
+  merkeExport, tageSeitExport, brauchtExportErinnerung, verschiebeErinnerung,
+  MAX_SNAPSHOTS,
 } from './core/storage.js';
 import { formatZahl, formatWert } from './core/metrics.js';
 import { heuteIso, findeAktivitaet, sessionKategorien, verschiebeZeitraum,
@@ -131,6 +132,11 @@ const actions = {
     URL.revokeObjectURL(a.href);
     // Datum merken → die Export-Erinnerung ist damit für 30 Tage still.
     merkeExport(state);
+    await ctx.save();
+    render();
+  },
+  async 'daten.erinnerungSpaeter'() {
+    verschiebeErinnerung(state);
     await ctx.save();
     render();
   },
@@ -743,6 +749,24 @@ function dashboardHtml() {
     <button class="zahnrad" data-action="unterseiteAuf" data-seite="daten" aria-label="Daten & Einstellungen">⚙️</button>
   </div>`;
 
+  // Erinnerung ans Datei-Backup — GANZ OBEN, weil ein Hinweis, den man erst
+  // erscrollen muss, keiner ist. Bewusst kein Modal: er käme bei jedem Start
+  // wieder, bis exportiert ist, und würde sich zum Wegklick-Reflex abnutzen.
+  // Stattdessen sichtbar, aber nicht blockierend — mit „Später" als Ventil.
+  if (brauchtExportErinnerung(state)) {
+    const tage = tageSeitExport(state);
+    html += `<div class="export-hinweis anim">
+      <div class="eh-text">
+        <strong>${tage == null ? 'Noch kein Backup gesichert' : `Letztes Backup vor ${tage} Tagen`}</strong>
+        <small>Snapshots liegen nur auf diesem Gerät — eine Datei nicht.</small>
+      </div>
+      <div class="eh-knoepfe">
+        <button class="knopf klein primaer" data-action="unterseiteAuf" data-seite="daten">Sichern</button>
+        <button class="knopf klein" data-action="daten.erinnerungSpaeter">Später</button>
+      </div>
+    </div>`;
+  }
+
   // Modul-Kacheln
   const kraftStatus = (() => {
     const e = naechsteEinheit(state, KRAFT);
@@ -794,16 +818,6 @@ function dashboardHtml() {
 
   // Kalender-Streifen (Ebene 1): Glance auf die Woche, tippen → Monats-Overlay
   html += kalenderStreifenHtml();
-
-  // Dezente Erinnerung ans Datei-Backup — nur wenn es was zu verlieren gibt
-  // und der letzte Export lange her ist. Tippen führt direkt zu den Daten.
-  if (brauchtExportErinnerung(state)) {
-    const tage = tageSeitExport(state);
-    html += `<button class="export-hinweis anim" data-action="unterseiteAuf" data-seite="daten">
-      <span>${tage == null ? 'Noch kein Backup gesichert' : `Letztes Backup vor ${tage} Tagen`}</span>
-      <span class="eh-tu">Sichern</span>
-    </button>`;
-  }
 
   return html;
 }

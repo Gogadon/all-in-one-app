@@ -16,7 +16,7 @@ globalThis.localStorage = {
 
 const {
   leererZustand, snapshots, sichereSnapshot, ladeSnapshot, loescheSnapshots,
-  merkeExport, tageSeitExport, brauchtExportErinnerung,
+  merkeExport, tageSeitExport, brauchtExportErinnerung, verschiebeErinnerung,
   SNAPSHOT_KEY, MAX_SNAPSHOTS,
 } = await import('../js/core/storage.js');
 const { neueSession } = await import('../js/core/model.js');
@@ -175,4 +175,33 @@ test('Export-Erinnerung: frisch exportiert → Ruhe, nach 30 Tagen wieder', () =
 
   assert.equal(tageSeitExport(s, '2026-08-09'), 30);
   assert.equal(brauchtExportErinnerung(s, '2026-08-09'), true);
+});
+
+test('Export-Erinnerung: „Später" legt sie 7 Tage still und holt sie zurück', () => {
+  frisch();
+  const s = stateMit(1);
+  assert.equal(brauchtExportErinnerung(s, '2026-07-10'), true);
+
+  verschiebeErinnerung(s, '2026-07-10');
+  assert.equal(brauchtExportErinnerung(s, '2026-07-10'), false);   // sofort still
+  assert.equal(brauchtExportErinnerung(s, '2026-07-16'), false);   // Tag 6: noch still
+  assert.equal(brauchtExportErinnerung(s, '2026-07-17'), true);    // Tag 7: wieder da
+});
+
+test('Export-Erinnerung: Pause überlebt einen Monatswechsel', () => {
+  frisch();
+  const s = stateMit(1);
+  verschiebeErinnerung(s, '2026-07-28');
+  assert.equal(s.einstellungen.erinnerungPause, '2026-08-04');
+  assert.equal(brauchtExportErinnerung(s, '2026-08-03'), false);
+  assert.equal(brauchtExportErinnerung(s, '2026-08-04'), true);
+});
+
+test('Export-Erinnerung: ein Export hebt eine laufende Pause auf', () => {
+  frisch();
+  const s = stateMit(1);
+  verschiebeErinnerung(s, '2026-07-10');
+  merkeExport(s, '2026-07-11');
+  assert.equal(s.einstellungen.erinnerungPause, undefined);
+  assert.equal(brauchtExportErinnerung(s, '2026-07-11'), false);   // frisch exportiert
 });

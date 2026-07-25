@@ -11,7 +11,7 @@
 // Daten im localStorage des Geräts. Eine Umbenennung macht alle gespeicherten
 // Trainings unauffindbar. Der historische Name bleibt, auch wenn die App
 // inzwischen anders heißt.
-import { heuteIso, tageZwischen } from './model.js';
+import { heuteIso, tageZwischen, naechsterTag } from './model.js';
 
 export const STORAGE_KEY = 'gogadon_allinone_v1';
 export const SCHEMA_VERSION = 2;
@@ -26,6 +26,9 @@ export const MAX_SNAPSHOTS = 3;
 // Ab wann an ein Datei-Backup erinnert wird (Snapshots liegen auf DEMSELBEN
 // Gerät — bei Handy-Wechsel oder Browser-Reset sind sie mit weg).
 export const EXPORT_ERINNERUNG_TAGE = 30;
+// „Später": so lange bleibt die Erinnerung still. Damit ein Hinweis, der
+// sichtbar oben steht, nie zur Dauerberieselung wird.
+export const ERINNERUNG_PAUSE_TAGE = 7;
 
 // ------------------------------------------------------------
 // Zustand
@@ -396,6 +399,20 @@ export function loescheSnapshots() {
 export function merkeExport(state, heute = heuteIso()) {
   state.einstellungen ??= {};
   state.einstellungen.letzterExport = heute;
+  delete state.einstellungen.erinnerungPause;   // erledigt → Pause hinfällig
+  return state;
+}
+
+/**
+ * „Später": Erinnerung für ERINNERUNG_PAUSE_TAGE Tage stilllegen.
+ * Bewusst eine Pause und kein „nie wieder" — der Hinweis kommt verlässlich
+ * zurück, bis wirklich exportiert wurde.
+ */
+export function verschiebeErinnerung(state, heute = heuteIso(), tage = ERINNERUNG_PAUSE_TAGE) {
+  let bis = heute;
+  for (let i = 0; i < tage; i++) bis = naechsterTag(bis);
+  state.einstellungen ??= {};
+  state.einstellungen.erinnerungPause = bis;
   return state;
 }
 
@@ -414,6 +431,9 @@ export function tageSeitExport(state, heute = heuteIso()) {
 export function brauchtExportErinnerung(state, heute = heuteIso()) {
   const hatDaten = (state?.sessions ?? []).length > 0;
   if (!hatDaten) return false;
+  // „Später" gedrückt? Dann bis zum Pausenende Ruhe.
+  const pause = state?.einstellungen?.erinnerungPause;
+  if (typeof pause === 'string' && heute < pause) return false;
   const tage = tageSeitExport(state, heute);
   return tage == null || tage >= EXPORT_ERINNERUNG_TAGE;
 }

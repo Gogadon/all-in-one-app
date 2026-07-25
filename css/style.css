@@ -550,13 +550,16 @@ body.ohne-navi .nav{display:none}
 .snap-zeile{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .snap-zeile small{line-height:1.5}
 
-/* Export-Erinnerung: dezente Zeile, kein Alarm — nur ein Stupser. */
-.export-hinweis{display:flex;align-items:center;justify-content:space-between;
-  gap:12px;width:100%;margin-top:18px;padding:12px 14px;
-  border:1px solid var(--line);border-radius:var(--r-button);
-  background:var(--surface);color:var(--dim);font-size:12.5px;text-align:left}
-.export-hinweis .eh-tu{flex:none;color:var(--kraft);font-weight:600}
-.export-hinweis:active{border-color:rgba(255,255,255,.16)}
+/* Export-Erinnerung: steht oben auf dem Dashboard, damit man sie überhaupt
+   sieht. Sichtbar (Amber = Handlungsbedarf), aber nicht blockierend. */
+.export-hinweis{display:flex;flex-direction:column;gap:10px;
+  margin:0 0 16px;padding:13px 15px;border-radius:var(--r-container);
+  border:1px solid rgba(252,180,75,.35);background:rgba(252,180,75,.08)}
+.export-hinweis .eh-text{display:flex;flex-direction:column;gap:2px}
+.export-hinweis strong{font-size:14px;color:var(--wandern)}
+.export-hinweis small{font-size:12px;color:var(--dim);line-height:1.4}
+.export-hinweis .eh-knoepfe{display:flex;gap:8px}
+.export-hinweis .knopf.klein{padding:7px 14px}
 /* Gleiche Info auf der Daten-Seite, wenn der Export überfällig ist */
 .export-alt{color:var(--wandern)}
 
