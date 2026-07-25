@@ -546,6 +546,13 @@ h1,h2,h3,.num{font-family:var(--font-display);letter-spacing:-.02em}
 body.ohne-navi main{padding-bottom:16px}
 body.ohne-navi .nav{display:none}
 
+/* Tipp-Modus: extra Scroll-Platz unter dem Formular, solange ein Eingabefeld
+   aktiv ist. Ohne ihn ist der Scroll-Container beim letzten Feld schon am
+   Anschlag — es ließe sich nicht mehr über die Tastatur schieben. 50vh
+   entspricht der halben Sichthöhe, also genau dem, was zum Zentrieren fehlt.
+   Steht bewusst NACH .ohne-navi, damit es auch auf dem Dashboard greift. */
+body.eingabe-aktiv main{padding-bottom:calc(76px + 50vh)}
+
 /* ===== Challenge-Modul ===== */
 .eyebrow .pip.challenge{background:var(--challenge);box-shadow:0 0 10px var(--challenge)}
 .ch-karte{padding:16px}

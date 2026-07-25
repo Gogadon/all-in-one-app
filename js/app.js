@@ -189,6 +189,47 @@ function naechstesFeld(el) {
   return (i >= 0 && i < felder.length - 1) ? felder[i + 1] : null;
 }
 
+/** Höhe des tatsächlich sichtbaren Bereichs (ohne aufgeklappte Tastatur). */
+function sichtHoehe() {
+  return window.visualViewport?.height ?? window.innerHeight;
+}
+
+/**
+ * Liegt das Feld hinter der Tastatur bzw. außerhalb der Sicht?
+ * Mit etwas Luft nach unten (24px), damit ein Feld, das gerade eben noch am
+ * unteren Rand klebt, auch als „nicht gut sichtbar" gilt.
+ */
+function istVerdeckt(el) {
+  const r = el.getBoundingClientRect();
+  return r.bottom > sichtHoehe() - 24 || r.top < 0;
+}
+
+/**
+ * Feld mittig in den sichtbaren Bereich holen — und NACHFASSEN.
+ * Mobile Browser korrigieren nach einem Fokuswechsel oft selbst nach und
+ * überschreiben dabei ein laufendes sanftes Scrollen (dann bleibt das Feld
+ * unter der Tastatur liegen). Deshalb: sanft zentrieren, kurz später prüfen
+ * und notfalls hart nachziehen.
+ */
+function zeigeFeld(el) {
+  el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  setTimeout(() => {
+    if (document.activeElement === el && istVerdeckt(el)) {
+      el.scrollIntoView({ block: 'center', behavior: 'auto' });
+    }
+  }, 300);
+}
+
+/**
+ * Tipp-Modus: solange ein Feld aktiv ist, bekommt der Inhaltsbereich unten
+ * extra Scroll-Platz. Ohne den lässt sich ein Feld am Listenende NICHT mittig
+ * scrollen (der Container ist schon am Anschlag) — es bliebe unter der
+ * Tastatur liegen. Der Platz verschwindet wieder, sobald die Eingabe endet.
+ */
+function eingabeModus(an) {
+  document.body.classList.toggle('eingabe-aktiv', an);
+}
+
 document.addEventListener('focusin', e => {
   const el = e.target;
   if (el.tagName !== 'INPUT') return;
@@ -201,6 +242,27 @@ document.addEventListener('focusin', e => {
   // folgt, sonst „Fertig" (schließt die Tastatur).
   if (el.dataset.change) {
     el.setAttribute('enterkeyhint', naechstesFeld(el) ? 'next' : 'done');
+    eingabeModus(true);
+  }
+});
+
+// Eingabe beendet → Scroll-Platz wieder einklappen (erst prüfen, ob nicht
+// direkt ins nächste Feld gesprungen wurde).
+document.addEventListener('focusout', e => {
+  if (e.target.tagName !== 'INPUT') return;
+  setTimeout(() => {
+    const a = document.activeElement;
+    if (!(a && a.tagName === 'INPUT' && a.dataset.change)) eingabeModus(false);
+  }, 0);
+});
+
+// Tastatur klappt auf/ändert die Höhe → verdecktes Feld nachführen. Läuft NUR
+// bei Größenänderungen des sichtbaren Bereichs, nicht beim Scrollen — danach
+// kann man also frei scrollen, ohne dass es zurückspringt.
+window.visualViewport?.addEventListener('resize', () => {
+  const el = document.activeElement;
+  if (el && el.tagName === 'INPUT' && el.dataset.change && istVerdeckt(el)) {
+    zeigeFeld(el);
   }
 });
 
@@ -215,7 +277,9 @@ main.addEventListener('keydown', e => {
   const next = naechstesFeld(el);
   if (next) {
     next.focus({ preventScroll: true });
-    next.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    // Erst im nächsten Frame scrollen: der Extra-Platz unten muss im Layout
+    // stehen, sonst ist beim letzten Feld wieder kein Platz zum Zentrieren.
+    requestAnimationFrame(() => zeigeFeld(next));
   } else {
     el.blur();
   }
