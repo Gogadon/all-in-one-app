@@ -11,9 +11,21 @@
 // Daten im localStorage des Geräts. Eine Umbenennung macht alle gespeicherten
 // Trainings unauffindbar. Der historische Name bleibt, auch wenn die App
 // inzwischen anders heißt.
+import { heuteIso, tageZwischen } from './model.js';
+
 export const STORAGE_KEY = 'gogadon_allinone_v1';
 export const SCHEMA_VERSION = 2;
 const APP_NAME = 'all-in-one';
+
+// Automatische Tages-Snapshots (Sicherheitsnetz gegen versehentliches Löschen
+// IN der App). Alle Snapshots liegen zusammen unter EINEM Schlüssel — so muss
+// niemand localStorage-Schlüssel durchzählen.
+export const SNAPSHOT_KEY = STORAGE_KEY + '_snapshots';
+export const MAX_SNAPSHOTS = 3;
+
+// Ab wann an ein Datei-Backup erinnert wird (Snapshots liegen auf DEMSELBEN
+// Gerät — bei Handy-Wechsel oder Browser-Reset sind sie mit weg).
+export const EXPORT_ERINNERUNG_TAGE = 30;
 
 // ------------------------------------------------------------
 // Zustand
@@ -291,4 +303,117 @@ export function migriereV1zuV2(state) {
   }
 
   return state;
+}
+
+// ============================================================
+// Automatische Tages-Snapshots
+//
+// Sicherheitsnetz gegen versehentliches Löschen/Überschreiben INNERHALB der
+// App: Beim Start wird höchstens EIN Snapshot pro Kalendertag angelegt, die
+// letzten MAX_SNAPSHOTS bleiben erhalten.
+//
+// ⚠️ KEIN Geräte-Backup: Die Snapshots liegen im selben localStorage wie die
+// Daten. Handy-Wechsel, Browser-Daten löschen oder App neu installieren nimmt
+// sie mit. Dagegen hilft nur der Datei-Export — deshalb die Export-Erinnerung.
+// ============================================================
+
+/** Alle Snapshots, neueste zuerst. Kaputte/fehlende Liste → []. */
+export function snapshots() {
+  let roh = null;
+  try { roh = localStorage.getItem(SNAPSHOT_KEY); } catch { return []; }
+  if (!roh) return [];
+  try {
+    const liste = JSON.parse(roh);
+    if (!Array.isArray(liste)) return [];
+    return liste.filter(s => s && typeof s.datum === 'string' && s.daten);
+  } catch {
+    return [];   // unlesbare Snapshots sind kein Grund, die App zu stören
+  }
+}
+
+/**
+ * Tages-Snapshot anlegen — höchstens einer pro Kalendertag.
+ * @returns true, wenn geschrieben wurde (sonst: heute gab es schon einen,
+ *          oder der Speicher wollte nicht).
+ *
+ * Scheitert das Schreiben (Speicher voll), wird mit weniger Snapshots erneut
+ * versucht und am Ende nur gewarnt: ein fehlgeschlagenes Sicherheitsnetz darf
+ * niemals den normalen Betrieb blockieren.
+ */
+export function sichereSnapshot(state, heute = heuteIso()) {
+  if (!state || typeof state !== 'object') return false;
+  const liste = snapshots();
+  if (liste.some(s => s.datum === heute)) return false;   // heute schon gesichert
+
+  const eintrag = {
+    datum: heute,
+    erstelltAm: new Date().toISOString(),
+    sessions: (state.sessions ?? []).length,
+    uebungen: (state.bibliothek ?? []).length,
+    daten: state,
+  };
+
+  for (let behalten = MAX_SNAPSHOTS; behalten >= 1; behalten--) {
+    const neu = [eintrag, ...liste].slice(0, behalten);
+    try {
+      localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(neu));
+      return true;
+    } catch {
+      // Speicher voll → mit einem Snapshot weniger nochmal versuchen
+    }
+  }
+  console.warn('Snapshot konnte nicht angelegt werden (Speicher voll?).');
+  return false;
+}
+
+/**
+ * Snapshot zurückholen (validiert + migriert, wie ein Datei-Backup).
+ * Gibt einen frischen Zustand zurück; der gespeicherte bleibt unberührt.
+ */
+export function ladeSnapshot(erstelltAm) {
+  const treffer = snapshots().find(s => s.erstelltAm === erstelltAm);
+  if (!treffer) throw new Error('Dieser Wiederherstellungspunkt existiert nicht mehr.');
+  const kopie = JSON.parse(JSON.stringify(treffer.daten));
+  try {
+    pruefeGrundform(kopie);
+  } catch {
+    throw new Error('Dieser Wiederherstellungspunkt ist beschädigt.');
+  }
+  normalisiereSessions(kopie);
+  return migriere(kopie);
+}
+
+/** Alle Snapshots verwerfen (z.B. beim „Alles zurücksetzen"). */
+export function loescheSnapshots() {
+  try { localStorage.removeItem(SNAPSHOT_KEY); } catch { /* egal */ }
+}
+
+// ------------------------------------------------------------
+// Export-Erinnerung
+// ------------------------------------------------------------
+
+/** Datum des letzten Datei-Exports festhalten (im Zustand, wandert also mit). */
+export function merkeExport(state, heute = heuteIso()) {
+  state.einstellungen ??= {};
+  state.einstellungen.letzterExport = heute;
+  return state;
+}
+
+/** Tage seit dem letzten Datei-Export — null, wenn noch nie exportiert. */
+export function tageSeitExport(state, heute = heuteIso()) {
+  const iso = state?.einstellungen?.letzterExport;
+  if (typeof iso !== 'string' || iso === '') return null;
+  return Math.max(0, tageZwischen(iso.slice(0, 10), heute));
+}
+
+/**
+ * Soll an ein Datei-Backup erinnert werden?
+ * Ja, wenn es überhaupt etwas zu verlieren gibt UND der letzte Export lange
+ * her ist (oder nie stattfand).
+ */
+export function brauchtExportErinnerung(state, heute = heuteIso()) {
+  const hatDaten = (state?.sessions ?? []).length > 0;
+  if (!hatDaten) return false;
+  const tage = tageSeitExport(state, heute);
+  return tage == null || tage >= EXPORT_ERINNERUNG_TAGE;
 }

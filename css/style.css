@@ -546,6 +546,27 @@ h1,h2,h3,.num{font-family:var(--font-display);letter-spacing:-.02em}
 body.ohne-navi main{padding-bottom:16px}
 body.ohne-navi .nav{display:none}
 
+/* Wiederherstellungspunkte (Daten-Seite) */
+.snap-zeile{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.snap-zeile small{line-height:1.5}
+
+/* Export-Erinnerung: dezente Zeile, kein Alarm — nur ein Stupser. */
+.export-hinweis{display:flex;align-items:center;justify-content:space-between;
+  gap:12px;width:100%;margin-top:18px;padding:12px 14px;
+  border:1px solid var(--line);border-radius:var(--r-button);
+  background:var(--surface);color:var(--dim);font-size:12.5px;text-align:left}
+.export-hinweis .eh-tu{flex:none;color:var(--kraft);font-weight:600}
+.export-hinweis:active{border-color:rgba(255,255,255,.16)}
+/* Gleiche Info auf der Daten-Seite, wenn der Export überfällig ist */
+.export-alt{color:var(--wandern)}
+
+/* Tipp-Modus: extra Scroll-Platz unter dem Formular, solange ein Eingabefeld
+   aktiv ist. Ohne ihn ist der Scroll-Container beim letzten Feld schon am
+   Anschlag — es ließe sich nicht mehr über die Tastatur schieben. 50vh
+   entspricht der halben Sichthöhe, also genau dem, was zum Zentrieren fehlt.
+   Steht bewusst NACH .ohne-navi, damit es auch auf dem Dashboard greift. */
+body.eingabe-aktiv main{padding-bottom:calc(76px + 50vh)}
+
 /* ===== Challenge-Modul ===== */
 .eyebrow .pip.challenge{background:var(--challenge);box-shadow:0 0 10px var(--challenge)}
 .ch-karte{padding:16px}
