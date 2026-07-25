@@ -163,7 +163,7 @@ Historie, Progression und Einstellungen.
 
 ## Tests
 
-167 Tests, alle ohne Browser lauffähig. Sie decken die Rechenlogik ab:
+180 Tests, alle ohne Browser lauffähig. Sie decken die Rechenlogik ab:
 Progression, PR-Erkennung, Zyklus-Berechnung, Zeiträume, Datumsgrenzen,
 Statistik-Aggregation und Challenge-Fortschritt.
 
@@ -187,6 +187,18 @@ deshalb laden auch ältere Backups (mit dem früheren Namen) weiterhin.
 
 Bei kaputten gespeicherten Daten legt die App eine Rettungskopie unter
 `gogadon_allinone_v1_defekt` an und startet leer. Die Konsole sagt dann Bescheid.
+
+**Automatische Wiederherstellungspunkte:** Beim Öffnen legt die App höchstens
+einen Snapshot pro Kalendertag an (die letzten 3 bleiben), alle zusammen unter
+`gogadon_allinone_v1_snapshots`. Weil der Snapshot beim *Start* entsteht, ist es
+der Stand **vor** den Änderungen des Tages — genau das, was man bei einem
+Versehen zurückhaben will. Zurückholen unter Daten → Wiederherstellungspunkte.
+
+Wichtig: Snapshots liegen im selben localStorage wie die Daten. Sie retten vor
+versehentlichem Löschen **in** der App, aber nicht vor Handy-Wechsel, App-Neu-
+installation oder gelöschten Browserdaten. Dagegen hilft nur der Datei-Export —
+deshalb erinnert das Dashboard nach 30 Tagen ohne Export dezent daran
+(`state.einstellungen.letzterExport` hält das Datum fest).
 
 ---
 

@@ -5,7 +5,11 @@
 // registrierten Aktionen weiter (Module bringen ihre eigenen mit).
 // ============================================================
 
-import { load, save, exportBackup, importBackup, leererZustand } from './core/storage.js';
+import {
+  load, save, exportBackup, importBackup, leererZustand,
+  snapshots, sichereSnapshot, ladeSnapshot, loescheSnapshots,
+  merkeExport, tageSeitExport, brauchtExportErinnerung, MAX_SNAPSHOTS,
+} from './core/storage.js';
 import { formatZahl, formatWert } from './core/metrics.js';
 import { heuteIso, findeAktivitaet, sessionKategorien, verschiebeZeitraum,
   istWertbareTour, sessionWert, loeseSegmentAuf, neuerTermin } from './core/model.js';
@@ -118,13 +122,30 @@ const actions = {
   'modulOeffne'(d) { aktivesModul = d.m; tab = 'heute'; unterseite = null; render(); window.scrollTo(0, 0); },
   'verlaufSub'(d) { verlaufSub = d.s; render(); mainInner.parentElement.scrollTo(0, 0); },
 
-  'daten.export'() {
+  async 'daten.export'() {
     const blob = new Blob([exportBackup(state)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = `all-in-one-backup-${heuteIso()}.json`;
     a.click();
     URL.revokeObjectURL(a.href);
+    // Datum merken → die Export-Erinnerung ist damit für 30 Tage still.
+    merkeExport(state);
+    await ctx.save();
+    render();
+  },
+  async 'daten.snapshot'(d) {
+    const punkt = snapshots().find(s => s.erstelltAm === d.marke);
+    if (!punkt) { await hinweis('Nicht mehr da', 'Dieser Wiederherstellungspunkt existiert nicht mehr.'); return; }
+    if (!await bestaetige({
+      titel: `Stand vom ${formatDatum(punkt.datum)} laden?`,
+      text: `Der aktuelle Stand (${state.sessions.length} Sessions) wird dabei ersetzt durch ${punkt.sessions} Sessions. Am besten vorher ein Backup exportieren.`,
+      jaText: 'Wiederherstellen', gefahr: true })) return;
+    state = ladeSnapshot(d.marke);
+    await ctx.save();
+    await hinweis('Wiederhergestellt ✓');
+    unterseite = null; tab = 'dashboard';
+    render();
   },
   'daten.import'() { document.getElementById('importDatei')?.click(); },
   'daten.datei'(d, el) { importiereDatei(el); },
@@ -136,6 +157,7 @@ const actions = {
       text: 'Letzte Chance — das lässt sich nicht rückgängig machen.',
       jaText: 'Alles löschen', gefahr: true })) return;
     state = leererZustand();
+    loescheSnapshots();   // „alles" heißt alles — sonst bliebe der alte Stand hintenrum liegen
     unterseite = null; tab = 'dashboard';
     await ctx.save(); render();
   },
@@ -425,20 +447,50 @@ function verlaufHtml() {
 // ------------------------------------------------------------
 // Daten-Tab (Backup rein/raus)
 // ------------------------------------------------------------
+/** „vor 3 Tagen" / „heute" / „noch nie" — für die Export-Zeile. */
+function exportStatusText() {
+  const tage = tageSeitExport(state);
+  if (tage == null) return 'Noch nie als Datei exportiert';
+  if (tage === 0) return 'Zuletzt exportiert: heute';
+  if (tage === 1) return 'Zuletzt exportiert: gestern';
+  return `Zuletzt exportiert: vor ${tage} Tagen`;
+}
+
 function datenHtml() {
-  return `<div class="tab-kopf anim"><span class="eyebrow"><span class="pip"></span>Backup & Speicher</span><h1>Daten</h1></div>
+  const punkte = snapshots();
+  const warnen = brauchtExportErinnerung(state);
+
+  let html = `<div class="tab-kopf anim"><span class="eyebrow"><span class="pip"></span>Backup & Speicher</span><h1>Daten</h1></div>
     <div class="karte anim">
       <p class="dim">${state.sessions.length} Sessions · ${state.bibliothek.length} Übungen/Aktivitäten</p>
+      <p class="dim ${warnen ? 'export-alt' : ''}">${esc(exportStatusText())}</p>
       <div class="knopf-zeile">
         <button class="knopf primaer" data-action="daten.export">Backup exportieren</button>
         <button class="knopf" data-action="daten.import">Backup importieren</button>
       </div>
       <input type="file" id="importDatei" accept=".json,application/json" hidden data-change="daten.datei">
-    </div>
-    <div class="karte anim">
+    </div>`;
+
+  // Automatische Tages-Snapshots — Rettung bei versehentlichem Löschen.
+  html += `<p class="sheet-abschnitt zwischen">Wiederherstellungspunkte</p>`;
+  if (punkte.length) {
+    html += punkte.map(p => `<div class="karte anim snap-zeile">
+      <div>
+        <strong>${esc(formatDatum(p.datum))}</strong><br>
+        <small class="dim">${p.sessions} Sessions · ${p.uebungen} Übungen</small>
+      </div>
+      <button class="knopf klein" data-action="daten.snapshot" data-marke="${esc(p.erstelltAm)}">Laden</button>
+    </div>`).join('');
+  } else {
+    html += `<div class="karte leer anim"><p>Noch keine Punkte. Die App legt beim Öffnen automatisch einen pro Tag an.</p></div>`;
+  }
+  html += `<p class="dim bib-hinweis">Automatisch, die letzten ${MAX_SNAPSHOTS} Tage. Liegt auf diesem Gerät — schützt vor versehentlichem Löschen, aber <strong>nicht</strong> vor Handy-Wechsel oder gelöschten Browserdaten. Dafür der Datei-Export oben.</p>`;
+
+  html += `<div class="karte anim">
       <p class="dim">Alles auf Anfang — löscht sämtliche Daten dieser App auf diesem Gerät.</p>
       <button class="knopf gefahr" data-action="daten.reset">Alles zurücksetzen</button>
     </div>`;
+  return html;
 }
 
 function importiereDatei(input) {
@@ -743,6 +795,16 @@ function dashboardHtml() {
   // Kalender-Streifen (Ebene 1): Glance auf die Woche, tippen → Monats-Overlay
   html += kalenderStreifenHtml();
 
+  // Dezente Erinnerung ans Datei-Backup — nur wenn es was zu verlieren gibt
+  // und der letzte Export lange her ist. Tippen führt direkt zu den Daten.
+  if (brauchtExportErinnerung(state)) {
+    const tage = tageSeitExport(state);
+    html += `<button class="export-hinweis anim" data-action="unterseiteAuf" data-seite="daten">
+      <span>${tage == null ? 'Noch kein Backup gesichert' : `Letztes Backup vor ${tage} Tagen`}</span>
+      <span class="eh-tu">Sichern</span>
+    </button>`;
+  }
+
   return html;
 }
 
@@ -856,6 +918,10 @@ function unterseiteHtml(titel, inhalt) {
 
 try {
   state = await load();
+  // Sicherheitsnetz: höchstens ein Snapshot pro Tag, direkt nach dem Laden —
+  // also im Zustand VOR allem, was heute noch passiert. Schlägt es fehl
+  // (Speicher voll), läuft die App trotzdem normal weiter.
+  sichereSnapshot(state);
   render();
 } catch (err) {
   mainInner.innerHTML = `<div class="karte leer"><h2>Da klemmt was.</h2><p class="dim">${esc(err.message)}</p></div>`;
