@@ -63,13 +63,13 @@ test('tagMarker: Module in Dashboard-Reihenfolge, Anzahl korrekt', () => {
 
 test('tagMarker: offene und übersprungene Touren erzeugen keinen Punkt', () => {
   const state = bauStandardState();
-  assert.deepEqual(tagMarker(state, '2026-07-15'), { module: ['wandern'], geplant: [], anzahl: 1 }); // offenes Rad raus
-  assert.deepEqual(tagMarker(state, '2026-07-20'), { module: [], geplant: [], anzahl: 0 });           // übersprungen raus
+  assert.deepEqual(tagMarker(state, '2026-07-15'), { module: ['wandern'], geplant: [], anzahl: 1, ausfall: null }); // offenes Rad raus
+  assert.deepEqual(tagMarker(state, '2026-07-20'), { module: [], geplant: [], anzahl: 0, ausfall: null });           // übersprungen raus
 });
 
 test('tagMarker: leerer Tag ist sauber leer', () => {
   const state = bauStandardState();
-  assert.deepEqual(tagMarker(state, '2026-07-10'), { module: [], geplant: [], anzahl: 0 });
+  assert.deepEqual(tagMarker(state, '2026-07-10'), { module: [], geplant: [], anzahl: 0, ausfall: null });
 });
 
 test('tagMarker: Alt-Session ohne modul-Feld zählt als Kraft', () => {
