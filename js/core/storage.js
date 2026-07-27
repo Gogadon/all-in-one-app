@@ -41,6 +41,7 @@ export function leererZustand() {
     bibliothek: [],      // Aktivitäten (siehe model.js → neueAktivitaet)
     sessions: [],        // Log (Session → Segment → Eintrag)
     termine: [],         // geplante Termine (Werkzeug B) — eigene Liste, getrennt von sessions
+    ausfallTage: [],     // Tage ohne Training mit Grund (krank …) — ebenfalls getrennt
     plaene: {},          // pro Modul, z.B. plaene.kraft = { einheiten: [], position: 0 }  (Schritt 2)
     challenges: [],      // Auswertungsschicht (Etappe 4)
     einstellungen: {},   // App-weite Einstellungen

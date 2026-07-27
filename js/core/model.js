@@ -186,6 +186,22 @@ export function neuerTermin({ datum, modul, notiz = '' }) {
   return { id: neueId(), datum, modul, erstelltAm: new Date().toISOString(), notiz };
 }
 
+/**
+ * Ein Ausfall-Tag: ein Tag, an dem bewusst NICHT trainiert wurde, weil etwas
+ * dazwischenkam — Krankheit vorneweg. Eigene Liste `state.ausfallTage`, nach
+ * demselben Muster wie `termine`: getrennt von den Sessions, wird nie zur
+ * Session und fließt NIE in Statistik oder Wochenzahlen ein.
+ *
+ * `typ` ist von Anfang an dabei, damit später 'urlaub' oder 'verletzung' ohne
+ * Schema-Änderung dazukommen können.
+ */
+export const AUSFALL_TYPEN = Object.freeze(['krank']);
+
+export function neuerAusfallTag({ datum, typ = 'krank', notiz = '' }) {
+  if (!datum) throw new Error('Ausfall-Tag braucht ein Datum.');
+  return { id: neueId(), datum, typ, notiz, erstelltAm: new Date().toISOString() };
+}
+
 /** Segment = eine Aktivität innerhalb einer Session. altOf = genutzte Alternative. */
 export function neuesSegment(aktivitaetId, { altOf = null } = {}) {
   if (!aktivitaetId) throw new Error('Segment braucht eine aktivitaetId.');
@@ -295,6 +311,42 @@ export function sessionsAmTag(state, iso) {
 /** Geplante Termine an einem Tag (Werkzeug B / Kalender-Planung). */
 export function termineAmTag(state, iso) {
   return (state.termine ?? []).filter(t => t.datum === iso);
+}
+
+/** Der Ausfall-Eintrag dieses Tages — null, wenn der Tag normal war. */
+export function ausfallAmTag(state, iso) {
+  return (state.ausfallTage ?? []).find(a => a.datum === iso) ?? null;
+}
+
+// Sicherung gegen versehentlich riesige Zeiträume (z.B. vertippt beim Datum).
+const MAX_AUSFALL_SPANNE = 366;
+
+/**
+ * Tage von..bis (BEIDE inklusive) als Ausfall markieren.
+ * Reihenfolge egal — vertauschte Grenzen werden gedreht. Tage, die schon einen
+ * Eintrag haben, bleiben unangetastet (kein Duplikat, keine Überschreibung).
+ * @returns Anzahl der NEU markierten Tage.
+ */
+export function markiereAusfall(state, vonIso, bisIso = vonIso, { typ = 'krank', notiz = '' } = {}) {
+  state.ausfallTage ??= [];
+  const [von, bis] = vonIso <= bisIso ? [vonIso, bisIso] : [bisIso, vonIso];
+  let neu = 0;
+  let tag = von;
+  for (let i = 0; tag <= bis && i < MAX_AUSFALL_SPANNE; i++) {
+    if (!ausfallAmTag(state, tag)) {
+      state.ausfallTage.push(neuerAusfallTag({ datum: tag, typ, notiz }));
+      neu++;
+    }
+    tag = naechsterTag(tag);
+  }
+  return neu;
+}
+
+/** Ausfall-Markierung eines Tages entfernen. @returns true, wenn etwas wegfiel. */
+export function entferneAusfall(state, iso) {
+  const vorher = (state.ausfallTage ?? []).length;
+  state.ausfallTage = (state.ausfallTage ?? []).filter(a => a.datum !== iso);
+  return state.ausfallTage.length !== vorher;
 }
 
 /** Sessions, die eine bestimmte Aktivität enthalten — neueste zuerst. */

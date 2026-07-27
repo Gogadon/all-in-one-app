@@ -13,7 +13,8 @@ import {
 } from './core/storage.js';
 import { formatZahl, formatWert } from './core/metrics.js';
 import { heuteIso, findeAktivitaet, sessionKategorien, verschiebeZeitraum,
-  istWertbareTour, sessionWert, loeseSegmentAuf, neuerTermin } from './core/model.js';
+  istWertbareTour, sessionWert, loeseSegmentAuf, neuerTermin,
+  markiereAusfall, entferneAusfall } from './core/model.js';
 import { findeEinheit, naechsteEinheit } from './core/plan.js';
 import { esc, formatDatum, sheet, bestaetige, hinweis } from './ui/components.js';
 import {
@@ -53,6 +54,7 @@ let unterseite = null;   // null | 'daten' | 'kalender' — Overlay über den Ta
 let kalenderAnker = heuteIso();   // welchen Monat zeigt das Kalender-Overlay
 let tagSheetIso = null;           // welcher Tag im Tages-Sheet offen ist
 const tagDetailOffen = new Set(); // welche Sessions im Tages-Sheet aufgeklappt sind
+let krankBis = '';                // optionales Enddatum beim Krankmelden (nur UI)
 
 // ------------------------------------------------------------
 // Kontext für Module
@@ -119,6 +121,22 @@ const actions = {
   async 'termin.notiz'(d, el) {
     const t = (state.termine ?? []).find(x => x.id === d.id);
     if (t) { t.notiz = el.value; await ctx.save(); }   // kein Re-Render → Fokus bleibt
+  },
+  'tag.krankBis'(d, el) { krankBis = el.value; },      // nur merken, kein Re-Render
+  async 'tag.krank'(d) {
+    // Ohne Enddatum genau dieser eine Tag; mit Enddatum der ganze Zeitraum.
+    const anzahl = markiereAusfall(state, d.iso, krankBis || d.iso);
+    krankBis = '';
+    await ctx.save();
+    render();
+    sheet.aktualisiere(tagSheetHtml());
+    if (anzahl > 1) await hinweis('Gute Besserung', `${anzahl} Tage als krank vermerkt.`);
+  },
+  async 'tag.krankWeg'(d) {
+    entferneAusfall(state, d.iso);
+    await ctx.save();
+    render();
+    sheet.aktualisiere(tagSheetHtml());
   },
   'modulOeffne'(d) { aktivesModul = d.m; tab = 'heute'; unterseite = null; render(); window.scrollTo(0, 0); },
   'verlaufSub'(d) { verlaufSub = d.s; render(); mainInner.parentElement.scrollTo(0, 0); },
@@ -587,9 +605,14 @@ function wochenStatistikHtml() {
 // folgt in Etappe 3.
 // ------------------------------------------------------------
 
-/** Die Modul-Punkte eines Tages: erledigt = gefüllt, geplant = Umriss. */
-function kalPunkte(module, geplant = []) {
-  return module.map(m => `<span class="punkt ${m}"></span>`).join('')
+/**
+ * Die Punkte eines Tages: erledigt = gefüllt, geplant = Umriss.
+ * Ein Ausfall-Tag (krank) bekommt ein eigenes, neutrales Zeichen — es verdrängt
+ * nichts: wer trotz Erkältung radeln war, sieht beides.
+ */
+function kalPunkte(module, geplant = [], ausfall = null) {
+  return (ausfall ? `<span class="punkt ausfall ${ausfall}" title="Krank"></span>` : '')
+    + module.map(m => `<span class="punkt ${m}"></span>`).join('')
     + geplant.map(m => `<span class="punkt umriss ${m}"></span>`).join('');
 }
 
@@ -603,7 +626,7 @@ function kalenderStreifenHtml() {
     return `<button class="${klasse}" data-action="tag.auf" data-iso="${t.iso}">
       <span class="kal-wt">${t.kurz}</span>
       <span class="kal-num">${t.tag}</span>
-      <span class="kal-dots">${kalPunkte(t.module, t.geplant)}</span>
+      <span class="kal-dots">${kalPunkte(t.module, t.geplant, t.ausfall)}</span>
     </button>`;
   }).join('');
   return `<p class="sheet-abschnitt zwischen">Kalender</p>
@@ -627,7 +650,7 @@ function kalenderHtml() {
       t.istZukunft ? 'zukunft' : ''].filter(Boolean).join(' ');
     return `<button class="${klasse}" data-action="tag.auf" data-iso="${t.iso}">
       <span class="kal-num">${t.tag}</span>
-      <span class="kal-dots">${kalPunkte(t.module, t.geplant)}</span>
+      <span class="kal-dots">${kalPunkte(t.module, t.geplant, t.ausfall)}</span>
     </button>`;
   }).join('');
   return `<div class="kal-nav">
@@ -720,7 +743,33 @@ function tagSheetHtml() {
   // Planung (Termine) — bei heute und in der Zukunft
   if (planbar) koerper += planungHtml(d.termine, d.gesicht);
 
+  // Ausfall (krank) — für heute und vergangene Tage. In der Zukunft ergibt
+  // „krank melden" keinen Sinn; das wäre eine Vorhersage, kein Protokoll.
+  if (d.gesicht !== 'zukunft') koerper += ausfallHtml(d.ausfall);
+
   return `<div class="tag-sheet-kopf"><h3>${esc(langesDatum(tagSheetIso))}</h3>${badge}</div>${koerper}`;
+}
+
+/**
+ * Ausfall-Abschnitt: Tag als krank melden bzw. die Meldung zurücknehmen.
+ * Beim Melden lässt sich optional ein Enddatum angeben — eine Erkältung dauert
+ * selten genau einen Tag, und so muss man nicht jeden Tag einzeln antippen.
+ */
+function ausfallHtml(ausfall) {
+  if (ausfall) {
+    return `<p class="sheet-abschnitt zwischen">Ausfall</p>
+      <div class="karte ausfall-zeile">
+        <span class="au-titel"><span class="punkt ausfall krank"></span><strong>Krank gemeldet</strong></span>
+        <button class="knopf klein" data-action="tag.krankWeg" data-iso="${tagSheetIso}">Zurücknehmen</button>
+      </div>`;
+  }
+  return `<p class="sheet-abschnitt zwischen">Ausfall</p>
+    <div class="karte ausfall-neu">
+      <button class="knopf" data-action="tag.krank" data-iso="${tagSheetIso}">Krank melden</button>
+      <label class="au-bis">bis (optional)
+        <input type="date" value="${esc(krankBis)}" data-change="tag.krankBis">
+      </label>
+    </div>`;
 }
 
 /** Planungs-Abschnitt: bestehende Termine + Modul-Chips zum Anlegen. */

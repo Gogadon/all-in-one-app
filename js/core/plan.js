@@ -76,6 +76,19 @@ export function findeEinheit(state, modul, einheitId) {
   return planFuer(state, modul)?.einheiten.find(e => e.id === einheitId) ?? null;
 }
 
+/**
+ * Einheit ausdrücklich als Ruhetag markieren (oder die Markierung entfernen).
+ * Setzt `typ: 'rest'` — die Marke, die istRuhetag/einheitIstRuhetag ZUERST
+ * prüfen. Damit rückt der Zyklus an diesem Tag automatisch weiter, ohne dass
+ * man etwas abhaken muss, und man sieht im Plan auf einen Blick, was ein
+ * Ruhetag ist (statt es aus „nur Cardio" erraten zu müssen).
+ */
+export function setzeRuhetag(state, modul, einheitId, an = true) {
+  const e = mussEinheit(state, modul, einheitId);
+  if (an) e.typ = 'rest'; else delete e.typ;
+  return e;
+}
+
 /** Einheit umbenennen (wirkt an allen Zyklus-Stellen — es ist dieselbe). */
 export function benenneEinheitUm(state, modul, einheitId, neuerName) {
   const e = mussEinheit(state, modul, einheitId);

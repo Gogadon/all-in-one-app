@@ -33,7 +33,7 @@
 
 import {
   heuteIso, istWertbareTour, sessionsAmTag, sortiereNeuesteZuerst,
-  naechsterTag, wochenStart, zeitraum, isoZuDatum, termineAmTag,
+  naechsterTag, wochenStart, zeitraum, isoZuDatum, termineAmTag, ausfallAmTag,
 } from './core/model.js';
 import { zeitraumLabel } from './core/statistik.js';
 import { DASHBOARD_MODULE } from './dashboard.js';
@@ -73,18 +73,23 @@ function wochenEnde(iso) {
  *  - `geplant` = Module mit einem Termin, die NICHT schon erledigt sind
  *                (Umriss-Punkte; ein erfüllter Plan wird zum gefüllten Punkt)
  *  - `anzahl`  = Zahl der wertbaren Touren
+ *  - `ausfall` = Typ des Ausfall-Tags ('krank' …) oder null. Ein Ausfall-Tag
+ *                verdrängt nichts: wer trotz Erkältung radeln war, sieht beides.
  */
 export function tagMarker(state, iso) {
   const wertbar = (state.sessions ?? []).filter(s => istWertbareTour(s) && s.datum === iso);
   const erledigt = new Set(wertbar.map(modulVon));
   const geplant = new Set(
     termineAmTag(state, iso).map(t => t.modul).filter(m => !erledigt.has(m)));
-  return { module: ordneModule(erledigt), geplant: ordneModule(geplant), anzahl: wertbar.length };
+  return {
+    module: ordneModule(erledigt), geplant: ordneModule(geplant), anzahl: wertbar.length,
+    ausfall: ausfallAmTag(state, iso)?.typ ?? null,
+  };
 }
 
 /** Eine Zelle für Streifen/Raster. */
 function zelle(state, iso, { imMonat, heute }) {
-  const { module, geplant, anzahl } = tagMarker(state, iso);
+  const { module, geplant, anzahl, ausfall } = tagMarker(state, iso);
   const wochentag = (isoZuDatum(iso).getUTCDay() + 6) % 7;   // Mo=0
   return {
     iso,
@@ -96,6 +101,7 @@ function zelle(state, iso, { imMonat, heute }) {
     module,
     geplant,
     anzahl,
+    ausfall,
   };
 }
 
@@ -150,11 +156,15 @@ export function monatsGitter(state, anker = heuteIso(), heute = heuteIso()) {
  * (neueste zuerst) plus das Gesicht, aus dem die UI entscheidet, ob Rückblick,
  * beides oder Planung oben steht. Bewusst ROH (inkl. offener/übersprungener
  * Sessions) — welche Zeilen wie dargestellt werden, entscheidet die UI, die die
- * Module kennt. `termine` ist die (getrennte) Planungs-Liste des Tages.
- * @returns { iso, gesicht, sessions, termine }
+ * Module kennt. `termine` ist die (getrennte) Planungs-Liste des Tages,
+ * `ausfall` der Ausfall-Eintrag (krank o.Ä.) bzw. null.
+ * @returns { iso, gesicht, sessions, termine, ausfall }
  */
 export function tagDetail(state, iso, heute = heuteIso()) {
   const sessions = sortiereNeuesteZuerst(sessionsAmTag(state, iso));
   const termine = termineAmTag(state, iso);
-  return { iso, gesicht: gesichtFuer(iso, heute), sessions, termine };
+  return {
+    iso, gesicht: gesichtFuer(iso, heute), sessions, termine,
+    ausfall: ausfallAmTag(state, iso),
+  };
 }
