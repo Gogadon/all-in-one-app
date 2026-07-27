@@ -27,6 +27,7 @@ import { erstelleSchwimmModul, MODUL as SCHWIMMEN, schwimmStatistik } from './mo
 import { erstelleChallengeModul, MODUL as CHALLENGE, fortschritt } from './modules/challenge.js';
 import { wochenUebersicht } from './dashboard.js';
 import { wochenStreifen, monatsGitter, tagDetail } from './kalender.js';
+import { routeVonZustand, routeParsen } from './route.js';
 
 const main = document.getElementById('main');
 const nav = document.getElementById('nav');
@@ -81,6 +82,17 @@ const PLANBARE_MODULE = [KRAFT, RAD, WANDERN, SCHWIMMEN];
 // Module, die über die gemeinsame Touren-Fabrik laufen (spontanes Loggen,
 // „Heute" = Liste, Verlauf = Statistik). Schwimmen zählt in Einheiten.
 const TOUREN_MODULE = [RAD, WANDERN, SCHWIMMEN];
+
+// Welche Tabs hat welches Modul? Start führt immer heim.
+// Kraft: alle. Rad/Wandern/Schwimmen: kein Plan. Challenge: nur Ziele.
+// Steht hier oben, weil außer der Navi auch das URL-Routing sie prüft.
+const MODUL_TABS = {
+  [KRAFT]:     ['dashboard', 'heute', 'plan', 'verlauf'],
+  [RAD]:       ['dashboard', 'heute', 'verlauf'],
+  [WANDERN]:   ['dashboard', 'heute', 'verlauf'],
+  [SCHWIMMEN]: ['dashboard', 'heute', 'verlauf'],
+  [CHALLENGE]: ['dashboard', 'heute'],
+};
 
 // Line-Icons (stroke, viewBox 0 0 24 24) für die Dashboard-Kacheln.
 const MODUL_ICON = {
@@ -347,14 +359,7 @@ function navHtml() {
 
   // Welche Tabs hat das aktive Modul? Start führt immer heim.
   // Kraft: alle. Rad: kein Plan. Challenge: nur Heute (kein Plan/Verlauf).
-  const modulTabs = {
-    [KRAFT]:     ['dashboard', 'heute', 'plan', 'verlauf'],
-    [RAD]:       ['dashboard', 'heute', 'verlauf'],
-    [WANDERN]:   ['dashboard', 'heute', 'verlauf'],
-    [SCHWIMMEN]: ['dashboard', 'heute', 'verlauf'],
-    [CHALLENGE]: ['dashboard', 'heute'],
-  };
-  const erlaubt = modulTabs[aktivesModul] ?? ['dashboard', 'heute'];
+  const erlaubt = MODUL_TABS[aktivesModul] ?? ['dashboard', 'heute'];
 
   // Manche Tabs heißen je Modul anders. Challenge: „Heute" → „Ziele".
   // Rad/Wandern: „Heute" → „Touren" (der Tab ist die Tour-Übersicht mit
@@ -875,7 +880,43 @@ function formatZahl0(n) {
   return Math.round(n).toLocaleString('de-DE');
 }
 
+// ------------------------------------------------------------
+// URL-Routing — das Rechnen steckt in route.js (Node-getestet), hier nur
+// das Anwenden auf den UI-Zustand und das Setzen der Adresse.
+//
+// Bewusst replaceState statt neuer History-Einträge: Der Zurück-Knopf verlässt
+// die App wie bisher, statt sich erst durch jeden Tab-Wechsel zurückzuarbeiten.
+// Wer Tab-Wechsel in der History haben will, tauscht das hier gegen pushState.
+// ------------------------------------------------------------
+
+let routeSchreibt = false;   // verhindert, dass unser eigenes Setzen zurückschlägt
+
+/** Route auf den UI-Zustand anwenden. */
+function wendeRouteAn(hash) {
+  const z = routeParsen(hash, MODUL_TABS);
+  unterseite = z.unterseite;
+  tab = z.tab;
+  if (z.modul) aktivesModul = z.modul;
+  if (z.unterseite === 'kalender') kalenderAnker = heuteIso();
+}
+
+/** Adresse nachziehen, ohne die History vollzumüllen. */
+function schreibeRoute() {
+  const neu = routeVonZustand({ unterseite, tab, modul: aktivesModul });
+  if (location.hash === neu) return;
+  routeSchreibt = true;
+  history.replaceState(null, '', location.pathname + location.search + neu);
+  routeSchreibt = false;
+}
+
+window.addEventListener('hashchange', () => {
+  if (routeSchreibt) return;    // von uns selbst ausgelöst
+  wendeRouteAn(location.hash);
+  render();
+});
+
 function render() {
+  schreibeRoute();
   const navInhalt = navHtml();
   nav.innerHTML = navInhalt;
   // Ohne untere Navi (Dashboard) den Platz voll nutzen.
@@ -985,6 +1026,7 @@ try {
   // also im Zustand VOR allem, was heute noch passiert. Schlägt es fehl
   // (Speicher voll), läuft die App trotzdem normal weiter.
   sichereSnapshot(state);
+  wendeRouteAn(location.hash);   // Reload/Lesezeichen landet wieder dort, wo man war
   render();
 } catch (err) {
   mainInner.innerHTML = `<div class="karte leer"><h2>Da klemmt was.</h2><p class="dim">${esc(err.message)}</p></div>`;
