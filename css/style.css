@@ -702,6 +702,10 @@ body.eingabe-aktiv main{padding-bottom:calc(76px + 50vh)}
 .kw-feld-eingabe .einheit{flex:none;min-width:34px;font-size:13px;color:var(--dim)}
 .kw-feld-eingabe .feld-weg{flex:none;color:var(--dim-2);font-size:13px;padding:4px 6px}
 
+/* Luft vor dem Speichern-Knopf: .knopf.voll bringt nur margin-bottom mit,
+   dadurch klebte er direkt an der Chip-Reihe „Mehr Werte". */
+.kw-speichern{margin-top:18px}
+
 .kw-zeile-karte{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
 .kw-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:5px}
 .kw-chip{font-size:12px;color:var(--dim);background:var(--surface-2);

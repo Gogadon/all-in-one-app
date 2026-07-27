@@ -137,7 +137,7 @@ export function erstelleKoerperModul(ctx) {
         ${zeilen}
       </div>
       ${chips}
-      <button class="knopf primaer gross voll" data-action="koerper.speichern">Messung speichern ✓</button>`;
+      <button class="knopf primaer gross voll kw-speichern" data-action="koerper.speichern">Messung speichern ✓</button>`;
   }
 
   /** Verlauf als Liste, neueste zuerst. */
