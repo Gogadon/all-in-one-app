@@ -20,6 +20,10 @@
 // Ein Eintrag in KOERPER_WERTE, sonst nichts. Eingabe, Anzeige, Verlauf und
 // Formatierung richten sich danach — derselbe Registry-Gedanke wie in
 // metrics.js.
+//
+// `schritt` ist die Schrittweite, `platzhalter` der graue Beispieltext im
+// leeren Feld. Zwei verschiedene Dinge: Als Platzhalter wäre „0,1" nutzlos
+// und sähe aus, als stünde schon ein Wert drin.
 // ============================================================
 
 import { neueId, heuteIso } from './model.js';
@@ -27,31 +31,31 @@ import { formatZahl } from './metrics.js';
 
 export const KOERPER_WERTE = Object.freeze({
   gewicht: Object.freeze({
-    label: 'Gewicht', einheit: 'kg', dezimal: 1, schritt: 0.1,
+    label: 'Gewicht', einheit: 'kg', dezimal: 1, schritt: 0.1, platzhalter: '95,0',
     standard: true,      // ohne Zutun im Eingabeformular sichtbar
     richtung: 'runter',  // „gut" ist kleiner — nur für die Färbung der Änderung
   }),
   kfa: Object.freeze({
-    label: 'Körperfett', einheit: '%', dezimal: 1, schritt: 0.1,
+    label: 'Körperfett', einheit: '%', dezimal: 1, schritt: 0.1, platzhalter: '23,5',
     standard: true, richtung: 'runter',
   }),
   muskelmasse: Object.freeze({
-    label: 'Muskelmasse', einheit: 'kg', dezimal: 1, schritt: 0.1,
+    label: 'Muskelmasse', einheit: 'kg', dezimal: 1, schritt: 0.1, platzhalter: '35,0',
     richtung: 'hoch',
   }),
   wasser: Object.freeze({
-    label: 'Wasseranteil', einheit: '%', dezimal: 1, schritt: 0.1,
+    label: 'Wasseranteil', einheit: '%', dezimal: 1, schritt: 0.1, platzhalter: '55,0',
     richtung: 'hoch',
   }),
   knochenmasse: Object.freeze({
-    label: 'Knochenmasse', einheit: 'kg', dezimal: 1, schritt: 0.1,
+    label: 'Knochenmasse', einheit: 'kg', dezimal: 1, schritt: 0.1, platzhalter: '3,2',
   }),
   viszeralfett: Object.freeze({
-    label: 'Viszeralfett', einheit: '', dezimal: 1, schritt: 0.5,
+    label: 'Viszeralfett', einheit: '', dezimal: 1, schritt: 0.5, platzhalter: '10',
     richtung: 'runter',
   }),
   bmi: Object.freeze({
-    label: 'BMI', einheit: '', dezimal: 1, schritt: 0.1,
+    label: 'BMI', einheit: '', dezimal: 1, schritt: 0.1, platzhalter: '27,0',
     richtung: 'runter',
   }),
 });
