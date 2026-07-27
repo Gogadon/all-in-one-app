@@ -111,7 +111,7 @@ export function erstelleKoerperModul(ctx) {
         <label>${esc(def.label)}</label>
         <div class="kw-feld-eingabe">
           <input type="text" inputmode="decimal" value="${esc(wert)}"
-            placeholder="${esc(def.schritt ? formatZahl(def.schritt, def.dezimal ?? 1) : '0')}"
+            placeholder="${esc(def.platzhalter ?? '')}"
             data-change="koerper.wert" data-typ="${typ}">
           ${def.einheit ? `<span class="einheit">${esc(def.einheit)}</span>` : ''}
           ${abwaehlbar ? `<button class="feld-weg" data-action="koerper.feldWeg" data-typ="${typ}">✕</button>` : ''}

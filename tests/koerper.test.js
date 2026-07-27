@@ -42,6 +42,17 @@ test('Körper: Register kennt Gewicht und KFA als Standard, weitere optional', (
   }
 });
 
+test('Körper: jeder Wert hat einen Beispiel-Platzhalter, nicht die Schrittweite', () => {
+  for (const [typ, def] of Object.entries(KOERPER_WERTE)) {
+    assert.ok(def.platzhalter, `${typ} hat keinen Platzhalter`);
+    // Der Platzhalter soll ein plausibler Beispielwert sein — die Schrittweite
+    // („0,1") als grauer Text ist nutzlos und sieht aus wie ein echter Wert.
+    const alsZahl = Number(String(def.platzhalter).replace(',', '.'));
+    assert.notEqual(alsZahl, def.schritt, `${typ}: Platzhalter ist die Schrittweite`);
+    assert.ok(alsZahl > 1, `${typ}: Platzhalter ${def.platzhalter} wirkt nicht wie ein echter Wert`);
+  }
+});
+
 test('Körper: Formatierung mit deutscher Schreibweise und Einheit', () => {
   assert.equal(formatKoerperWert('gewicht', 95.1), '95,1 kg');
   assert.equal(formatKoerperWert('kfa', 23.5), '23,5 %');
