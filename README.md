@@ -76,6 +76,7 @@ Tests unmöglich (sie laden Module einzeln, ohne DOM).
 | `js/core/plan.js` | Trainingszyklus, Einheiten, Positionsberechnung |
 | `js/core/library.js` | Übungs-Bibliothek |
 | `js/core/storage.js` | Speichern, Laden, Backup, Migration |
+| `js/route.js` | Adresse ⇄ Ansicht (Hash-Routing, reine Logik) |
 | `js/modules/kraft.js` | Kraftmodul (das größte — Progression, PRs, Sätze) |
 | `js/modules/rad.js` | Radmodul (freie Touren, kein Plan) |
 | `js/modules/wandern.js` | Wandermodul (freie Touren; Schritte, Höhenmeter, Std:Min) |
@@ -141,6 +142,23 @@ Ein Ausfall-Tag verdrängt nichts: Wer trotz Erkältung radeln war, sieht im
 Kalender beides. Am Kraft-Zyklus ändert er bewusst nichts — ein offener
 Krafttag wartet ohnehin, bis er erledigt oder übersprungen ist.
 
+### 3c. Die Adresse spiegelt die Ansicht (Hash-Routing)
+
+`#/dashboard` · `#/kraft/heute` · `#/rad/verlauf` · `#/daten` · `#/kalender`.
+Ein Reload landet dadurch wieder dort, wo man war, und eine Ansicht lässt sich
+als Lesezeichen ablegen.
+
+**Hash statt echter Pfade, mit Absicht:** Die App liegt als statische Dateien
+auf GitHub Pages. `/kraft/heute` würde beim Neuladen einen 404 erzeugen, weil
+dort keine Datei liegt — ein Hash kommt nie beim Server an.
+
+Gesetzt wird per `replaceState`: Der Zurück-Knopf verlässt die App wie bisher,
+statt sich erst durch jeden Tab-Wechsel zurückzuarbeiten. Wer Tab-Wechsel in
+der History haben will, tauscht das in `app.js` gegen `pushState`.
+
+Unbekannte Routen fallen sauber zurück (fremdes Modul → Dashboard, unpassender
+Tab → „heute"), damit ein altes Lesezeichen nie in einer leeren Ansicht endet.
+
 ### 4. Service Worker cacht nichts — mit Absicht
 
 Er existiert nur, damit Chrome die App als installierbar erkennt. Jede Anfrage
@@ -180,7 +198,7 @@ Historie, Progression und Einstellungen.
 
 ## Tests
 
-198 Tests, alle ohne Browser lauffähig. Sie decken die Rechenlogik ab:
+206 Tests, alle ohne Browser lauffähig. Sie decken die Rechenlogik ab:
 Progression, PR-Erkennung, Zyklus-Berechnung, Zeiträume, Datumsgrenzen,
 Statistik-Aggregation und Challenge-Fortschritt.
 
