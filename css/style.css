@@ -186,6 +186,12 @@ h1,h2,h3,.num{font-family:var(--font-display);letter-spacing:-.02em}
 .knopf.gefahr{border-color:rgba(255,107,107,.4);color:#ff8a8a}
 .knopf.voll{width:100%;margin-bottom:12px}
 .knopf-zeile{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+/* Ein Knopf direkt hinter einer Chip- oder Knopf-Gruppe braucht Luft, sonst
+   klebt er daran (z.B. „Mehr Werte" → „Tour speichern", oder die Hero-Zeile
+   → „Freie Session starten"). Zentral geregelt statt je Modul: dasselbe
+   Muster gibt es in Kraft, den Tour-Modulen, Körper und Challenge. */
+.chip-zeile + .knopf,
+.knopf-zeile + .knopf{margin-top:16px}
 .fertig-banner{display:flex;align-items:center;justify-content:space-between;
   gap:12px;padding:12px 14px;font-weight:700;
   color:var(--kraft);background:rgba(205,253,52,.08);
