@@ -24,6 +24,9 @@ import {
 import { erstelleRadModul, MODUL as RAD, tourStatistik } from './modules/rad.js';
 import { erstelleWanderModul, MODUL as WANDERN, wanderStatistik } from './modules/wandern.js';
 import { erstelleSchwimmModul, MODUL as SCHWIMMEN, schwimmStatistik } from './modules/schwimmen.js';
+import { erstelleKoerperModul, MODUL as KOERPER } from './modules/koerper.js';
+import { letzterWert as letzterKoerperWert, veraenderung as koerperVeraenderung,
+  formatKoerperWert } from './core/koerper.js';
 import { erstelleChallengeModul, MODUL as CHALLENGE, fortschritt } from './modules/challenge.js';
 import { wochenUebersicht } from './dashboard.js';
 import { wochenStreifen, monatsGitter, tagDetail } from './kalender.js';
@@ -70,6 +73,7 @@ const kraft = erstelleKraftModul(ctx);
 const rad = erstelleRadModul(ctx);
 const wandern = erstelleWanderModul(ctx);
 const schwimmen = erstelleSchwimmModul(ctx);
+const koerper = erstelleKoerperModul(ctx);
 const challenge = erstelleChallengeModul(ctx);
 
 // Welches Modul zeigt der Heute-/Verlauf-Tab gerade? (Plan bleibt Kraft.)
@@ -77,7 +81,7 @@ let aktivesModul = KRAFT;
 
 // Kalender-Planung: welche Module planbar sind (Challenge = Auswertung, kein Tun)
 // und ihre Anzeigenamen.
-const MODUL_LABEL = { [KRAFT]: 'Kraft', [RAD]: 'Rad', [WANDERN]: 'Wandern', [SCHWIMMEN]: 'Schwimmen', [CHALLENGE]: 'Challenge' };
+const MODUL_LABEL = { [KRAFT]: 'Kraft', [RAD]: 'Rad', [WANDERN]: 'Wandern', [SCHWIMMEN]: 'Schwimmen', [KOERPER]: 'Körper', [CHALLENGE]: 'Challenge' };
 const PLANBARE_MODULE = [KRAFT, RAD, WANDERN, SCHWIMMEN];
 // Module, die über die gemeinsame Touren-Fabrik laufen (spontanes Loggen,
 // „Heute" = Liste, Verlauf = Statistik). Schwimmen zählt in Einheiten.
@@ -91,6 +95,7 @@ const MODUL_TABS = {
   [RAD]:       ['dashboard', 'heute', 'verlauf'],
   [WANDERN]:   ['dashboard', 'heute', 'verlauf'],
   [SCHWIMMEN]: ['dashboard', 'heute', 'verlauf'],
+  [KOERPER]:   ['dashboard', 'heute'],
   [CHALLENGE]: ['dashboard', 'heute'],
 };
 
@@ -100,6 +105,7 @@ const MODUL_ICON = {
   [RAD]: '<svg viewBox="0 0 24 24"><circle cx="6" cy="16.5" r="3.3"/><circle cx="18" cy="16.5" r="3.3"/><path d="M6 16.5l5-8 7 8M11 8.5h5"/></svg>',
   [WANDERN]: '<svg viewBox="0 0 24 24"><path d="M3 19h18M6 19l4-6 3 4M12.5 19l4-7 4.5 7"/></svg>',
   [SCHWIMMEN]: '<svg viewBox="0 0 24 24"><path d="M2 8c2 0 2 2 4 2s2-2 4-2 2 2 4 2 2-2 4-2 2 2 4 2M2 14c2 0 2 2 4 2s2-2 4-2 2 2 4 2 2-2 4-2 2 2 4 2"/></svg>',
+  [KOERPER]: '<svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="M8.5 9.5a3.5 3.5 0 0 1 7 0"/><path d="M12 9.5V13"/></svg>',
   [CHALLENGE]: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/></svg>',
 };
 
@@ -202,6 +208,7 @@ const actions = {
   ...rad.actions,
   ...wandern.actions,
   ...schwimmen.actions,
+  ...koerper.actions,
   ...challenge.actions,
 };
 
@@ -371,6 +378,7 @@ function navHtml() {
     if (t.id === 'verlauf' && heisstTouren) return 'Statistik';
     if (t.id !== 'heute') return t.label;
     if (aktivesModul === CHALLENGE) return 'Ziele';
+    if (aktivesModul === KOERPER) return 'Werte';
     // Schwimmen zählt in Einheiten, Rad/Wandern in Touren.
     if (heisstTouren) return aktivesModul === SCHWIMMEN ? 'Einheiten' : 'Touren';
     return t.label;
@@ -386,6 +394,7 @@ function navHtml() {
     if (t.id === 'verlauf' && heisstTouren) return statistikIcon;
     if (t.id !== 'heute') return t.icon;
     if (aktivesModul === CHALLENGE) return zielIcon;
+    if (aktivesModul === KOERPER) return MODUL_ICON[KOERPER];
     if (heisstTouren) return tourenIcon;
     return t.icon;
   };
@@ -832,6 +841,14 @@ function dashboardHtml() {
   const wanderStatus = wanderStat.anzahl > 0 ? `${wanderStat.anzahl} Touren · ${Math.round(wanderStat.distanz / 1000)} km` : 'Noch keine Tour';
   const schwimmStat = schwimmStatistik(state);
   const schwimmStatus = schwimmStat.anzahl > 0 ? `${schwimmStat.anzahl} Einheiten · ${schwimmStat.bahnen} Bahnen` : 'Noch keine Einheit';
+  const koerperStatus = (() => {
+    const letzte = letzterKoerperWert(state, 'gewicht');
+    if (!letzte) return 'Noch keine Messung';
+    const v = koerperVeraenderung(state, 'gewicht');
+    const text = formatKoerperWert('gewicht', letzte.wert);
+    if (!v || v.diff === 0) return text;
+    return `${text} · ${v.diff > 0 ? '+' : ''}${formatZahl(v.diff, 1)}`;
+  })();
   const chStatus = (() => {
     const ziele = state.challenges ?? [];
     if (!ziele.length) return 'Keine Ziele';
@@ -859,6 +876,11 @@ function dashboardHtml() {
       <span class="mk-icon">${MODUL_ICON[SCHWIMMEN]}</span>
       <span class="mk-label">Schwimmen</span>
       <span class="mk-status">${esc(schwimmStatus)}</span>
+    </button>
+    <button class="modul-kachel koerper" data-action="modulOeffne" data-m="${KOERPER}">
+      <span class="mk-icon">${MODUL_ICON[KOERPER]}</span>
+      <span class="mk-label">Körper</span>
+      <span class="mk-status">${esc(koerperStatus)}</span>
     </button>
     <button class="modul-kachel challenge" data-action="modulOeffne" data-m="${CHALLENGE}">
       <span class="mk-icon">${MODUL_ICON[CHALLENGE]}</span>
@@ -941,6 +963,7 @@ function render() {
         aktivesModul === RAD ? rad.heuteHtml()
         : aktivesModul === WANDERN ? wandern.heuteHtml()
         : aktivesModul === SCHWIMMEN ? schwimmen.heuteHtml()
+        : aktivesModul === KOERPER ? koerper.heuteHtml()
         : aktivesModul === CHALLENGE ? challenge.heuteHtml()
         : kraft.heuteHtml();
       break;

@@ -1,6 +1,7 @@
 # All-in-One
 
-Fitness-Tracking-App für Kraft, Rad, Wandern, Schwimmen und selbstgesetzte Ziele.
+Fitness-Tracking-App für Kraft, Rad, Wandern, Schwimmen, Körperwerte und
+selbstgesetzte Ziele.
 Vanilla JavaScript, keine Frameworks, kein Build-Schritt. Läuft als PWA.
 
 Live: https://gogadon.github.io/all-in-one-app/
@@ -76,11 +77,13 @@ Tests unmöglich (sie laden Module einzeln, ohne DOM).
 | `js/core/plan.js` | Trainingszyklus, Einheiten, Positionsberechnung |
 | `js/core/library.js` | Übungs-Bibliothek |
 | `js/core/storage.js` | Speichern, Laden, Backup, Migration |
+| `js/core/koerper.js` | Körperwerte-Register + Verlauf (Gewicht, KFA …) |
 | `js/route.js` | Adresse ⇄ Ansicht (Hash-Routing, reine Logik) |
 | `js/modules/kraft.js` | Kraftmodul (das größte — Progression, PRs, Sätze) |
 | `js/modules/rad.js` | Radmodul (freie Touren, kein Plan) |
 | `js/modules/wandern.js` | Wandermodul (freie Touren; Schritte, Höhenmeter, Std:Min) |
 | `js/modules/schwimmen.js` | Schwimmmodul (freie Einheiten; Bahnen als Primär-Einheit) |
+| `js/modules/koerper.js` | Körper-Tab (Werte eintragen, Verlauf) |
 | `js/modules/challenge.js` | Ziele — liest die anderen Module aus, erzeugt kaum eigene Daten |
 | `js/ui/` | Wiederverwendbare Bausteine: Dialoge, Bottom-Sheet, Charts, Teilen-Karte |
 | `sw.js` | Service Worker — nur für Installierbarkeit, **cacht bewusst nichts** |
@@ -159,6 +162,23 @@ der History haben will, tauscht das in `app.js` gegen `pushState`.
 Unbekannte Routen fallen sauber zurück (fremdes Modul → Dashboard, unpassender
 Tab → „heute"), damit ein altes Lesezeichen nie in einer leeren Ansicht endet.
 
+### 3d. Körperwerte sind kein Training
+
+`state.koerper` ist eine eigene Top-Level-Liste (`{ id, datum, werte, notiz,
+erstelltAm }`) — wie `termine` und `ausfallTage`: erzeugt nie eine Session und
+fließt **nie** in Statistik oder Wochenzahlen ein. Eine Messung ist ein
+*Zustand* des Körpers, keine Aktivität.
+
+Bewusst **nicht** in `metrics.js`: Dort meint `gewicht` das GEHOBENE Gewicht.
+Ein zweites `gewicht` mit anderer Bedeutung im selben Register wäre genau die
+Doppeldeutigkeit, die dieses Projekt vermeidet. Körperwerte haben deshalb ihr
+eigenes kleines Register in `core/koerper.js` — neue Waage mit neuem Wert =
+ein Eintrag dort, sonst nichts.
+
+**Eine Messung pro Tag:** Ein zweiter Eintrag am selben Tag ergänzt den
+vorhandenen (upsert), statt eine zweite Zeile zu erzeugen — so bleibt der
+Verlauf eine Kurve statt einer Punktewolke.
+
 ### 4. Service Worker cacht nichts — mit Absicht
 
 Er existiert nur, damit Chrome die App als installierbar erkennt. Jede Anfrage
@@ -198,7 +218,7 @@ Historie, Progression und Einstellungen.
 
 ## Tests
 
-206 Tests, alle ohne Browser lauffähig. Sie decken die Rechenlogik ab:
+221 Tests, alle ohne Browser lauffähig. Sie decken die Rechenlogik ab:
 Progression, PR-Erkennung, Zyklus-Berechnung, Zeiträume, Datumsgrenzen,
 Statistik-Aggregation und Challenge-Fortschritt.
 
