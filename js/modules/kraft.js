@@ -31,6 +31,7 @@ import {
   addAktivitaetZuEinheit, entferneAktivitaetAusEinheit, verschiebeAktivitaetInEinheit,
   zyklusEinheiten, addZuZyklus, entferneAusZyklus, verschiebeImZyklus, setzeAnker,
   naechsteEinheit, sessionAusEinheit, aktuelleEinheit,
+  setzeRuhetag, einheitIstRuhetag,
 } from '../core/plan.js';
 import { sparkline, balken, trend } from '../ui/charts.js';
 import { teileKarte } from '../ui/share.js';
@@ -764,7 +765,7 @@ export function erstelleKraftModul(ctx) {
       html += `<div class="karte zyklus-karte anim">` + zyklus.map((e, i) => `
         <div class="zyklus-zeile ${i === pos ? 'aktuell' : ''}">
           <span class="tag-nr">${i + 1}</span>
-          <span class="name">${esc(e.name)}${i === pos ? (heuteErledigt ? ' <span class="dim">· heute ✓</span>' : ' <span class="dim">· heute</span>') : ''}</span>
+          <span class="name">${esc(e.name)}${e.typ === 'rest' ? ' <span class="rest-badge">Rest</span>' : ''}${i === pos ? (heuteErledigt ? ' <span class="dim">· heute ✓</span>' : ' <span class="dim">· heute</span>') : ''}</span>
           <span class="werkzeuge">
             <button data-action="k.zyklusSchieb" data-i="${i}" data-r="-1"><span class="pfeil-ico"></span></button>
             <button data-action="k.zyklusSchieb" data-i="${i}" data-r="1"><span class="pfeil-ico runter"></span></button>
@@ -797,7 +798,7 @@ export function erstelleKraftModul(ctx) {
     let html = `<div class="karte plan-einheit anim">
       <div class="seg-kopf">
         <button class="seg-titel" data-action="k.planAuf" data-einheit="${einheit.id}">
-          <strong>${esc(einheit.name)}</strong>
+          <strong>${esc(einheit.name)}${einheit.typ === 'rest' ? ' <span class="rest-badge">Rest</span>' : ''}</strong>
           <small class="dim">${einheit.segmente.length} Übungen${imZyklus ? ` · ${imZyklus}× im Zyklus` : ' · nicht im Zyklus'}</small>
         </button>
         <span class="werkzeuge">
@@ -824,9 +825,36 @@ export function erstelleKraftModul(ctx) {
       html += `<div class="knopf-zeile">
         <button class="knopf klein" data-action="k.planUebungPlus" data-einheit="${einheit.id}">+ Übung</button>
         <button class="knopf klein geist" data-action="k.zyklusPlusDirekt" data-einheit="${einheit.id}">In Zyklus einfügen</button>
-      </div></div>`;
+      </div>`;
+      html += ruhetagSchalterHtml(einheit);
+      html += `</div>`;
     }
     return html + `</div>`;
+  }
+
+  /**
+   * Schalter „Als Rest Day markieren".
+   * Zeigt zusätzlich an, wenn eine Einheit auch OHNE Markierung schon als
+   * Ruhetag behandelt wird (nur Cardio = Active Rest) — sonst wundert man sich,
+   * warum der Zyklus weiterrückt, obwohl der Schalter aus ist.
+   */
+  function ruhetagSchalterHtml(einheit) {
+    const an = einheit.typ === 'rest';
+    const autoRuhe = !an && einheitIstRuhetag(S(), einheit);
+    return `<div class="ruhetag-schalter ${an ? 'an' : ''}">
+      <button class="schalter ${an ? 'an' : ''}" role="switch" aria-checked="${an}"
+        data-action="k.ruhetag" data-einheit="${einheit.id}" data-an="${an ? '0' : '1'}">
+        <span class="schalter-knauf"></span>
+      </button>
+      <div class="rs-text">
+        <strong>Als Rest Day markieren</strong>
+        <small class="dim">${an
+          ? 'Wird beim Tageswechsel automatisch weitergeschaltet.'
+          : autoRuhe
+            ? 'Zählt schon jetzt als Ruhetag, weil nur Cardio drin ist.'
+            : 'Ruhetage schalten beim Tageswechsel automatisch weiter.'}</small>
+      </div>
+    </div>`;
   }
 
   function heuteWaehlenHtml() {
@@ -1444,6 +1472,10 @@ export function erstelleKraftModul(ctx) {
       const e = addEinheit(S(), MODUL, { name });
       planOffen.add(e.id);
       sheet.schliesse();
+      await speichernUndZeigen();
+    },
+    async 'k.ruhetag'(d) {
+      setzeRuhetag(S(), MODUL, d.einheit, d.an === '1');
       await speichernUndZeigen();
     },
     'k.einheitName'(d) {

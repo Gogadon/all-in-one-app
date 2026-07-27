@@ -553,6 +553,26 @@ h1,h2,h3,.num{font-family:var(--font-display);letter-spacing:-.02em}
 body.ohne-navi main{padding-bottom:16px}
 body.ohne-navi .nav{display:none}
 
+/* Rest-Day-Schalter im Einheiten-Editor */
+.ruhetag-schalter{display:flex;align-items:center;gap:12px;margin-top:10px;
+  padding:11px 12px;border:1px solid var(--line);border-radius:var(--r-tile);
+  background:var(--surface-2)}
+.ruhetag-schalter.an{border-color:rgba(205,253,52,.35);background:rgba(205,253,52,.06)}
+.ruhetag-schalter .rs-text{display:flex;flex-direction:column;gap:2px;min-width:0}
+.ruhetag-schalter strong{font-size:13.5px}
+.ruhetag-schalter small{font-size:11.5px;line-height:1.35}
+.schalter{flex:none;width:46px;height:27px;border-radius:999px;padding:3px;
+  background:var(--surface);border:1px solid var(--line);display:flex;
+  transition:background .15s ease,border-color .15s ease}
+.schalter.an{background:var(--kraft);border-color:var(--kraft);justify-content:flex-end}
+.schalter-knauf{width:21px;height:21px;border-radius:50%;background:var(--dim-2)}
+.schalter.an .schalter-knauf{background:#0C0D0E}
+
+/* „Rest"-Kennzeichnung in Zyklus- und Bibliotheksliste */
+.rest-badge{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;
+  font-size:10.5px;font-weight:700;letter-spacing:.03em;vertical-align:1px;
+  color:var(--kraft);background:rgba(205,253,52,.12)}
+
 /* Ausfall-Tage (krank) im Tages-Sheet */
 .ausfall-zeile{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .au-titel{display:flex;align-items:center;gap:8px;min-width:0}

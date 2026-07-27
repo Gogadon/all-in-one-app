@@ -124,6 +124,23 @@ Und ein importiertes Backup kann nie „veralten".
 Wer `plan.position` direkt setzt, wird beim nächsten Rendern überschrieben.
 Für „Heute korrigieren" gibt es `setzeAnker()`.
 
+**Ruhetage** lassen sich im Plan ausdrücklich markieren (`einheit.typ = 'rest'`,
+Schalter im Einheiten-Editor). Ohne Markierung wird geraten: eine Einheit, in
+der ausschließlich Cardio steckt, gilt als „Active Rest". Die ausdrückliche
+Marke gewinnt immer — deshalb prüft `istRuhetag()` sie zuerst.
+
+### 3b. Ausfall-Tage (krank) sind kein Training
+
+`state.ausfallTage` ist eine eigene Top-Level-Liste (`{ id, datum, typ, notiz,
+erstelltAm }`), nach demselben Muster wie `state.termine`: nie aus Sessions
+abgeleitet, erzeugt nie eine Session und fließt **nie** in Statistik oder
+Wochenzahlen ein. `typ` ist von Anfang an dabei, damit `'urlaub'` oder
+`'verletzung'` später ohne Schema-Änderung dazukommen können.
+
+Ein Ausfall-Tag verdrängt nichts: Wer trotz Erkältung radeln war, sieht im
+Kalender beides. Am Kraft-Zyklus ändert er bewusst nichts — ein offener
+Krafttag wartet ohnehin, bis er erledigt oder übersprungen ist.
+
 ### 4. Service Worker cacht nichts — mit Absicht
 
 Er existiert nur, damit Chrome die App als installierbar erkennt. Jede Anfrage
@@ -163,7 +180,7 @@ Historie, Progression und Einstellungen.
 
 ## Tests
 
-183 Tests, alle ohne Browser lauffähig. Sie decken die Rechenlogik ab:
+198 Tests, alle ohne Browser lauffähig. Sie decken die Rechenlogik ab:
 Progression, PR-Erkennung, Zyklus-Berechnung, Zeiträume, Datumsgrenzen,
 Statistik-Aggregation und Challenge-Fortschritt.
 

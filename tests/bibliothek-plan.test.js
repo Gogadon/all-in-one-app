@@ -395,3 +395,59 @@ test('Plan: Anker folgt der Einheit bei Zyklus-Umbau', async () => {
   loescheEinheit(s2, M, B.id);
   assert.ok(cur(s2) === 'A' || cur(s2) === 'C');
 });
+
+// ==================================================================
+// Rest Days: Einheit ausdrücklich als Ruhetag markieren
+// ==================================================================
+
+test('Ruhetag: Markierung setzen und wieder entfernen', async () => {
+  const { addEinheit, setzeRuhetag, findeEinheit } = await import('../js/core/plan.js');
+  const { leererZustand } = await import('../js/core/storage.js');
+  const state = leererZustand();
+  const e = addEinheit(state, 'kraft', { name: 'Sonntag frei' });
+  assert.equal(e.typ, undefined);
+
+  setzeRuhetag(state, 'kraft', e.id, true);
+  assert.equal(findeEinheit(state, 'kraft', e.id).typ, 'rest');
+
+  setzeRuhetag(state, 'kraft', e.id, false);
+  assert.equal(findeEinheit(state, 'kraft', e.id).typ, undefined);
+});
+
+test('Ruhetag: markierte Einheit schaltet beim Tageswechsel automatisch weiter', async () => {
+  const { addEinheit, addZuZyklus, addAktivitaetZuEinheit, setzeRuhetag, setzeAnker, aktuelleEinheit }
+    = await import('../js/core/plan.js');
+  const { addAktivitaet } = await import('../js/core/library.js');
+  const { leererZustand } = await import('../js/core/storage.js');
+  const M = 'kraft';
+  const state = leererZustand();
+  const bank = addAktivitaet(state, { name: 'Bank', kategorie: 'kraft', messwerte: ['gewicht', 'wdh'] });
+
+  // Zyklus: Push (Kraft) → Frei (Ruhetag) → Pull (Kraft)
+  const push = addEinheit(state, M, { name: 'Push' });
+  const frei = addEinheit(state, M, { name: 'Frei' });
+  const pull = addEinheit(state, M, { name: 'Pull' });
+  addAktivitaetZuEinheit(state, M, push.id, bank.id);
+  addAktivitaetZuEinheit(state, M, pull.id, bank.id);
+  // „Frei" enthält eine Kraftübung — ohne Markierung wäre es KEIN Ruhetag.
+  addAktivitaetZuEinheit(state, M, frei.id, bank.id);
+  addZuZyklus(state, M, push.id); addZuZyklus(state, M, frei.id); addZuZyklus(state, M, pull.id);
+
+  setzeAnker(state, M, 1, '2026-07-01');   // heute steht „Frei" an
+  assert.equal(aktuelleEinheit(state, M, '2026-07-01').name, 'Frei');
+
+  // Ohne Markierung: nichts erledigt → der Zyklus wartet auf „Frei"
+  assert.equal(aktuelleEinheit(state, M, '2026-07-02').name, 'Frei');
+
+  // Mit Markierung: der Ruhetag ist mit dem Kalendertag durch → morgen Pull
+  setzeRuhetag(state, M, frei.id, true);
+  assert.equal(aktuelleEinheit(state, M, '2026-07-02').name, 'Pull');
+});
+
+test('Ruhetag: unbekannte Einheit wirft', async () => {
+  const { setzeRuhetag, erstellePlan } = await import('../js/core/plan.js');
+  const { leererZustand } = await import('../js/core/storage.js');
+  const state = leererZustand();
+  erstellePlan(state, 'kraft');
+  assert.throws(() => setzeRuhetag(state, 'kraft', 'gibts-nicht', true), /nicht gefunden/);
+});
