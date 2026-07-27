@@ -181,10 +181,21 @@ Verlauf eine Kurve statt einer Punktewolke.
 
 ### 4. Service Worker cacht nichts — mit Absicht
 
-Er existiert nur, damit Chrome die App als installierbar erkennt. Jede Anfrage
-geht direkt ans Netz, deshalb sind Deploys sofort sichtbar.
+Er existiert, damit Chrome die App als installierbar erkennt, und er sorgt
+dafür, dass Deploys sofort ankommen.
 
-Falls je Offline-Caching dazukommt: **unbedingt** einen sichtbaren
+Wichtig zu verstehen: „kein Cache" hieß früher nur, dass der Service Worker
+selbst keinen anlegt. Der **normale HTTP-Cache des Browsers** greift trotzdem —
+GitHub Pages liefert statische Dateien mit Gültigkeitsdauer aus. In einer
+installierten PWA gibt es kein „Hard Reload", deshalb konnte ein Deploy
+minutenlang unsichtbar bleiben, obwohl im Code „Updates sind sofort da" stand.
+
+Deshalb holt der `fetch`-Handler eigene Dateien mit `cache: 'reload'` (geht am
+HTTP-Cache vorbei und frischt ihn auf); ohne Netz fällt er auf `force-cache`
+zurück, damit die Seite nicht einfach kaputt ist. Registriert wird mit
+`updateViaCache: 'none'`, sonst käme ausgerechnet `sw.js` selbst aus dem Cache.
+
+Falls je echtes Offline-Caching dazukommt: **unbedingt** einen sichtbaren
 „Update verfügbar"-Flow mitbauen. Sonst hält der alte Service Worker die alten
 Dateien fest, und neue Versionen erscheinen erst nach Tagen.
 

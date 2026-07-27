@@ -34,7 +34,10 @@
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function () {
-        navigator.serviceWorker.register('sw.js').catch(function (err) {
+        // updateViaCache:'none' → sw.js wird bei der Update-Prüfung IMMER frisch
+        // geholt. Sonst käme ausgerechnet der Service Worker, der für frische
+        // Dateien sorgen soll, selbst aus dem HTTP-Cache.
+        navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(function (err) {
           // Ohne SW läuft die App trotzdem — nur ggf. nicht installierbar.
           console.warn('Service Worker nicht registriert:', err && err.message);
         });

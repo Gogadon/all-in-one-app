@@ -24,7 +24,24 @@ self.addEventListener('activate', (e) => {
   );
 });
 
-self.addEventListener('fetch', () => {
-  // Kein respondWith → der Browser holt normal aus dem Netz.
-  // Genau so bleibt die App immer aktuell.
+self.addEventListener('fetch', (e) => {
+  const req = e.request;
+  // Nur eigene GET-Anfragen anfassen. Fremdes (Schriften o.Ä.) läuft normal.
+  if (req.method !== 'GET') return;
+  let url;
+  try { url = new URL(req.url); } catch { return; }
+  if (url.origin !== self.location.origin) return;
+
+  // „Kein Cache" hieß bisher nur: der Service Worker legt keinen an. Der
+  // normale HTTP-Cache des Browsers greift trotzdem — GitHub Pages liefert
+  // statische Dateien mit Gültigkeitsdauer aus. In einer installierten PWA
+  // gibt es kein „Hard Reload", deshalb konnte ein Deploy minutenlang
+  // unsichtbar bleiben. `cache: 'reload'` geht am HTTP-Cache vorbei und
+  // frischt ihn zugleich auf — damit stimmt endlich, was oben steht.
+  e.respondWith(
+    fetch(req, { cache: 'reload' })
+      // Kein Netz? Dann lieber eine womöglich ältere Fassung aus dem
+      // HTTP-Cache als eine kaputte Seite.
+      .catch(() => fetch(req, { cache: 'force-cache' }))
+  );
 });
