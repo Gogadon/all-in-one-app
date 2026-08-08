@@ -195,3 +195,21 @@ test('Challenge: Schwimm-Meter zählt die berechnete Distanz', () => {
   mk('2026-07-08', 30, 750);
   assert.equal(fortschritt(state, { was: 'schwimm_meter', zielwert: 5000, zeitraum: 'monat' }, HEUTE).ist, 1250);
 });
+
+test('Challenge: offene Kraft-Einheit zählt nicht ins Volumen', () => {
+  const state = leererZustand();
+  const fertig = neueSession({ datum: '2026-07-08' });
+  fertig.modul = 'kraft'; fertig.abgeschlossen = true;
+  const segA = addSegment(fertig, neuesSegment('x')); segA.erledigt = true;
+  addEintrag(segA, neuerEintrag({ gewicht: 50, wdh: 10 }));   // 500 kg
+  state.sessions.push(fertig);
+
+  const offen = neueSession({ datum: '2026-07-08' });
+  offen.modul = 'kraft'; offen.abgeschlossen = false;
+  const segB = addSegment(offen, neuesSegment('x')); segB.erledigt = true;
+  addEintrag(segB, neuerEintrag({ gewicht: 100, wdh: 10 }));  // 1000 kg, darf NICHT zählen
+  state.sessions.push(offen);
+
+  // Wie bei Rad/Wandern/Schwimmen: erst nach dem Speichern zählt es mit
+  assert.equal(fortschritt(state, { was: 'kraft_volumen', zielwert: 5000, zeitraum: 'monat' }, HEUTE).ist, 500);
+});

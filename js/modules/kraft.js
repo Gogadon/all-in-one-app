@@ -221,6 +221,45 @@ export function prefillEintrag(state, identId, vorIso = heuteIso()) {
   return Object.keys(mw).length ? neuerEintrag(mw, { quelle: 'prefill' }) : null;
 }
 
+/**
+ * Sind alle Sätze eines Segments noch unberührte Vorschläge?
+ * Nur dann darf ein Wechsel der Übung sie ersetzen — getippte Werte
+ * gehören dem Nutzer und bleiben in jedem Fall stehen.
+ */
+export function nurVorschlaege(segment) {
+  const eintraege = segment?.eintraege ?? [];
+  return eintraege.length > 0 && eintraege.every(e => e.quelle === 'prefill');
+}
+
+/** Der Nutzer hat den Satz angefasst — ab jetzt ist er kein Vorschlag mehr. */
+function beruehrt(eintrag) {
+  if (eintrag) eintrag.quelle = 'manuell';
+}
+
+/**
+ * Die Kraft-Session eines Tages — null, wenn es keine gibt.
+ * Übersprungene zählen nicht: die sind ja gerade das Gegenteil einer Einheit.
+ */
+export function kraftSessionAmTag(state, datum) {
+  return (state.sessions ?? []).find(s =>
+    s.datum === datum && (s.modul ?? 'kraft') === 'kraft' && !s.uebersprungen) ?? null;
+}
+
+/**
+ * Darf für diesen Tag eine Kraft-Session angelegt werden?
+ *
+ * REGEL: höchstens EINE pro Kalendertag. Zwei volle Einheiten an einem Tag
+ * (morgens Pull, abends Push) sind nichts, was der Körper leistet — und der
+ * Zyklus rechnet ohnehin in Kalendertagen. Wer abends noch etwas nachträgt,
+ * ergänzt die bestehende Einheit; sie bleibt den ganzen Tag bearbeitbar.
+ *
+ * Bewusst hier im Kern und nicht nur als ausgeblendeter Knopf: sonst kann
+ * jede spätere UI-Änderung die Regel versehentlich aushebeln.
+ */
+export function kannKraftSessionStarten(state, datum) {
+  return kraftSessionAmTag(state, datum) == null;
+}
+
 /** Kraft-Zusammenfassung: "3 Sätze · 1 Aufw. · 60–80 kg" (wie Gym-App). */
 export function segmentZusammenfassungKraft(segment) {
   const n = segment.eintraege.length;
@@ -494,8 +533,9 @@ export function erstelleKraftModul(ctx) {
 
   const S = () => ctx.state;
   // Heutige Kraft-Sessions; eine noch OFFENE hat Vorrang (die bearbeitet man
-  // gerade), sonst die zuletzt angelegte. So blockiert eine bereits
-  // abgeschlossene Einheit nicht das Starten einer zweiten am selben Tag.
+  // gerade), sonst die zuletzt angelegte. Pro Tag ist ohnehin nur eine
+  // erlaubt (siehe kannKraftSessionStarten) — die Liste bleibt trotzdem
+  // tolerant, damit Altbestände mit mehreren Einträgen lesbar bleiben.
   const heutigeSessions = () =>
     S().sessions.filter(s => s.datum === heuteIso() && s.modul === MODUL && !s.uebersprungen);
   const heutigeSession = () => {
@@ -1181,6 +1221,11 @@ export function erstelleKraftModul(ctx) {
 
   const actions = {
     async 'k.start'(d) {
+      if (!kannKraftSessionStarten(S(), heuteIso())) {
+        await hinweis('Heute läuft schon eine Einheit',
+          'Pro Tag gibt es eine Kraft-Einheit. Ergänze die bestehende — oder korrigiere über „Heute korrigieren", welche heute dran ist.');
+        return;
+      }
       const s = sessionAusEinheit(S(), MODUL, d.einheit);
       s.modul = MODUL;
       S().sessions.push(s);
@@ -1209,6 +1254,11 @@ export function erstelleKraftModul(ctx) {
       await speichernUndZeigen();
     },
     async 'k.frei'() {
+      if (!kannKraftSessionStarten(S(), heuteIso())) {
+        await hinweis('Heute läuft schon eine Einheit',
+          'Pro Tag gibt es eine Kraft-Einheit. Ergänze die bestehende — oder korrigiere über „Heute korrigieren", welche heute dran ist.');
+        return;
+      }
       const s = neueSession(); s.modul = MODUL;
       S().sessions.push(s);
       await speichernUndZeigen();
@@ -1374,6 +1424,7 @@ export function erstelleKraftModul(ctx) {
       const seg = segFinden(d.seg);
       const e = seg?.eintraege.find(x => x.id === d.eintrag); if (!e) return;
       e.flags = hatFlag(e, 'aufwaermsatz') ? e.flags.filter(f => f !== 'aufwaermsatz') : [...e.flags, 'aufwaermsatz'];
+      beruehrt(e);
       await speichernUndZeigen();
     },
     async 'k.wert'(d, el) {
@@ -1394,6 +1445,7 @@ export function erstelleKraftModul(ctx) {
         }
         e.messwerte[d.typ] = wert;
       }
+      beruehrt(e);
       // WICHTIG: nur speichern, NICHT neu rendern. Sonst wird das Eingabefeld neu
       // erzeugt, der Tastatur-Fokus geht verloren und der „Weiter"-Button springt
       // ins Leere. Volumen/PR/Progression aktualisieren sich beim nächsten Render
@@ -1412,11 +1464,25 @@ export function erstelleKraftModul(ctx) {
       } else {
         e._plus = !(e._plus ?? false);           // noch kein Wert → Absicht merken
       }
+      beruehrt(e);
       await speichernUndZeigen();
     },
     async 'k.altWahl'(d) {
       const seg = segFinden(d.seg); if (!seg) return;
+      const session = heutigeSession();
+      const vorher = identVon(seg);
       seg.altOf = d.alt || null;
+      // Andere Übung → andere Historie. Steht da nur noch der Vorschlag der
+      // alten Übung, wäre er jetzt schlicht falsch: er würde Gewichte zeigen,
+      // die zu dieser Übung nie gehoben wurden. Also durch den Vorschlag der
+      // neuen Übung ersetzen — und leer lassen, wenn es dazu keine Historie
+      // gibt. Getippte Werte bleiben immer stehen, in beide Richtungen.
+      if (session && identVon(seg) !== vorher && nurVorschlaege(seg)) {
+        const { aktivitaet } = loeseSegmentAuf(S(), seg);
+        if (aktivitaet?.kategorie === 'kraft') {
+          seg.eintraege = [prefillEintrag(S(), identVon(seg), session.datum) ?? neuerEintrag({})];
+        }
+      }
       altOffen.delete(d.seg);
       await speichernUndZeigen();
     },
@@ -1566,14 +1632,14 @@ export function erstelleKraftModul(ctx) {
           // Session mit Daten/abgeschlossen, aber ANDERE Einheit → nachfragen
           const ok = await bestaetige({
             titel: 'Andere Einheit heute?',
-            text: 'Für heute liegt schon eine andere Einheit vor. Verwerfen und neu starten? Bei Abbrechen bleibt sie im Verlauf.',
+            text: 'Für heute liegt schon eine andere Einheit vor. Verwerfen und stattdessen die gewählte starten? Bei Abbrechen bleibt alles, wie es ist.',
             jaText: 'Verwerfen', gefahr: true,
           });
-          if (ok) {
-            S().sessions = S().sessions.filter(x => x !== s);
-          }
-          // Bei „Abbrechen" bleibt sie erhalten; da sie abgeschlossen/befüllt ist,
-          // zeigt der Heute-Tab sie weiter an — das ist dann bewusst so gewählt.
+          // Abbrechen heißt: NICHTS passiert. Vorher wurde der Anker trotzdem
+          // gesetzt — der Zyklus verschob sich also unsichtbar, obwohl man
+          // abgebrochen hatte.
+          if (!ok) return;
+          S().sessions = S().sessions.filter(x => x !== s);
         }
       }
       setzeAnker(S(), MODUL, +d.i);

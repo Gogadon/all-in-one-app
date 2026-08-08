@@ -62,7 +62,10 @@ export const GROESSEN = {
   },
   kraft_volumen: {
     label: 'Kraft-Volumen', einheit: 'kg', modul: 'kraft',
-    wert: s => (s.modul ?? 'kraft') === 'kraft' ? sessionVolumenErledigt(s) : 0,
+    // `abgeschlossen` wie bei ALLEN anderen Größen: sonst zählte eine noch
+    // laufende Einheit schon mit, während Rad/Wandern/Schwimmen erst nach dem
+    // Speichern zählen — dieselbe Challenge hätte zwei verschiedene Regeln.
+    wert: s => ((s.modul ?? 'kraft') === 'kraft' && s.abgeschlossen) ? sessionVolumenErledigt(s) : 0,
   },
   kraft_einheiten: {
     label: 'Kraft-Einheiten', einheit: 'Einheiten', modul: 'kraft',

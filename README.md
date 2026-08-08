@@ -133,6 +133,17 @@ Schalter im Einheiten-Editor). Ohne Markierung wird geraten: eine Einheit, in
 der ausschließlich Cardio steckt, gilt als „Active Rest". Die ausdrückliche
 Marke gewinnt immer — deshalb prüft `istRuhetag()` sie zuerst.
 
+### 3a. Eine Kraft-Einheit pro Kalendertag
+
+`kannKraftSessionStarten(state, datum)` ist die Regel, nicht der ausgeblendete
+Knopf. Zwei volle Einheiten an einem Tag sind nichts, was der Körper leistet,
+und der Zyklus rechnet ohnehin in Kalendertagen. Wer abends etwas nachträgt,
+ergänzt die bestehende Einheit — sie bleibt den ganzen Tag bearbeitbar.
+
+Übersprungene Tage blockieren nicht: „übersprungen" ist ja das Gegenteil einer
+Einheit. Die Prüfung liegt bewusst im Kern, damit eine spätere UI-Änderung sie
+nicht versehentlich aushebelt.
+
 ### 3b. Ausfall-Tage (krank) sind kein Training
 
 `state.ausfallTage` ist eine eigene Top-Level-Liste (`{ id, datum, typ, notiz,
