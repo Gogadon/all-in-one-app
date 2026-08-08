@@ -305,3 +305,45 @@ test('Alternative aus Bibliothek wählen (Etappe 3): verknüpfen + neu anlegen',
   const neu = state.bibliothek.find(a => a.name === 'Kurzhantel-Bank');
   assert.ok(neu && bank.alternativen.includes(neu.id));
 });
+
+// ==================================================================
+// Invariante: höchstens EINE Kraft-Session pro Kalendertag
+// ==================================================================
+
+test('Kraft: pro Tag ist nur eine Einheit erlaubt', async () => {
+  const { kannKraftSessionStarten, kraftSessionAmTag } = await import('../js/modules/kraft.js');
+  const state = leererZustand();
+  const TAG = '2026-08-08';
+
+  assert.equal(kannKraftSessionStarten(state, TAG), true);
+  assert.equal(kraftSessionAmTag(state, TAG), null);
+
+  const s = neueSession({ datum: TAG }); s.modul = 'kraft';
+  state.sessions.push(s);
+  assert.equal(kannKraftSessionStarten(state, TAG), false);
+  assert.equal(kraftSessionAmTag(state, TAG)?.id, s.id);
+
+  // Auch eine bereits ABGESCHLOSSENE blockiert — sonst käme abends eine zweite dazu
+  s.abgeschlossen = true;
+  assert.equal(kannKraftSessionStarten(state, TAG), false);
+
+  // Andere Tage bleiben frei
+  assert.equal(kannKraftSessionStarten(state, '2026-08-09'), true);
+});
+
+test('Kraft: übersprungene Tage blockieren nicht', async () => {
+  const { kannKraftSessionStarten } = await import('../js/modules/kraft.js');
+  const state = leererZustand();
+  const s = neueSession({ datum: '2026-08-08' });
+  s.modul = 'kraft'; s.uebersprungen = true;
+  state.sessions.push(s);
+  // Übersprungen ist das Gegenteil einer Einheit — danach darf man loslegen
+  assert.equal(kannKraftSessionStarten(state, '2026-08-08'), true);
+});
+
+test('Kraft: Alt-Session ohne modul-Feld zählt als Kraft', async () => {
+  const { kannKraftSessionStarten } = await import('../js/modules/kraft.js');
+  const state = leererZustand();
+  state.sessions.push(neueSession({ datum: '2026-08-08' }));   // kein .modul
+  assert.equal(kannKraftSessionStarten(state, '2026-08-08'), false);
+});
