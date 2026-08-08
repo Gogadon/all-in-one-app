@@ -6,7 +6,7 @@
 // ============================================================
 
 import {
-  load, save, exportBackup, importBackup, leererZustand,
+  load, save, exportBackup, importBackup, leererZustand, backupDateiname,
   snapshots, sichereSnapshot, ladeSnapshot, loescheSnapshots,
   merkeExport, tageSeitExport, brauchtExportErinnerung, verschiebeErinnerung,
   MAX_SNAPSHOTS,
@@ -169,7 +169,7 @@ const actions = {
     const blob = new Blob([exportBackup(state)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `all-in-one-backup-${heuteIso()}.json`;
+    a.download = backupDateiname();
     a.click();
     URL.revokeObjectURL(a.href);
     // Datum merken → die Export-Erinnerung ist damit für 30 Tage still.

@@ -111,6 +111,19 @@ export function exportBackup(state) {
 }
 
 /**
+ * Dateiname für ein Backup — mit Uhrzeit, nicht nur mit Datum.
+ * Zwei Exporte am selben Tag sollen nebeneinander im Download-Ordner
+ * liegen und nicht als "…(1).json" raten lassen, welcher der neuere ist.
+ * Bewusst Ortszeit: der Name soll zu der Uhr passen, auf die man schaut.
+ */
+export function backupDateiname(jetzt = new Date()) {
+  const z = (n, breite = 2) => String(n).padStart(breite, '0');
+  const datum = `${jetzt.getFullYear()}-${z(jetzt.getMonth() + 1)}-${z(jetzt.getDate())}`;
+  const zeit = `${z(jetzt.getHours())}${z(jetzt.getMinutes())}${z(jetzt.getSeconds())}`;
+  return `all-in-one-backup-${datum}-${zeit}.json`;
+}
+
+/**
  * Backup-JSON-String → Zustand (validiert + migriert).
  * Akzeptiert auch "nackte" Zustände ohne Backup-Hülle (robust).
  * Wirft mit verständlicher Meldung, wenn die Datei nichts taugt.
@@ -401,6 +414,20 @@ export function loescheSnapshots() {
 // Export-Erinnerung
 // ------------------------------------------------------------
 
+/** Listen, die von Hand entstehen — jede einzelne ist ein Backup wert. */
+const DATEN_LISTEN = ['bibliothek', 'sessions', 'termine', 'ausfallTage', 'koerper', 'challenges'];
+
+/**
+ * Gibt es überhaupt etwas zu verlieren?
+ * Zählt alles, was von Hand entsteht, nicht nur Sessions: wer die App
+ * (noch) bloß für Körperwerte, Termine oder den Plan nutzt, hat genauso
+ * viel Arbeit drin und soll dieselbe Erinnerung bekommen.
+ */
+export function hatSchuetzenswerteDaten(state) {
+  if (DATEN_LISTEN.some(k => (state?.[k] ?? []).length > 0)) return true;
+  return Object.values(state?.plaene ?? {}).some(p => (p?.einheiten ?? []).length > 0);
+}
+
 /** Datum des letzten Datei-Exports festhalten (im Zustand, wandert also mit). */
 export function merkeExport(state, heute = heuteIso()) {
   state.einstellungen ??= {};
@@ -435,8 +462,7 @@ export function tageSeitExport(state, heute = heuteIso()) {
  * her ist (oder nie stattfand).
  */
 export function brauchtExportErinnerung(state, heute = heuteIso()) {
-  const hatDaten = (state?.sessions ?? []).length > 0;
-  if (!hatDaten) return false;
+  if (!hatSchuetzenswerteDaten(state)) return false;
   // „Später" gedrückt? Dann bis zum Pausenende Ruhe.
   const pause = state?.einstellungen?.erinnerungPause;
   if (typeof pause === 'string' && heute < pause) return false;
