@@ -222,6 +222,21 @@ export function prefillEintrag(state, identId, vorIso = heuteIso()) {
 }
 
 /**
+ * Sind alle Sätze eines Segments noch unberührte Vorschläge?
+ * Nur dann darf ein Wechsel der Übung sie ersetzen — getippte Werte
+ * gehören dem Nutzer und bleiben in jedem Fall stehen.
+ */
+export function nurVorschlaege(segment) {
+  const eintraege = segment?.eintraege ?? [];
+  return eintraege.length > 0 && eintraege.every(e => e.quelle === 'prefill');
+}
+
+/** Der Nutzer hat den Satz angefasst — ab jetzt ist er kein Vorschlag mehr. */
+function beruehrt(eintrag) {
+  if (eintrag) eintrag.quelle = 'manuell';
+}
+
+/**
  * Die Kraft-Session eines Tages — null, wenn es keine gibt.
  * Übersprungene zählen nicht: die sind ja gerade das Gegenteil einer Einheit.
  */
@@ -1409,6 +1424,7 @@ export function erstelleKraftModul(ctx) {
       const seg = segFinden(d.seg);
       const e = seg?.eintraege.find(x => x.id === d.eintrag); if (!e) return;
       e.flags = hatFlag(e, 'aufwaermsatz') ? e.flags.filter(f => f !== 'aufwaermsatz') : [...e.flags, 'aufwaermsatz'];
+      beruehrt(e);
       await speichernUndZeigen();
     },
     async 'k.wert'(d, el) {
@@ -1429,6 +1445,7 @@ export function erstelleKraftModul(ctx) {
         }
         e.messwerte[d.typ] = wert;
       }
+      beruehrt(e);
       // WICHTIG: nur speichern, NICHT neu rendern. Sonst wird das Eingabefeld neu
       // erzeugt, der Tastatur-Fokus geht verloren und der „Weiter"-Button springt
       // ins Leere. Volumen/PR/Progression aktualisieren sich beim nächsten Render
@@ -1447,11 +1464,25 @@ export function erstelleKraftModul(ctx) {
       } else {
         e._plus = !(e._plus ?? false);           // noch kein Wert → Absicht merken
       }
+      beruehrt(e);
       await speichernUndZeigen();
     },
     async 'k.altWahl'(d) {
       const seg = segFinden(d.seg); if (!seg) return;
+      const session = heutigeSession();
+      const vorher = identVon(seg);
       seg.altOf = d.alt || null;
+      // Andere Übung → andere Historie. Steht da nur noch der Vorschlag der
+      // alten Übung, wäre er jetzt schlicht falsch: er würde Gewichte zeigen,
+      // die zu dieser Übung nie gehoben wurden. Also durch den Vorschlag der
+      // neuen Übung ersetzen — und leer lassen, wenn es dazu keine Historie
+      // gibt. Getippte Werte bleiben immer stehen, in beide Richtungen.
+      if (session && identVon(seg) !== vorher && nurVorschlaege(seg)) {
+        const { aktivitaet } = loeseSegmentAuf(S(), seg);
+        if (aktivitaet?.kategorie === 'kraft') {
+          seg.eintraege = [prefillEintrag(S(), identVon(seg), session.datum) ?? neuerEintrag({})];
+        }
+      }
       altOffen.delete(d.seg);
       await speichernUndZeigen();
     },

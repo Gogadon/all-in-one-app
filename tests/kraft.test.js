@@ -347,3 +347,66 @@ test('Kraft: Alt-Session ohne modul-Feld zählt als Kraft', async () => {
   state.sessions.push(neueSession({ datum: '2026-08-08' }));   // kein .modul
   assert.equal(kannKraftSessionStarten(state, '2026-08-08'), false);
 });
+
+// ==================================================================
+// Vorschlag vs. getippter Wert beim Wechsel auf eine Alternative
+// ==================================================================
+
+test('nurVorschlaege: nur unberührte Prefill-Sätze zählen', async () => {
+  const { nurVorschlaege } = await import('../js/modules/kraft.js');
+  assert.equal(nurVorschlaege({ eintraege: [] }), false, 'leer ist kein Vorschlag');
+  assert.equal(nurVorschlaege({ eintraege: [neuerEintrag({ gewicht: 80 }, { quelle: 'prefill' })] }), true);
+  assert.equal(nurVorschlaege({ eintraege: [neuerEintrag({ gewicht: 80 })] }), false, 'manuell zählt nicht');
+  assert.equal(nurVorschlaege({
+    eintraege: [neuerEintrag({}, { quelle: 'prefill' }), neuerEintrag({ gewicht: 80 })],
+  }), false, 'ein getippter Satz reicht');
+});
+
+test('Alternativ-Wechsel: Vorschlag wird ersetzt, getippte Werte bleiben', async () => {
+  const { erstelleKraftModul, nurVorschlaege } = await import('../js/modules/kraft.js');
+  const state = leererZustand();
+  const bank = addAktivitaet(state, { name: 'Bankdrücken', kategorie: 'kraft', messwerte: ['gewicht', 'wdh'] });
+  const kh = addAktivitaet(state, { name: 'KH-Bank', kategorie: 'kraft', messwerte: ['gewicht', 'wdh'] });
+  const chest = addAktivitaet(state, { name: 'Chest Press', kategorie: 'kraft', messwerte: ['gewicht', 'wdh'] });
+  addAlternative(state, bank.id, kh.id);
+  addAlternative(state, bank.id, chest.id);
+
+  const heute = new Date().toISOString().slice(0, 10);
+  session(state, '2026-01-02', bank.id, [[80, 8]]);                    // Historie Hauptübung
+  session(state, '2026-01-09', kh.id, [[32, 10]], { altOf: kh.id });   // Historie Alternative
+
+  const heuteSession = neueSession({ datum: heute });
+  heuteSession.modul = 'kraft';
+  const seg = addSegment(heuteSession, neuesSegment(bank.id));
+  state.sessions.push(heuteSession);
+
+  const ctx = {
+    get state() { return state; }, save: async () => {}, render: () => {},
+    sheet: { oeffne() {}, schliesse() {}, aktualisiere() {} },
+    esc: t => String(t ?? ''), formatDatum: i => i, tabWechsel: () => {},
+  };
+  const k = erstelleKraftModul(ctx);
+  // k.wert frischt die Volumen-Anzeige direkt im DOM auf — hier reicht ein Stub.
+  globalThis.document = { getElementById: () => null };
+
+  // Startzustand: Vorschlag aus der Historie der Hauptübung
+  addEintrag(seg, prefillEintrag(state, bank.id, heute));
+  assert.deepEqual(seg.eintraege[0].messwerte, { gewicht: 80, wdh: 8 });
+  assert.equal(nurVorschlaege(seg), true);
+
+  // → Alternative MIT Historie: deren eigener Vorschlag
+  await k.actions['k.altWahl']({ seg: seg.id, alt: kh.id });
+  assert.equal(seg.eintraege.length, 1);
+  assert.deepEqual(seg.eintraege[0].messwerte, { gewicht: 32, wdh: 10 });
+
+  // → Alternative OHNE Historie: leeres Feld statt fremder Zahlen
+  await k.actions['k.altWahl']({ seg: seg.id, alt: chest.id });
+  assert.deepEqual(seg.eintraege[0].messwerte, {});
+
+  // Getippter Wert überlebt den Wechsel zurück auf die Hauptübung
+  await k.actions['k.wert']({ seg: seg.id, eintrag: seg.eintraege[0].id, typ: 'gewicht' }, { value: '45' });
+  assert.equal(seg.eintraege[0].quelle, 'manuell');
+  await k.actions['k.altWahl']({ seg: seg.id, alt: '' });
+  assert.equal(seg.altOf, null);
+  assert.equal(seg.eintraege[0].messwerte.gewicht, 45, 'getippte Werte bleiben stehen');
+});
