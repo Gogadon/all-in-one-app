@@ -158,3 +158,20 @@ test('Schwimmen: leerer Zeitraum zeigt einen Hinweis', async () => {
   const html = schwimmen.statistikHtml();
   assert.ok(html.includes('Keine Einheiten'));
 });
+
+// ---- Standardname: darf nicht mit anderen Tour-Modulen kollidieren ----
+
+test('Schwimmen: hat einen eigenen Session-Standardnamen', async () => {
+  const { TITEL_EINZAHL: schwimmenTitel } = await import('../js/modules/schwimmen.js');
+  const { TITEL_EINZAHL: wandernTitel } = await import('../js/modules/wandern.js');
+  const { TITEL_EINZAHL: radTitel } = await import('../js/modules/rad.js');
+
+  // Im Kalender hieß eine namenlose Schwimmeinheit früher „Wanderung", weil
+  // dort ein „Rad ? Radtour : Wanderung"-Ternary stand. Der Name kommt jetzt
+  // aus der Modul-Config — die müssen sich unterscheiden, sonst ist derselbe
+  // Fehler wieder möglich.
+  assert.ok(schwimmenTitel, 'Schwimmen hat keinen Standardnamen');
+  assert.notEqual(schwimmenTitel, wandernTitel);
+  assert.notEqual(schwimmenTitel, radTitel);
+  assert.equal(new Set([schwimmenTitel, wandernTitel, radTitel]).size, 3);
+});

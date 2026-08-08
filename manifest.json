@@ -1,7 +1,7 @@
 {
   "name": "All-in-One",
   "short_name": "All-in-One",
-  "description": "Kraft, Rad und Ziele an einem Ort.",
+  "description": "Kraft, Rad, Wandern, Schwimmen, Körperwerte und Ziele an einem Ort.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
