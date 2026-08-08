@@ -62,6 +62,9 @@ const CONFIG = {
 };
 
 // ---- Öffentliche Oberfläche (stabil, config-gebunden) ----
+// Standardname einer Session ohne eigenen Namen — kommt aus DIESER Config,
+// damit der Name nicht an anderer Stelle nochmal getippt werden muss.
+export const TITEL_EINZAHL = CONFIG.titelEinzahl;
 export const alleWanderungen  = (state)       => tourenFuer(state, CONFIG);
 export const wanderAktivitaet = (state, opts) => aktivitaetFuer(state, CONFIG, opts);
 export const wanderWerte      = (session)     => werteVon(session);

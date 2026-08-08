@@ -21,9 +21,9 @@ import {
   erstelleKraftModul, MODUL as KRAFT,
   sessionVolumenErledigt, segmentZusammenfassungKraft, segmentZusammenfassungWerte,
 } from './modules/kraft.js';
-import { erstelleRadModul, MODUL as RAD, tourStatistik } from './modules/rad.js';
-import { erstelleWanderModul, MODUL as WANDERN, wanderStatistik } from './modules/wandern.js';
-import { erstelleSchwimmModul, MODUL as SCHWIMMEN, schwimmStatistik } from './modules/schwimmen.js';
+import { erstelleRadModul, MODUL as RAD, tourStatistik, TITEL_EINZAHL as RAD_TITEL } from './modules/rad.js';
+import { erstelleWanderModul, MODUL as WANDERN, wanderStatistik, TITEL_EINZAHL as WANDERN_TITEL } from './modules/wandern.js';
+import { erstelleSchwimmModul, MODUL as SCHWIMMEN, schwimmStatistik, TITEL_EINZAHL as SCHWIMMEN_TITEL } from './modules/schwimmen.js';
 import { erstelleKoerperModul, MODUL as KOERPER } from './modules/koerper.js';
 import { letzterWert as letzterKoerperWert, veraenderung as koerperVeraenderung,
   formatKoerperWert } from './core/koerper.js';
@@ -86,6 +86,12 @@ const PLANBARE_MODULE = [KRAFT, RAD, WANDERN, SCHWIMMEN];
 // Module, die über die gemeinsame Touren-Fabrik laufen (spontanes Loggen,
 // „Heute" = Liste, Verlauf = Statistik). Schwimmen zählt in Einheiten.
 const TOUREN_MODULE = [RAD, WANDERN, SCHWIMMEN];
+// Name einer Session, die keinen eigenen trägt. Die Texte kommen aus den
+// Modul-Configs — vorher stand hier ein Ternary „Rad ? Radtour : Wanderung",
+// wodurch JEDES andere Tour-Modul (Schwimmen!) als „Wanderung" auftauchte.
+const MODUL_SESSION_NAME = {
+  [RAD]: RAD_TITEL, [WANDERN]: WANDERN_TITEL, [SCHWIMMEN]: SCHWIMMEN_TITEL,
+};
 
 // Welche Tabs hat welches Modul? Start führt immer heim.
 // Kraft: alle. Rad/Wandern/Schwimmen: kein Plan. Challenge: nur Ziele.
@@ -406,6 +412,25 @@ function navHtml() {
     </button>`).join('');
 }
 
+/**
+ * Die abgehakten Segmente einer Session als Zeilen — genutzt vom Kraft-Verlauf
+ * UND vom Tages-Sheet. Beide hatten dieselbe Zeile doppelt; im Verlauf steckte
+ * darin eine veraltete Alternativ-Auflösung (`alternativen` sind seit Schema 2
+ * IDs, keine Objekte), sodass dort statt der benutzten Alternative die
+ * Hauptübung stand. Ein gemeinsamer Helfer verhindert, dass die beiden Stellen
+ * wieder auseinanderlaufen.
+ */
+function erledigteSegmentZeilen(s) {
+  return (s.segmente ?? []).filter(seg => seg.erledigt === true).map(seg => {
+    const { aktivitaet, anzeigeName } = loeseSegmentAuf(state, seg);
+    if (!aktivitaet) return '';
+    const zsf = aktivitaet.kategorie === 'kraft'
+      ? segmentZusammenfassungKraft(seg)
+      : segmentZusammenfassungWerte(aktivitaet, seg);
+    return `<div class="verlauf-zeile"><span class="punkt ${aktivitaet.kategorie}"></span>${esc(anzeigeName)} <span class="dim">${esc(zsf)}</span></div>`;
+  }).join('');
+}
+
 // ------------------------------------------------------------
 // Verlauf-Tab (modulübergreifender Feed — Phase 1: nur Kraft da)
 // ------------------------------------------------------------
@@ -460,15 +485,7 @@ function verlaufHtml() {
     const titel = einheit ? einheit.name : 'Freie Session';
     const vol = sessionVolumenErledigt(s);
     const kats = sessionKategorien(state, s);
-    const zeilen = s.segmente.filter(seg => seg.erledigt === true).map(seg => {
-      const akt = findeAktivitaet(state, seg.aktivitaetId);
-      if (!akt) return '';
-      const alt = seg.altOf ? (akt.alternativen ?? []).find(a => a.id === seg.altOf) : null;
-      const zsf = akt.kategorie === 'kraft'
-        ? segmentZusammenfassungKraft(seg)
-        : segmentZusammenfassungWerte(akt, seg);
-      return `<div class="verlauf-zeile"><span class="punkt ${akt.kategorie}"></span>${esc(alt?.name ?? akt.name)} <span class="dim">${esc(zsf)}</span></div>`;
-    }).join('');
+    const zeilen = erledigteSegmentZeilen(s);
     return `<div class="karte anim">
       <div class="verlauf-kopf">
         <div><strong>${esc(titel)}</strong><br><small class="dim">${formatDatum(s.datum)}</small></div>
@@ -705,7 +722,7 @@ function tagZeileHtml(s) {
     const vol = sessionVolumenErledigt(s);
     if (vol > 0) wert = `${formatZahl(vol, 0)} kg`;
   } else {
-    titel = s.name || (modul === RAD ? 'Radtour' : 'Wanderung');
+    titel = s.name || MODUL_SESSION_NAME[modul] || 'Einheit';
     const dist = sessionWert(s, 'distanz');
     if (dist) wert = formatWert('distanz', dist);
   }
@@ -721,14 +738,7 @@ function tagZeileHtml(s) {
 
 /** Aufgeklappte Detail-Zeilen einer Session (Segmente mit Zusammenfassung). */
 function tagZeileDetailHtml(s) {
-  const zeilen = s.segmente.filter(seg => seg.erledigt === true).map(seg => {
-    const { aktivitaet, anzeigeName } = loeseSegmentAuf(state, seg);
-    if (!aktivitaet) return '';
-    const zsf = aktivitaet.kategorie === 'kraft'
-      ? segmentZusammenfassungKraft(seg)
-      : segmentZusammenfassungWerte(aktivitaet, seg);
-    return `<div class="verlauf-zeile"><span class="punkt ${aktivitaet.kategorie}"></span>${esc(anzeigeName)} <span class="dim">${esc(zsf)}</span></div>`;
-  }).join('');
+  const zeilen = erledigteSegmentZeilen(s);
   const notiz = s.notiz ? `<p class="tz-notiz dim">${esc(s.notiz)}</p>` : '';
   return `<div class="tz-detail">${zeilen || '<small class="dim">Nichts abgehakt.</small>'}${notiz}</div>`;
 }

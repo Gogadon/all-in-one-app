@@ -4,8 +4,8 @@
 // Baugleich zu Rad/Wandern, aber die Primär-Einheit sind BAHNEN, nicht
 // Meter — man kennt die Beckenlänge nicht immer, Bahnen zählen geht immer.
 // Der Hero ist deshalb eine reine Anzahl (kein „/1000"): heroFormat +
-// kopfStat überschreiben die km-Defaults der Fabrik. Die Meter-Umrechnung
-// (Bahnen × Bahnlänge) folgt in einer späteren Etappe.
+// kopfStat überschreiben die km-Defaults der Fabrik. Ist die Bahnlänge
+// bekannt, wird daraus die Distanz abgeleitet (siehe `ableiten` unten).
 // Die gesamte Logik steckt in touren/tour-modul.js; hier nur die Config.
 // ============================================================
 
@@ -82,6 +82,9 @@ const CONFIG = {
 };
 
 // ---- Öffentliche Oberfläche (stabil, config-gebunden) ----
+// Standardname einer Session ohne eigenen Namen — kommt aus DIESER Config,
+// damit der Name nicht an anderer Stelle nochmal getippt werden muss.
+export const TITEL_EINZAHL = CONFIG.titelEinzahl;
 export const alleSchwimmeinheiten = (state)       => tourenFuer(state, CONFIG);
 export const schwimmAktivitaet    = (state, opts) => aktivitaetFuer(state, CONFIG, opts);
 export const schwimmWerte         = (session)     => werteVon(session);
