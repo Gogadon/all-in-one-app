@@ -345,16 +345,20 @@ export function snapshots() {
  * versucht und am Ende nur gewarnt: ein fehlgeschlagenes Sicherheitsnetz darf
  * niemals den normalen Betrieb blockieren.
  */
-export function sichereSnapshot(state, heute = heuteIso()) {
+export function sichereSnapshot(state, heute = heuteIso(), { erzwingen = false, grund = '' } = {}) {
   if (!state || typeof state !== 'object') return false;
   const liste = snapshots();
-  if (liste.some(s => s.datum === heute)) return false;   // heute schon gesichert
+  // Ein Tages-Snapshot pro Tag. `erzwingen` ist für Rettungspunkte vor
+  // gefährlichen Schritten (Import) — die dürfen nicht daran scheitern, dass
+  // heute schon einer existiert.
+  if (!erzwingen && liste.some(s => s.datum === heute)) return false;
 
   const eintrag = {
     datum: heute,
     erstelltAm: new Date().toISOString(),
     sessions: (state.sessions ?? []).length,
     uebungen: (state.bibliothek ?? []).length,
+    grund,
     daten: state,
   };
 

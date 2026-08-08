@@ -205,6 +205,21 @@ Wird ein Feld während der Eingabe neu erzeugt, verliert es den Fokus und der
 „Weiter"-Knopf der Handy-Tastatur springt ins Leere. Deshalb speichert
 `k.wert` nur und rendert *nicht* neu.
 
+### 5b. Löschen prüft ALLE Referenzen, nicht nur Sessions
+
+`referenzenVonAktivitaet(state, id)` beantwortet an einer Stelle, wo eine Übung
+überall hängt: Sessions, Plan-Einheiten und Alternativ-Verweise.
+
+Vorher fragte das Löschen nur die Sessions ab und meldete „noch nirgends
+benutzt". Eine Übung, die in einer Plan-Einheit steckte, aber nie trainiert
+wurde, ließ sich damit hart löschen — die Einheit zeigte danach auf eine ID,
+die es nicht mehr gibt.
+
+Sessions und Plan-Einheiten **blockieren** das Löschen (bei Plan-Einheiten
+bewusst blockieren statt still herauslöschen, sonst ändert sich der Plan,
+ohne dass es jemand merkt). Alternativ-Verweise blockieren **nicht** — die
+räumt `entferneAktivitaet` selbst auf.
+
 ### 6. Alternativen sind echte Bibliotheks-Übungen (ID-Verweise)
 
 Eine Übung trägt `alternativen: [uebungsId, …]` — reine Verweise auf andere
@@ -250,6 +265,12 @@ Erzeugt `all-in-one-backup-JJJJ-MM-TT.json`.
 
 **Import:** Gleiche Stelle. Der Import prüft den `app`-Namen im JSON *nicht*,
 deshalb laden auch ältere Backups (mit dem früheren Namen) weiterhin.
+
+Der Ablauf ist bewusst in dieser Reihenfolge: **prüfen → fragen → Rettungspunkt
+→ ersetzen**. Gefragt wird erst nach dem Prüfen, damit niemand einen Import
+bestätigt, der ohnehin an einer kaputten Datei scheitert; der erzwungene
+Rettungspunkt („vor Import") hält den Stand von *unmittelbar davor* fest — der
+Tages-Snapshot ist ja der von heute früh.
 
 Bei kaputten gespeicherten Daten legt die App eine Rettungskopie unter
 `gogadon_allinone_v1_defekt` an und startet leer. Die Konsole sagt dann Bescheid.
