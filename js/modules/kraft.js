@@ -23,7 +23,7 @@ import {
 import {
   addAktivitaet, aktivitaetenNachKategorie, sucheAktivitaet,
   addAlternative, entferneAlternative, vorschlagMesswerte,
-  benenneUm, setzeMesswerte, entferneAktivitaet, archiviere, wirdVerwendet,
+  benenneUm, setzeMesswerte, entferneAktivitaet, archiviere, referenzenVonAktivitaet,
 } from '../core/library.js';
 import {
   planFuer, erstellePlan, addEinheit, benenneEinheitUm, loescheEinheit,
@@ -1019,13 +1019,18 @@ export function erstelleKraftModul(ctx) {
       </div>`;
 
       // Übung löschen / archivieren
-      const genutzt = wirdVerwendet(S(), aktId);
+      const ref = referenzenVonAktivitaet(S(), aktId);
       html += `<p class="sheet-abschnitt">Übung entfernen</p>`;
-      if (genutzt > 0) {
-        html += `<p class="dim klein-text">Steckt in ${genutzt} Session(s). Löschen würde den Verlauf zerstören — stattdessen archivieren: verschwindet aus Auswahllisten, Verlauf bleibt.</p>
+      if (ref.sessions > 0) {
+        html += `<p class="dim klein-text">Steckt in ${ref.sessions} Session(s). Löschen würde den Verlauf zerstören — stattdessen archivieren: verschwindet aus Auswahllisten, Verlauf bleibt.</p>
+          <button class="knopf" data-action="k.aktArchiv" data-akt="${aktId}">Archivieren</button>`;
+      } else if (ref.einheiten > 0) {
+        // Noch nie trainiert, steckt aber im Plan: Löschen würde dort einen
+        // Verweis ins Leere hinterlassen. Vorher aus der Einheit nehmen.
+        html += `<p class="dim klein-text">Steckt in ${ref.einheiten} Plan-Einheit(en), aber in keiner Session. Nimm sie erst dort heraus — sonst zeigt der Plan auf eine Übung, die es nicht mehr gibt.</p>
           <button class="knopf" data-action="k.aktArchiv" data-akt="${aktId}">Archivieren</button>`;
       } else {
-        html += `<p class="dim klein-text">Noch in keiner Session — kann gefahrlos gelöscht werden.</p>
+        html += `<p class="dim klein-text">Weder in einer Session noch in einem Plan — kann gefahrlos gelöscht werden.</p>
           <button class="knopf gefahr" data-action="k.aktWeg" data-akt="${aktId}">Übung löschen</button>`;
       }
     }

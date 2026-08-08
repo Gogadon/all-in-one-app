@@ -531,7 +531,7 @@ function datenHtml() {
   if (punkte.length) {
     html += punkte.map(p => `<div class="karte anim snap-zeile">
       <div>
-        <strong>${esc(formatDatum(p.datum))}</strong><br>
+        <strong>${esc(formatDatum(p.datum))}</strong>${p.grund ? ` <span class="dim klein-text">· ${esc(p.grund)}</span>` : ''}<br>
         <small class="dim">${p.sessions} Sessions · ${p.uebungen} Übungen</small>
       </div>
       <button class="knopf klein" data-action="daten.snapshot" data-marke="${esc(p.erstelltAm)}">Laden</button>
@@ -548,15 +548,43 @@ function datenHtml() {
   return html;
 }
 
+/**
+ * Backup einlesen. Reihenfolge mit Absicht: erst PRÜFEN, dann FRAGEN, dann
+ * einen Rettungspunkt anlegen, erst danach ersetzen.
+ *
+ * Vorher ersetzte die Datei den lokalen Stand sofort und wortlos — eine
+ * versehentlich gewählte (oder alte) Datei kostete alles, was seitdem
+ * dazugekommen war. Gefragt wird erst NACH dem Prüfen, damit niemand einen
+ * Import bestätigen muss, der ohnehin an einer kaputten Datei scheitert.
+ */
 function importiereDatei(input) {
   const datei = input.files?.[0];
   if (!datei) return;
   const leser = new FileReader();
   leser.onload = async () => {
     try {
-      state = importBackup(String(leser.result));
+      // 1) Prüfen — wirft bei Müll, ersetzt aber noch nichts.
+      const neu = importBackup(String(leser.result));
+
+      // 2) Fragen, mit Zahlen von beiden Seiten.
+      const jetzt = `${state.sessions.length} Sessions · ${state.bibliothek.length} Übungen`;
+      const dann = `${neu.sessions.length} Sessions · ${neu.bibliothek.length} Übungen`;
+      const ok = await bestaetige({
+        titel: 'Backup importieren?',
+        text: `Der Stand auf diesem Gerät (${jetzt}) wird ersetzt durch ${dann}. `
+          + 'Vorher wird automatisch ein Wiederherstellungspunkt angelegt.',
+        jaText: 'Importieren', gefahr: true,
+      });
+      if (!ok) return;
+
+      // 3) Rettungspunkt vom AKTUELLEN Stand — erzwungen, denn der heutige
+      //    Tages-Snapshot ist der Stand von heute früh, nicht der von eben.
+      sichereSnapshot(state, heuteIso(), { erzwingen: true, grund: 'vor Import' });
+
+      // 4) Erst jetzt ersetzen.
+      state = neu;
       await ctx.save();
-      await hinweis('Backup importiert ✓');
+      await hinweis('Backup importiert ✓', 'Der vorherige Stand liegt als Wiederherstellungspunkt bereit.');
       // Zurück ins Dashboard: dort sieht man sofort alle Module und die
       // Wochenstatistik mit den frisch importierten Daten.
       unterseite = null; tab = 'dashboard';

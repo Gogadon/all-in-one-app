@@ -55,9 +55,39 @@ export function setzeMesswerte(state, id, messwerte) {
 export function wirdVerwendet(state, id) {
   // Eine Übung gilt als benutzt, wenn sie als Haupt-Aktivität ODER als
   // Alternative (altOf) in einer Session steckt — beides gehört zur Historie.
-  return state.sessions.filter(s =>
-    s.segmente.some(seg => seg.aktivitaetId === id || seg.altOf === id)
+  return (state.sessions ?? []).filter(s =>
+    (s.segmente ?? []).some(seg => seg.aktivitaetId === id || seg.altOf === id)
   ).length;
+}
+
+/**
+ * ALLE Stellen, an denen eine Übung hängt — an EINER Stelle beantwortet.
+ *
+ * Vorher fragte das Löschen nur die Sessions ab und meldete „noch nirgends
+ * benutzt". Eine Übung, die in einer Plan-Einheit steckt, aber noch nie
+ * trainiert wurde, wurde dadurch hart gelöscht — und die Einheit zeigte
+ * anschließend auf eine ID, die es nicht mehr gibt (tote Referenz).
+ *
+ * @returns { sessions, einheiten, alternativen, gesamt }
+ *   sessions     — Sessions, die sie als Übung oder Alternative enthalten
+ *   einheiten    — Plan-Einheiten (über alle Module), die sie enthalten
+ *   alternativen — andere Übungen, die sie als Alternative verlinken
+ *                  (blockiert NICHT: solche Verweise räumt das Löschen auf)
+ */
+export function referenzenVonAktivitaet(state, id) {
+  const sessions = wirdVerwendet(state, id);
+
+  let einheiten = 0;
+  for (const plan of Object.values(state.plaene ?? {})) {
+    for (const e of plan?.einheiten ?? []) {
+      if ((e.segmente ?? []).some(v => v.aktivitaetId === id)) einheiten++;
+    }
+  }
+
+  const alternativen = (state.bibliothek ?? [])
+    .filter(a => a.id !== id && (a.alternativen ?? []).includes(id)).length;
+
+  return { sessions, einheiten, alternativen, gesamt: sessions + einheiten + alternativen };
 }
 
 /** Archivieren: raus aus Auswahllisten, Verlauf bleibt vollständig. */
@@ -75,9 +105,15 @@ export function reaktiviere(state, id) {
  * Sonst Fehler mit Hinweis auf Archivieren.
  */
 export function entferneAktivitaet(state, id) {
-  const anzahl = wirdVerwendet(state, id);
-  if (anzahl > 0) {
-    throw new Error(`Aktivität steckt in ${anzahl} Session(s) — bitte archivieren statt löschen.`);
+  const ref = referenzenVonAktivitaet(state, id);
+  if (ref.sessions > 0) {
+    throw new Error(`Aktivität steckt in ${ref.sessions} Session(s) — bitte archivieren statt löschen.`);
+  }
+  // Auch Plan-Einheiten zählen: sonst bliebe dort ein Verweis auf eine Übung,
+  // die es nicht mehr gibt. Bewusst blockieren statt still aus dem Plan zu
+  // entfernen — sonst ändert sich der Plan, ohne dass jemand es merkt.
+  if (ref.einheiten > 0) {
+    throw new Error(`Aktivität steckt in ${ref.einheiten} Plan-Einheit(en) — dort erst entfernen.`);
   }
   const i = state.bibliothek.findIndex(a => a.id === id);
   if (i === -1) throw new Error('Aktivität nicht gefunden.');

@@ -13,7 +13,7 @@ import {
 } from '../js/core/model.js';
 import {
   addAktivitaet, benenneUm, setzeEinstellungen, setzeMesswerte,
-  archiviere, reaktiviere, entferneAktivitaet, wirdVerwendet,
+  archiviere, reaktiviere, entferneAktivitaet, wirdVerwendet, referenzenVonAktivitaet,
   addAlternative, entferneAlternative, alternativeWirdVerwendet,
   aktivitaetenNachKategorie, sucheAktivitaet, vorschlagMesswerte,
 } from '../js/core/library.js';
@@ -450,4 +450,57 @@ test('Ruhetag: unbekannte Einheit wirft', async () => {
   const state = leererZustand();
   erstellePlan(state, 'kraft');
   assert.throws(() => setzeRuhetag(state, 'kraft', 'gibts-nicht', true), /nicht gefunden/);
+});
+
+// ==================================================================
+// Referenzen: Löschen darf keine toten Verweise hinterlassen
+// ==================================================================
+
+test('Referenzen: zählt Sessions, Plan-Einheiten und Alternativ-Verweise', () => {
+  const state = leererZustand();
+  const bank = addAktivitaet(state, { name: 'Bank', kategorie: 'kraft', messwerte: ['gewicht', 'wdh'] });
+  const kh = addAktivitaet(state, { name: 'KH-Bank', kategorie: 'kraft', messwerte: ['gewicht', 'wdh'] });
+  addAlternative(state, bank.id, kh.id);
+
+  const push = addEinheit(state, 'kraft', { name: 'Push' });
+  addAktivitaetZuEinheit(state, 'kraft', push.id, bank.id);
+
+  const s = neueSession({ datum: '2026-07-05' });
+  addEintrag(addSegment(s, neuesSegment(bank.id)), neuerEintrag({ gewicht: 80, wdh: 8 }));
+  state.sessions.push(s);
+
+  const ref = referenzenVonAktivitaet(state, bank.id);
+  assert.equal(ref.sessions, 1);
+  assert.equal(ref.einheiten, 1);
+  assert.equal(ref.alternativen, 0);      // bank verlinkt kh, nicht umgekehrt
+  assert.equal(referenzenVonAktivitaet(state, kh.id).alternativen, 1);
+});
+
+test('Referenzen: Übung im Plan lässt sich nicht löschen (Regression)', () => {
+  const state = leererZustand();
+  const uebung = addAktivitaet(state, { name: 'Neue Übung', kategorie: 'kraft', messwerte: ['gewicht', 'wdh'] });
+  const einheit = addEinheit(state, 'kraft', { name: 'Rücken · Bizeps' });
+  addAktivitaetZuEinheit(state, 'kraft', einheit.id, uebung.id);
+
+  // Nie trainiert → die reine Session-Prüfung sagt „unbenutzt" …
+  assert.equal(wirdVerwendet(state, uebung.id), 0);
+  // … aber Löschen hätte im Plan einen Verweis ins Leere hinterlassen.
+  assert.throws(() => entferneAktivitaet(state, uebung.id), /Plan-Einheit/);
+  assert.equal(state.bibliothek.length, 1);
+
+  // Erst aus der Einheit nehmen, dann geht es
+  entferneAktivitaetAusEinheit(state, 'kraft', einheit.id, uebung.id);
+  entferneAktivitaet(state, uebung.id);
+  assert.equal(state.bibliothek.length, 0);
+  assert.deepEqual(findeEinheit(state, 'kraft', einheit.id).segmente, []);
+});
+
+test('Referenzen: Alternativ-Verweis blockiert nicht, wird aber aufgeräumt', () => {
+  const state = leererZustand();
+  const bank = addAktivitaet(state, { name: 'Bank', kategorie: 'kraft', messwerte: ['gewicht', 'wdh'] });
+  const kh = addAktivitaet(state, { name: 'KH-Bank', kategorie: 'kraft', messwerte: ['gewicht', 'wdh'] });
+  addAlternative(state, bank.id, kh.id);
+
+  entferneAktivitaet(state, kh.id);                 // nur verlinkt → löschbar
+  assert.deepEqual(bank.alternativen, []);          // Verweis ist weg, nicht tot
 });
