@@ -17,6 +17,7 @@ globalThis.localStorage = {
 const {
   leererZustand, snapshots, sichereSnapshot, ladeSnapshot, loescheSnapshots,
   merkeExport, tageSeitExport, brauchtExportErinnerung, verschiebeErinnerung,
+  hatSchuetzenswerteDaten, backupDateiname,
   SNAPSHOT_KEY, MAX_SNAPSHOTS,
 } = await import('../js/core/storage.js');
 const { neueSession } = await import('../js/core/model.js');
@@ -204,4 +205,41 @@ test('Export-Erinnerung: ein Export hebt eine laufende Pause auf', () => {
   merkeExport(s, '2026-07-11');
   assert.equal(s.einstellungen.erinnerungPause, undefined);
   assert.equal(brauchtExportErinnerung(s, '2026-07-11'), false);   // frisch exportiert
+});
+
+test('Export-Erinnerung: auch ohne Sessions gibt es etwas zu verlieren', () => {
+  frisch();
+  const HEUTE = '2026-07-10';
+  assert.equal(hatSchuetzenswerteDaten(leererZustand()), false);
+
+  // Jede von Hand gepflegte Liste zählt für sich allein.
+  for (const liste of ['bibliothek', 'sessions', 'termine', 'ausfallTage', 'koerper', 'challenges']) {
+    const s = leererZustand();
+    s[liste].push({ id: 'x' });
+    assert.equal(hatSchuetzenswerteDaten(s), true, `${liste} zählt`);
+    assert.equal(brauchtExportErinnerung(s, HEUTE), true, `${liste} erinnert`);
+  }
+
+  // Ein selbst gebauter Plan ist genauso viel Arbeit.
+  const mitPlan = leererZustand();
+  mitPlan.plaene.kraft = { einheiten: [{ id: 'e1', name: 'Push', segmente: [] }] };
+  assert.equal(hatSchuetzenswerteDaten(mitPlan), true);
+  assert.equal(brauchtExportErinnerung(mitPlan, HEUTE), true);
+
+  // Ein leerer Plan dagegen nicht.
+  const leererPlan = leererZustand();
+  leererPlan.plaene.kraft = { einheiten: [] };
+  assert.equal(hatSchuetzenswerteDaten(leererPlan), false);
+  assert.equal(brauchtExportErinnerung(leererPlan, HEUTE), false);
+});
+
+test('Backup-Dateiname trägt die Uhrzeit, damit zwei Exporte am Tag nebeneinander liegen', () => {
+  // Ortszeit, nicht UTC: der Name soll zu der Uhr passen, auf die man schaut.
+  const morgens = new Date(2026, 7, 8, 9, 34, 12);
+  const abends  = new Date(2026, 7, 8, 20, 5, 3);
+  assert.equal(backupDateiname(morgens), 'all-in-one-backup-2026-08-08-093412.json');
+  assert.equal(backupDateiname(abends),  'all-in-one-backup-2026-08-08-200503.json');
+  assert.notEqual(backupDateiname(morgens), backupDateiname(abends));
+  // Sortiert im Download-Ordner chronologisch (rein alphabetisch).
+  assert.ok(backupDateiname(morgens) < backupDateiname(abends));
 });
