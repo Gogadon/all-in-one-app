@@ -9,25 +9,22 @@ import {
   load, save, exportBackup, importBackup, leererZustand, backupDateiname,
   snapshots, sichereSnapshot, ladeSnapshot, loescheSnapshots,
   merkeExport, tageSeitExport, brauchtExportErinnerung, verschiebeErinnerung,
-  MAX_SNAPSHOTS,
 } from './core/storage.js';
 import { formatZahl, formatWert } from './core/metrics.js';
 import { heuteIso, findeAktivitaet, sessionKategorien, verschiebeZeitraum,
-  istWertbareTour, sessionWert, loeseSegmentAuf, neuerTermin,
-  markiereAusfall, entferneAusfall } from './core/model.js';
+  neuerTermin, markiereAusfall, entferneAusfall } from './core/model.js';
 import { findeEinheit } from './core/plan.js';
 import { esc, formatDatum, sheet, bestaetige, hinweis } from './ui/components.js';
+import { sessionVolumenErledigt } from './modules/kraft.js';
 import {
-  sessionVolumenErledigt, segmentZusammenfassungKraft, segmentZusammenfassungWerte,
-} from './modules/kraft.js';
-import {
-  erstelleModule, MODULE, sessionNameFuer,
-  PLANBARE_MODULE, MODUL_TABS, MODUL_LABEL,
-  KRAFT, RAD, WANDERN, SCHWIMMEN, KOERPER, CHALLENGE,
+  erstelleModule, MODULE, MODUL_TABS, KRAFT,
 } from './module-registry.js';
 import { wochenUebersicht } from './dashboard.js';
-import { wochenStreifen, monatsGitter, tagDetail } from './kalender.js';
 import { routeVonZustand, routeParsen } from './route.js';
+import { installiereTastaturVerhalten } from './ui/tastatur.js';
+import { erledigteSegmentZeilen } from './views/session-zeilen.js';
+import { datenHtml } from './views/daten-ansicht.js';
+import { kalenderStreifenHtml, kalenderMonatHtml, tagSheetHtml } from './views/kalender-ansicht.js';
 
 const main = document.getElementById('main');
 const nav = document.getElementById('nav');
@@ -75,6 +72,9 @@ let aktivesModul = KRAFT;
 const aktives = () => module.nach(aktivesModul) ?? module.nach(KRAFT);
 
 
+/** Inhalt des Tages-Sheets für den gerade offenen Tag. */
+const tagSheet = () => tagSheetHtml(state, tagSheetIso, { offen: tagDetailOffen, krankBis });
+
 // ------------------------------------------------------------
 // Aktionen: App-eigene + Modul-Aktionen in einem Register
 // ------------------------------------------------------------
@@ -85,22 +85,22 @@ const actions = {
   'kalender.auf'() { kalenderAnker = heuteIso(); unterseite = 'kalender'; render(); mainInner.parentElement.scrollTo(0, 0); },
   'kalender.vor'() { kalenderAnker = verschiebeZeitraum('monat', kalenderAnker, +1); render(); },
   'kalender.rueck'() { kalenderAnker = verschiebeZeitraum('monat', kalenderAnker, -1); render(); },
-  'tag.auf'(d) { tagSheetIso = d.iso; tagDetailOffen.clear(); sheet.oeffne(tagSheetHtml()); },
+  'tag.auf'(d) { tagSheetIso = d.iso; tagDetailOffen.clear(); sheet.oeffne(tagSheet()); },
   'tag.zeile'(d) {
     tagDetailOffen.has(d.sid) ? tagDetailOffen.delete(d.sid) : tagDetailOffen.add(d.sid);
-    sheet.aktualisiere(tagSheetHtml());
+    sheet.aktualisiere(tagSheet());
   },
   async 'termin.neu'(d) {
     (state.termine ??= []).push(neuerTermin({ datum: d.iso, modul: d.m }));
     await ctx.save();
     render();                            // Punkte im Streifen/Raster darunter aktualisieren
-    sheet.aktualisiere(tagSheetHtml());
+    sheet.aktualisiere(tagSheet());
   },
   async 'termin.weg'(d) {
     state.termine = (state.termine ?? []).filter(t => t.id !== d.id);
     await ctx.save();
     render();
-    sheet.aktualisiere(tagSheetHtml());
+    sheet.aktualisiere(tagSheet());
   },
   async 'termin.notiz'(d, el) {
     const t = (state.termine ?? []).find(x => x.id === d.id);
@@ -113,14 +113,14 @@ const actions = {
     krankBis = '';
     await ctx.save();
     render();
-    sheet.aktualisiere(tagSheetHtml());
+    sheet.aktualisiere(tagSheet());
     if (anzahl > 1) await hinweis('Gute Besserung', `${anzahl} Tage als krank vermerkt.`);
   },
   async 'tag.krankWeg'(d) {
     entferneAusfall(state, d.iso);
     await ctx.save();
     render();
-    sheet.aktualisiere(tagSheetHtml());
+    sheet.aktualisiere(tagSheet());
   },
   'modulOeffne'(d) { aktivesModul = d.m; tab = 'heute'; unterseite = null; render(); window.scrollTo(0, 0); },
   'verlaufSub'(d) { verlaufSub = d.s; render(); mainInner.parentElement.scrollTo(0, 0); },
@@ -203,113 +203,9 @@ document.addEventListener('change', e => {
   if (fn) fuehreAktionAus(fn, el.dataset, el, e);
 });
 
-// Sichtbare Eingabefelder des Inhaltsbereichs, in DOM-Reihenfolge.
-// (Bottom-Sheets liegen außerhalb von #main und sind bewusst nicht dabei.)
-function eingabeFelder() {
-  return [...main.querySelectorAll('input[data-change]')].filter(el =>
-    el.type !== 'file' && el.type !== 'hidden' && el.offsetParent !== null);
-}
-function naechstesFeld(el) {
-  const felder = eingabeFelder();
-  const i = felder.indexOf(el);
-  return (i >= 0 && i < felder.length - 1) ? felder[i + 1] : null;
-}
-
-/** Höhe des tatsächlich sichtbaren Bereichs (ohne aufgeklappte Tastatur). */
-function sichtHoehe() {
-  return window.visualViewport?.height ?? window.innerHeight;
-}
-
-/**
- * Liegt das Feld hinter der Tastatur bzw. außerhalb der Sicht?
- * Mit etwas Luft nach unten (24px), damit ein Feld, das gerade eben noch am
- * unteren Rand klebt, auch als „nicht gut sichtbar" gilt.
- */
-function istVerdeckt(el) {
-  const r = el.getBoundingClientRect();
-  return r.bottom > sichtHoehe() - 24 || r.top < 0;
-}
-
-/**
- * Feld mittig in den sichtbaren Bereich holen — und NACHFASSEN.
- * Mobile Browser korrigieren nach einem Fokuswechsel oft selbst nach und
- * überschreiben dabei ein laufendes sanftes Scrollen (dann bleibt das Feld
- * unter der Tastatur liegen). Deshalb: sanft zentrieren, kurz später prüfen
- * und notfalls hart nachziehen.
- */
-function zeigeFeld(el) {
-  el.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  setTimeout(() => {
-    if (document.activeElement === el && istVerdeckt(el)) {
-      el.scrollIntoView({ block: 'center', behavior: 'auto' });
-    }
-  }, 300);
-}
-
-/**
- * Tipp-Modus: solange ein Feld aktiv ist, bekommt der Inhaltsbereich unten
- * extra Scroll-Platz. Ohne den lässt sich ein Feld am Listenende NICHT mittig
- * scrollen (der Container ist schon am Anschlag) — es bliebe unter der
- * Tastatur liegen. Der Platz verschwindet wieder, sobald die Eingabe endet.
- */
-function eingabeModus(an) {
-  document.body.classList.toggle('eingabe-aktiv', an);
-}
-
-document.addEventListener('focusin', e => {
-  const el = e.target;
-  if (el.tagName !== 'INPUT') return;
-  // Komfort: beim Antippen eines Kraft-Wertfelds den Inhalt sofort markieren,
-  // damit man direkt die neue Zahl tippt, statt erst die alte zu löschen.
-  if (el.dataset.change === 'k.wert') {
-    requestAnimationFrame(() => { try { el.select(); } catch {} });
-  }
-  // Tastatur-Aktionstaste passend beschriften: „Weiter" solange noch ein Feld
-  // folgt, sonst „Fertig" (schließt die Tastatur).
-  if (el.dataset.change) {
-    el.setAttribute('enterkeyhint', naechstesFeld(el) ? 'next' : 'done');
-    eingabeModus(true);
-  }
-});
-
-// Eingabe beendet → Scroll-Platz wieder einklappen (erst prüfen, ob nicht
-// direkt ins nächste Feld gesprungen wurde).
-document.addEventListener('focusout', e => {
-  if (e.target.tagName !== 'INPUT') return;
-  setTimeout(() => {
-    const a = document.activeElement;
-    if (!(a && a.tagName === 'INPUT' && a.dataset.change)) eingabeModus(false);
-  }, 0);
-});
-
-// Tastatur klappt auf/ändert die Höhe → verdecktes Feld nachführen. Läuft NUR
-// bei Größenänderungen des sichtbaren Bereichs, nicht beim Scrollen — danach
-// kann man also frei scrollen, ohne dass es zurückspringt.
-window.visualViewport?.addEventListener('resize', () => {
-  const el = document.activeElement;
-  if (el && el.tagName === 'INPUT' && el.dataset.change && istVerdeckt(el)) {
-    zeigeFeld(el);
-  }
-});
-
-// „Weiter"/Enter auf der Tastatur → nächstes Eingabefeld fokussieren und sanft
-// in die Bildmitte holen. Danach frei scrollbar (kein Re-Render → kein Snap
-// zurück). Am letzten Feld schließt „Fertig" die Tastatur.
-main.addEventListener('keydown', e => {
-  if (e.key !== 'Enter') return;
-  const el = e.target;
-  if (el.tagName !== 'INPUT' || !el.dataset.change) return;
-  e.preventDefault();
-  const next = naechstesFeld(el);
-  if (next) {
-    next.focus({ preventScroll: true });
-    // Erst im nächsten Frame scrollen: der Extra-Platz unten muss im Layout
-    // stehen, sonst ist beim letzten Feld wieder kein Platz zum Zentrieren.
-    requestAnimationFrame(() => zeigeFeld(next));
-  } else {
-    el.blur();
-  }
-});
+// Bildschirmtastatur: „Weiter" springt ins nächste Feld, verdeckte Felder
+// werden nachgeführt. Steckt in ui/tastatur.js — hängt nur am DOM.
+installiereTastaturVerhalten(main);
 
 // ------------------------------------------------------------
 // Tabs
@@ -351,25 +247,6 @@ function navHtml() {
     `<button class="nav-tab ${tab === t.id ? 'aktiv' : ''}" data-action="tab" data-tab="${t.id}">
       ${iconFuer(t)}<span>${labelFuer(t)}</span>
     </button>`).join('');
-}
-
-/**
- * Die abgehakten Segmente einer Session als Zeilen — genutzt vom Kraft-Verlauf
- * UND vom Tages-Sheet. Beide hatten dieselbe Zeile doppelt; im Verlauf steckte
- * darin eine veraltete Alternativ-Auflösung (`alternativen` sind seit Schema 2
- * IDs, keine Objekte), sodass dort statt der benutzten Alternative die
- * Hauptübung stand. Ein gemeinsamer Helfer verhindert, dass die beiden Stellen
- * wieder auseinanderlaufen.
- */
-function erledigteSegmentZeilen(s) {
-  return (s.segmente ?? []).filter(seg => seg.erledigt === true).map(seg => {
-    const { aktivitaet, anzeigeName } = loeseSegmentAuf(state, seg);
-    if (!aktivitaet) return '';
-    const zsf = aktivitaet.kategorie === 'kraft'
-      ? segmentZusammenfassungKraft(seg)
-      : segmentZusammenfassungWerte(aktivitaet, seg);
-    return `<div class="verlauf-zeile"><span class="punkt ${aktivitaet.kategorie}"></span>${esc(anzeigeName)} <span class="dim">${esc(zsf)}</span></div>`;
-  }).join('');
 }
 
 // ------------------------------------------------------------
@@ -419,7 +296,7 @@ function verlaufHtml() {
     const titel = einheit ? einheit.name : 'Freie Session';
     const vol = sessionVolumenErledigt(s);
     const kats = sessionKategorien(state, s);
-    const zeilen = erledigteSegmentZeilen(s);
+    const zeilen = erledigteSegmentZeilen(state, s);
     return `<div class="karte anim">
       <div class="verlauf-kopf">
         <div><strong>${esc(titel)}</strong><br><small class="dim">${formatDatum(s.datum)}</small></div>
@@ -436,52 +313,6 @@ function verlaufHtml() {
 // ------------------------------------------------------------
 // Daten-Tab (Backup rein/raus)
 // ------------------------------------------------------------
-/** „vor 3 Tagen" / „heute" / „noch nie" — für die Export-Zeile. */
-function exportStatusText() {
-  const tage = tageSeitExport(state);
-  if (tage == null) return 'Noch nie als Datei exportiert';
-  if (tage === 0) return 'Zuletzt exportiert: heute';
-  if (tage === 1) return 'Zuletzt exportiert: gestern';
-  return `Zuletzt exportiert: vor ${tage} Tagen`;
-}
-
-function datenHtml() {
-  const punkte = snapshots();
-  const warnen = brauchtExportErinnerung(state);
-
-  let html = `<div class="tab-kopf anim"><span class="eyebrow"><span class="pip"></span>Backup & Speicher</span><h1>Daten</h1></div>
-    <div class="karte anim">
-      <p class="dim">${state.sessions.length} Sessions · ${state.bibliothek.length} Übungen/Aktivitäten</p>
-      <p class="dim ${warnen ? 'export-alt' : ''}">${esc(exportStatusText())}</p>
-      <div class="knopf-zeile">
-        <button class="knopf primaer" data-action="daten.export">Backup exportieren</button>
-        <button class="knopf" data-action="daten.import">Backup importieren</button>
-      </div>
-      <input type="file" id="importDatei" accept=".json,application/json" hidden data-change="daten.datei">
-    </div>`;
-
-  // Automatische Tages-Snapshots — Rettung bei versehentlichem Löschen.
-  html += `<p class="sheet-abschnitt zwischen">Wiederherstellungspunkte</p>`;
-  if (punkte.length) {
-    html += punkte.map(p => `<div class="karte anim snap-zeile">
-      <div>
-        <strong>${esc(formatDatum(p.datum))}</strong>${p.grund ? ` <span class="dim klein-text">· ${esc(p.grund)}</span>` : ''}<br>
-        <small class="dim">${p.sessions} Sessions · ${p.uebungen} Übungen</small>
-      </div>
-      <button class="knopf klein" data-action="daten.snapshot" data-marke="${esc(p.erstelltAm)}">Laden</button>
-    </div>`).join('');
-  } else {
-    html += `<div class="karte leer anim"><p>Noch keine Punkte. Die App legt beim Öffnen automatisch einen pro Tag an.</p></div>`;
-  }
-  html += `<p class="dim bib-hinweis">Automatisch, die letzten ${MAX_SNAPSHOTS} Tage. Liegt auf diesem Gerät — schützt vor versehentlichem Löschen, aber <strong>nicht</strong> vor Handy-Wechsel oder gelöschten Browserdaten. Dafür der Datei-Export oben.</p>`;
-
-  html += `<div class="karte anim">
-      <p class="dim">Alles auf Anfang — löscht sämtliche Daten dieser App auf diesem Gerät.</p>
-      <button class="knopf gefahr" data-action="daten.reset">Alles zurücksetzen</button>
-    </div>`;
-  return html;
-}
-
 /**
  * Backup einlesen. Reihenfolge mit Absicht: erst PRÜFEN, dann FRAGEN, dann
  * einen Rettungspunkt anlegen, erst danach ersetzen.
@@ -598,186 +429,6 @@ function wochenStatistikHtml() {
 // folgt in Etappe 3.
 // ------------------------------------------------------------
 
-/**
- * Die Punkte eines Tages: erledigt = gefüllt, geplant = Umriss.
- * Ein Ausfall-Tag (krank) bekommt ein eigenes, neutrales Zeichen — es verdrängt
- * nichts: wer trotz Erkältung radeln war, sieht beides.
- */
-function kalPunkte(module, geplant = [], ausfall = null) {
-  return (ausfall ? `<span class="punkt ausfall ${ausfall}" title="Krank"></span>` : '')
-    + module.map(m => `<span class="punkt ${m}"></span>`).join('')
-    + geplant.map(m => `<span class="punkt umriss ${m}"></span>`).join('');
-}
-
-/** Ebene 1: der Wochen-Streifen fürs Dashboard. Jeder Tag → Tages-Sheet,
- *  der Pfeil rechts → Monats-Overlay. */
-function kalenderStreifenHtml() {
-  const { tage } = wochenStreifen(state);
-  const zellen = tage.map(t => {
-    const klasse = ['kal-tag', t.istHeute ? 'heute' : '', t.istZukunft ? 'zukunft' : '']
-      .filter(Boolean).join(' ');
-    return `<button class="${klasse}" data-action="tag.auf" data-iso="${t.iso}">
-      <span class="kal-wt">${t.kurz}</span>
-      <span class="kal-num">${t.tag}</span>
-      <span class="kal-dots">${kalPunkte(t.module, t.geplant, t.ausfall)}</span>
-    </button>`;
-  }).join('');
-  return `<p class="sheet-abschnitt zwischen">Kalender</p>
-    <div class="karte kal-streifen">
-      <div class="kal-woche">${zellen}</div>
-      <button class="kal-chevron-btn" data-action="kalender.auf" aria-label="Monatskalender öffnen">
-        <span class="kal-chevron" aria-hidden="true"></span>
-      </button>
-    </div>`;
-}
-
-/** Ebene 2: das Monats-Raster im Overlay (mit Monats-Navigation). */
-function kalenderHtml() {
-  const g = monatsGitter(state, kalenderAnker);
-  const kopfTage = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So']
-    .map(d => `<span class="kal-wt">${d}</span>`).join('');
-  const zellen = g.wochen.flat().map(t => {
-    const klasse = ['kal-zelle',
-      t.imMonat ? '' : 'aus',
-      t.istHeute ? 'heute' : '',
-      t.istZukunft ? 'zukunft' : ''].filter(Boolean).join(' ');
-    return `<button class="${klasse}" data-action="tag.auf" data-iso="${t.iso}">
-      <span class="kal-num">${t.tag}</span>
-      <span class="kal-dots">${kalPunkte(t.module, t.geplant, t.ausfall)}</span>
-    </button>`;
-  }).join('');
-  return `<div class="kal-nav">
-      <button class="kal-pfeil" data-action="kalender.rueck" aria-label="Voriger Monat"><span class="kal-pfeil-ico links"></span></button>
-      <span class="kal-monat-label">${esc(g.label)}</span>
-      <button class="kal-pfeil" data-action="kalender.vor" aria-label="Nächster Monat"><span class="kal-pfeil-ico"></span></button>
-    </div>
-    <div class="kal-kopf-tage">${kopfTage}</div>
-    <div class="kal-gitter">${zellen}</div>`;
-}
-
-// ------------------------------------------------------------
-// Kalender Ebene 3 — Tages-Sheet. Öffnet sich beim Antippen eines Tages
-// (Streifen oder Monatsraster). Zeigt je nach „Gesicht":
-//   vergangen → Rückblick (erledigte Aktivitäten, aufklappbar bis ins Detail)
-//   heute     → dasselbe (Planung folgt in Etappe 4)
-//   zukunft   → neutraler Leer-Zustand (Planung folgt in Etappe 4)
-// tagDetail() (kalender.js, Node-getestet) liefert Gesicht + rohe Sessions;
-// hier nur Darstellung + das modul-spezifische Formatieren der Zeilen.
-// ------------------------------------------------------------
-
-/** „Montag, 13. Juli 2026" — voller Kopf fürs Sheet. */
-function langesDatum(iso) {
-  const [y, m, d] = iso.split('-').map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString('de-DE',
-    { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-}
-
-/** Eine erledigte Session als aufklappbare Zeile im Tages-Sheet. */
-function tagZeileHtml(s) {
-  const modul = s.modul ?? KRAFT;
-  const auf = tagDetailOffen.has(s.id);
-
-  let titel, wert = '';
-  if (modul === KRAFT) {
-    const e = s.ausPlan ? findeEinheit(state, KRAFT, s.ausPlan) : null;
-    titel = e ? e.name : 'Freie Session';
-    const vol = sessionVolumenErledigt(s);
-    if (vol > 0) wert = `${formatZahl(vol, 0)} kg`;
-  } else {
-    titel = s.name || sessionNameFuer(modul) || 'Einheit';
-    const dist = sessionWert(s, 'distanz');
-    if (dist) wert = formatWert('distanz', dist);
-  }
-
-  return `<div class="karte tag-zeile-karte">
-    <button class="tour-kopf" data-action="tag.zeile" data-sid="${s.id}">
-      <span class="tz-titel"><span class="punkt ${modul}"></span><strong>${esc(titel)}</strong></span>
-      <span class="tz-rechts">${wert ? `<span class="dim num">${esc(wert)}</span>` : ''}<span class="pfeil-ico ${auf ? 'runter' : ''}"></span></span>
-    </button>
-    ${auf ? tagZeileDetailHtml(s) : ''}
-  </div>`;
-}
-
-/** Aufgeklappte Detail-Zeilen einer Session (Segmente mit Zusammenfassung). */
-function tagZeileDetailHtml(s) {
-  const zeilen = erledigteSegmentZeilen(s);
-  const notiz = s.notiz ? `<p class="tz-notiz dim">${esc(s.notiz)}</p>` : '';
-  return `<div class="tz-detail">${zeilen || '<small class="dim">Nichts abgehakt.</small>'}${notiz}</div>`;
-}
-
-/** Der ganze Inhalt des Tages-Sheets für den aktuell gewählten Tag. */
-function tagSheetHtml() {
-  const d = tagDetail(state, tagSheetIso);
-  const erledigt = d.sessions.filter(istWertbareTour);
-  const planbar = d.gesicht === 'heute' || d.gesicht === 'zukunft';
-
-  let badge = '';
-  if (d.gesicht === 'heute') badge = '<span class="tag-badge heute">Heute</span>';
-  else if (d.gesicht === 'zukunft') badge = '<span class="tag-badge zukunft">Vorschau</span>';
-
-  let koerper = '';
-
-  // Rückblick (erledigte Aktivitäten) — bei vergangenen und heutigen Tagen
-  if (d.gesicht !== 'zukunft') {
-    if (erledigt.length) {
-      koerper += erledigt.map(tagZeileHtml).join('');
-    } else if (d.gesicht === 'vergangen') {
-      koerper += '<div class="tag-leer"><p>An diesem Tag war nichts eingetragen.</p></div>';
-    }
-  }
-
-  // Planung (Termine) — bei heute und in der Zukunft
-  if (planbar) koerper += planungHtml(d.termine, d.gesicht);
-
-  // Ausfall (krank) — für heute und vergangene Tage. In der Zukunft ergibt
-  // „krank melden" keinen Sinn; das wäre eine Vorhersage, kein Protokoll.
-  if (d.gesicht !== 'zukunft') koerper += ausfallHtml(d.ausfall);
-
-  return `<div class="tag-sheet-kopf"><h3>${esc(langesDatum(tagSheetIso))}</h3>${badge}</div>${koerper}`;
-}
-
-/**
- * Ausfall-Abschnitt: Tag als krank melden bzw. die Meldung zurücknehmen.
- * Beim Melden lässt sich optional ein Enddatum angeben — eine Erkältung dauert
- * selten genau einen Tag, und so muss man nicht jeden Tag einzeln antippen.
- */
-function ausfallHtml(ausfall) {
-  if (ausfall) {
-    return `<p class="sheet-abschnitt zwischen">Ausfall</p>
-      <div class="karte ausfall-zeile">
-        <span class="au-titel"><span class="punkt ausfall krank"></span><strong>Krank gemeldet</strong></span>
-        <button class="knopf klein" data-action="tag.krankWeg" data-iso="${tagSheetIso}">Zurücknehmen</button>
-      </div>`;
-  }
-  return `<p class="sheet-abschnitt zwischen">Ausfall</p>
-    <div class="karte ausfall-neu">
-      <button class="knopf" data-action="tag.krank" data-iso="${tagSheetIso}">Krank melden</button>
-      <label class="au-bis">bis (optional)
-        <input type="date" value="${esc(krankBis)}" data-change="tag.krankBis">
-      </label>
-    </div>`;
-}
-
-/** Planungs-Abschnitt: bestehende Termine + Modul-Chips zum Anlegen. */
-function planungHtml(termine, gesicht) {
-  const rows = termine.map(terminZeileHtml).join('');
-  const chips = PLANBARE_MODULE.map(m =>
-    `<button class="chip" data-action="termin.neu" data-iso="${tagSheetIso}" data-m="${m}">+ ${esc(MODUL_LABEL[m])}</button>`
-  ).join('');
-  return `<p class="sheet-abschnitt zwischen">${gesicht === 'heute' ? 'Geplant' : 'Planung'}</p>
-    ${rows || '<p class="tag-plan-leer dim">Noch nichts geplant.</p>'}
-    <div class="plan-chips">${chips}</div>`;
-}
-
-/** Eine Termin-Zeile: Modul-Umrisspunkt + optionale Notiz + Entfernen. */
-function terminZeileHtml(t) {
-  return `<div class="karte termin-karte">
-    <span class="tz-titel"><span class="punkt umriss ${t.modul}"></span><strong>${esc(MODUL_LABEL[t.modul] ?? t.modul)}</strong></span>
-    <input class="termin-notiz" type="text" data-change="termin.notiz" data-id="${t.id}" value="${esc(t.notiz)}" placeholder="Notiz…">
-    <button class="termin-weg" data-action="termin.weg" data-id="${t.id}" aria-label="Termin entfernen">✕</button>
-  </div>`;
-}
-
 function dashboardHtml() {
   let html = `<div class="dash-kopf">
     <div><span class="eyebrow"><span class="pip"></span>All-in-One</span><h1>Start</h1></div>
@@ -817,7 +468,7 @@ function dashboardHtml() {
   html += wochenStatistikHtml();
 
   // Kalender-Streifen (Ebene 1): Glance auf die Woche, tippen → Monats-Overlay
-  html += kalenderStreifenHtml();
+  html += kalenderStreifenHtml(state);
 
   return html;
 }
@@ -870,11 +521,11 @@ function render() {
 
   // Unterseite (z.B. Daten) liegt über den Tabs, mit Zurück-Pfeil.
   if (unterseite === 'daten') {
-    mainInner.innerHTML = unterseiteHtml('Daten & Backup', datenHtml());
+    mainInner.innerHTML = unterseiteHtml('Daten & Backup', datenHtml(state));
     return;
   }
   if (unterseite === 'kalender') {
-    mainInner.innerHTML = unterseiteHtml('Kalender', kalenderHtml());
+    mainInner.innerHTML = unterseiteHtml('Kalender', kalenderMonatHtml(state, kalenderAnker));
     return;
   }
 
