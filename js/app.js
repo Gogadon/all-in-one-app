@@ -15,19 +15,16 @@ import { formatZahl, formatWert } from './core/metrics.js';
 import { heuteIso, findeAktivitaet, sessionKategorien, verschiebeZeitraum,
   istWertbareTour, sessionWert, loeseSegmentAuf, neuerTermin,
   markiereAusfall, entferneAusfall } from './core/model.js';
-import { findeEinheit, naechsteEinheit } from './core/plan.js';
+import { findeEinheit } from './core/plan.js';
 import { esc, formatDatum, sheet, bestaetige, hinweis } from './ui/components.js';
 import {
-  erstelleKraftModul, MODUL as KRAFT,
   sessionVolumenErledigt, segmentZusammenfassungKraft, segmentZusammenfassungWerte,
 } from './modules/kraft.js';
-import { erstelleRadModul, MODUL as RAD, tourStatistik, TITEL_EINZAHL as RAD_TITEL } from './modules/rad.js';
-import { erstelleWanderModul, MODUL as WANDERN, wanderStatistik, TITEL_EINZAHL as WANDERN_TITEL } from './modules/wandern.js';
-import { erstelleSchwimmModul, MODUL as SCHWIMMEN, schwimmStatistik, TITEL_EINZAHL as SCHWIMMEN_TITEL } from './modules/schwimmen.js';
-import { erstelleKoerperModul, MODUL as KOERPER } from './modules/koerper.js';
-import { letzterWert as letzterKoerperWert, veraenderung as koerperVeraenderung,
-  formatKoerperWert } from './core/koerper.js';
-import { erstelleChallengeModul, MODUL as CHALLENGE, fortschritt } from './modules/challenge.js';
+import {
+  erstelleModule, MODULE, sessionNameFuer,
+  PLANBARE_MODULE, MODUL_TABS, MODUL_LABEL,
+  KRAFT, RAD, WANDERN, SCHWIMMEN, KOERPER, CHALLENGE,
+} from './module-registry.js';
 import { wochenUebersicht } from './dashboard.js';
 import { wochenStreifen, monatsGitter, tagDetail } from './kalender.js';
 import { routeVonZustand, routeParsen } from './route.js';
@@ -69,51 +66,14 @@ const ctx = {
   render, sheet, esc, formatDatum,
   tabWechsel: (t) => { tab = t; },
 };
-const kraft = erstelleKraftModul(ctx);
-const rad = erstelleRadModul(ctx);
-const wandern = erstelleWanderModul(ctx);
-const schwimmen = erstelleSchwimmModul(ctx);
-const koerper = erstelleKoerperModul(ctx);
-const challenge = erstelleChallengeModul(ctx);
+const module = erstelleModule(ctx);
 
 // Welches Modul zeigt der Heute-/Verlauf-Tab gerade? (Plan bleibt Kraft.)
 let aktivesModul = KRAFT;
 
-// Kalender-Planung: welche Module planbar sind (Challenge = Auswertung, kein Tun)
-// und ihre Anzeigenamen.
-const MODUL_LABEL = { [KRAFT]: 'Kraft', [RAD]: 'Rad', [WANDERN]: 'Wandern', [SCHWIMMEN]: 'Schwimmen', [KOERPER]: 'Körper', [CHALLENGE]: 'Challenge' };
-const PLANBARE_MODULE = [KRAFT, RAD, WANDERN, SCHWIMMEN];
-// Module, die über die gemeinsame Touren-Fabrik laufen (spontanes Loggen,
-// „Heute" = Liste, Verlauf = Statistik). Schwimmen zählt in Einheiten.
-const TOUREN_MODULE = [RAD, WANDERN, SCHWIMMEN];
-// Name einer Session, die keinen eigenen trägt. Die Texte kommen aus den
-// Modul-Configs — vorher stand hier ein Ternary „Rad ? Radtour : Wanderung",
-// wodurch JEDES andere Tour-Modul (Schwimmen!) als „Wanderung" auftauchte.
-const MODUL_SESSION_NAME = {
-  [RAD]: RAD_TITEL, [WANDERN]: WANDERN_TITEL, [SCHWIMMEN]: SCHWIMMEN_TITEL,
-};
+/** Das gerade aktive Modul samt Instanz. */
+const aktives = () => module.nach(aktivesModul) ?? module.nach(KRAFT);
 
-// Welche Tabs hat welches Modul? Start führt immer heim.
-// Kraft: alle. Rad/Wandern/Schwimmen: kein Plan. Challenge: nur Ziele.
-// Steht hier oben, weil außer der Navi auch das URL-Routing sie prüft.
-const MODUL_TABS = {
-  [KRAFT]:     ['dashboard', 'heute', 'plan', 'verlauf'],
-  [RAD]:       ['dashboard', 'heute', 'verlauf'],
-  [WANDERN]:   ['dashboard', 'heute', 'verlauf'],
-  [SCHWIMMEN]: ['dashboard', 'heute', 'verlauf'],
-  [KOERPER]:   ['dashboard', 'heute'],
-  [CHALLENGE]: ['dashboard', 'heute'],
-};
-
-// Line-Icons (stroke, viewBox 0 0 24 24) für die Dashboard-Kacheln.
-const MODUL_ICON = {
-  [KRAFT]: '<svg viewBox="0 0 24 24"><path d="M3 10v4M6 8v8M18 8v8M21 10v4M6 12h12"/></svg>',
-  [RAD]: '<svg viewBox="0 0 24 24"><circle cx="6" cy="16.5" r="3.3"/><circle cx="18" cy="16.5" r="3.3"/><path d="M6 16.5l5-8 7 8M11 8.5h5"/></svg>',
-  [WANDERN]: '<svg viewBox="0 0 24 24"><path d="M3 19h18M6 19l4-6 3 4M12.5 19l4-7 4.5 7"/></svg>',
-  [SCHWIMMEN]: '<svg viewBox="0 0 24 24"><path d="M2 8c2 0 2 2 4 2s2-2 4-2 2 2 4 2 2-2 4-2 2 2 4 2M2 14c2 0 2 2 4 2s2-2 4-2 2 2 4 2 2-2 4-2 2 2 4 2"/></svg>',
-  [KOERPER]: '<svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="M8.5 9.5a3.5 3.5 0 0 1 7 0"/><path d="M12 9.5V13"/></svg>',
-  [CHALLENGE]: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/></svg>',
-};
 
 // ------------------------------------------------------------
 // Aktionen: App-eigene + Modul-Aktionen in einem Register
@@ -210,12 +170,7 @@ const actions = {
     await ctx.save(); render();
   },
 
-  ...kraft.actions,
-  ...rad.actions,
-  ...wandern.actions,
-  ...schwimmen.actions,
-  ...koerper.actions,
-  ...challenge.actions,
+  ...module.actions,
 };
 
 // Führt eine Aktion aus und fängt Fehler zentral ab. Viele Aktionen sind
@@ -374,34 +329,20 @@ function navHtml() {
   // Kraft: alle. Rad: kein Plan. Challenge: nur Heute (kein Plan/Verlauf).
   const erlaubt = MODUL_TABS[aktivesModul] ?? ['dashboard', 'heute'];
 
-  // Manche Tabs heißen je Modul anders. Challenge: „Heute" → „Ziele".
-  // Rad/Wandern: „Heute" → „Touren" (der Tab ist die Tour-Übersicht mit
-  // Knopf zum Neu-Eintragen; „Heute" wäre irreführend, da man auch ältere
-  // Touren sieht).
-  const heisstTouren = TOUREN_MODULE.includes(aktivesModul);
+  // Manche Tabs heißen je Modul anders — was, steht in der Registry.
+  // Challenge: „Heute" → „Ziele". Rad/Wandern: „Heute" → „Touren" (der Tab
+  // ist die Tour-Übersicht; „Heute" wäre irreführend, man sieht auch ältere).
+  // Bei den Touren-Modulen ist „Verlauf" die Statistik-Ansicht.
+  const m = aktives();
   const labelFuer = (t) => {
-    // Rad/Wandern/Schwimmen: der Verlauf-Tab ist die Statistik-Ansicht.
-    if (t.id === 'verlauf' && heisstTouren) return 'Statistik';
-    if (t.id !== 'heute') return t.label;
-    if (aktivesModul === CHALLENGE) return 'Ziele';
-    if (aktivesModul === KOERPER) return 'Werte';
-    // Schwimmen zählt in Einheiten, Rad/Wandern in Touren.
-    if (heisstTouren) return aktivesModul === SCHWIMMEN ? 'Einheiten' : 'Touren';
+    if (t.id === 'verlauf') return m.verlaufLabel ?? t.label;
+    if (t.id === 'heute') return m.heuteLabel ?? t.label;
     return t.label;
   };
 
-  // Challenge nutzt fürs „Heute" ein Zielscheiben-Icon statt der Hantel.
-  const zielIcon = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/></svg>';
-  // Rad/Wandern: Routen-Icon (Wegpunkte mit Pfad) statt der Hantel.
-  const tourenIcon = '<svg viewBox="0 0 24 24"><circle cx="6" cy="18" r="2.2"/><circle cx="18" cy="6" r="2.2"/><path d="M8 17c4 0 4-10 8-10"/></svg>';
-  // Rad/Wandern: Balken-Icon für den Statistik-Tab statt der Uhr.
-  const statistikIcon = '<svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>';
   const iconFuer = (t) => {
-    if (t.id === 'verlauf' && heisstTouren) return statistikIcon;
-    if (t.id !== 'heute') return t.icon;
-    if (aktivesModul === CHALLENGE) return zielIcon;
-    if (aktivesModul === KOERPER) return MODUL_ICON[KOERPER];
-    if (heisstTouren) return tourenIcon;
+    if (t.id === 'verlauf') return m.verlaufIcon ?? t.icon;
+    if (t.id === 'heute') return m.heuteIcon ?? t.icon;
     return t.icon;
   };
 
@@ -437,18 +378,11 @@ function erledigteSegmentZeilen(s) {
 let verlaufSub = 'feed';   // 'feed' | 'fortschritt'
 
 function verlaufHtml() {
-  // Rad: eigene Statistik-Ansicht (Zeitraum → Kennzahlen + Touren)
-  if (aktivesModul === RAD) {
-    return rad.statistikHtml();
-  }
-  // Wandern: eigene Statistik-Ansicht
-  if (aktivesModul === WANDERN) {
-    return wandern.statistikHtml();
-  }
-  // Schwimmen: eigene Statistik-Ansicht
-  if (aktivesModul === SCHWIMMEN) {
-    return schwimmen.statistikHtml();
-  }
+  // Touren-Module bringen ihre eigene Verlauf-Ansicht mit (die Statistik über
+  // einen Zeitraum). Welche das sind, weiß die Registry — hier steht kein
+  // Modulname mehr, den man beim nächsten Modul vergessen könnte.
+  const m = aktives();
+  if (m.verlaufHtml) return m.verlaufHtml(m.instanz);
 
   // Kraft: Feed + Fortschritt wie gehabt
   const umschalter = `<div class="chip-zeile" style="margin:0 2px 14px">
@@ -457,7 +391,7 @@ function verlaufHtml() {
   </div>`;
 
   if (verlaufSub === 'fortschritt') {
-    return umschalter + kraft.fortschrittHtml();
+    return umschalter + m.instanz.fortschrittHtml();
   }
 
   // Kraft-Feed: nur Kraft-Sessions (Rad hat eigenen Verlauf).
@@ -750,7 +684,7 @@ function tagZeileHtml(s) {
     const vol = sessionVolumenErledigt(s);
     if (vol > 0) wert = `${formatZahl(vol, 0)} kg`;
   } else {
-    titel = s.name || MODUL_SESSION_NAME[modul] || 'Einheit';
+    titel = s.name || sessionNameFuer(modul) || 'Einheit';
     const dist = sessionWert(s, 'distanz');
     if (dist) wert = formatWert('distanz', dist);
   }
@@ -868,63 +802,15 @@ function dashboardHtml() {
     </div>`;
   }
 
-  // Modul-Kacheln
-  const kraftStatus = (() => {
-    const e = naechsteEinheit(state, KRAFT);
-    return e ? e.name : 'Kein Plan';
-  })();
-  const radStat = tourStatistik(state);
-  const radStatus = radStat.anzahl > 0 ? `${radStat.anzahl} Touren · ${Math.round(radStat.distanz / 1000)} km` : 'Noch keine Tour';
-  const wanderStat = wanderStatistik(state);
-  const wanderStatus = wanderStat.anzahl > 0 ? `${wanderStat.anzahl} Touren · ${Math.round(wanderStat.distanz / 1000)} km` : 'Noch keine Tour';
-  const schwimmStat = schwimmStatistik(state);
-  const schwimmStatus = schwimmStat.anzahl > 0 ? `${schwimmStat.anzahl} Einheiten · ${schwimmStat.bahnen} Bahnen` : 'Noch keine Einheit';
-  const koerperStatus = (() => {
-    const letzte = letzterKoerperWert(state, 'gewicht');
-    if (!letzte) return 'Noch keine Messung';
-    const v = koerperVeraenderung(state, 'gewicht');
-    const text = formatKoerperWert('gewicht', letzte.wert);
-    if (!v || v.diff === 0) return text;
-    return `${text} · ${v.diff > 0 ? '+' : ''}${formatZahl(v.diff, 1)}`;
-  })();
-  const chStatus = (() => {
-    const ziele = state.challenges ?? [];
-    if (!ziele.length) return 'Keine Ziele';
-    const offen = ziele.filter(z => !fortschritt(state, z).fertig).length;
-    return offen > 0 ? `${ziele.length} Ziele · ${offen} offen` : `${ziele.length} Ziele · alle geschafft ✓`;
-  })();
-
-  html += `<div class="dash-module">
-    <button class="modul-kachel kraft" data-action="modulOeffne" data-m="${KRAFT}">
-      <span class="mk-icon">${MODUL_ICON[KRAFT]}</span>
-      <span class="mk-label">Kraft</span>
-      <span class="mk-status">${esc(kraftStatus)}</span>
-    </button>
-    <button class="modul-kachel rad" data-action="modulOeffne" data-m="${RAD}">
-      <span class="mk-icon">${MODUL_ICON[RAD]}</span>
-      <span class="mk-label">Rad</span>
-      <span class="mk-status">${esc(radStatus)}</span>
-    </button>
-    <button class="modul-kachel wandern" data-action="modulOeffne" data-m="${WANDERN}">
-      <span class="mk-icon">${MODUL_ICON[WANDERN]}</span>
-      <span class="mk-label">Wandern</span>
-      <span class="mk-status">${esc(wanderStatus)}</span>
-    </button>
-    <button class="modul-kachel schwimmen" data-action="modulOeffne" data-m="${SCHWIMMEN}">
-      <span class="mk-icon">${MODUL_ICON[SCHWIMMEN]}</span>
-      <span class="mk-label">Schwimmen</span>
-      <span class="mk-status">${esc(schwimmStatus)}</span>
-    </button>
-    <button class="modul-kachel koerper" data-action="modulOeffne" data-m="${KOERPER}">
-      <span class="mk-icon">${MODUL_ICON[KOERPER]}</span>
-      <span class="mk-label">Körper</span>
-      <span class="mk-status">${esc(koerperStatus)}</span>
-    </button>
-    <button class="modul-kachel challenge" data-action="modulOeffne" data-m="${CHALLENGE}">
-      <span class="mk-icon">${MODUL_ICON[CHALLENGE]}</span>
-      <span class="mk-label">Challenge</span>
-      <span class="mk-status">${esc(chStatus)}</span>
-    </button>
+  // Modul-Kacheln — Reihenfolge, Icon, Label und Statuszeile kommen aus der
+  // Registry. Ein neues Modul erscheint hier von allein, statt dass man den
+  // Block per Copy-Paste um einen siebten Eintrag erweitert.
+  html += `<div class="dash-module">${MODULE.map(m => `
+    <button class="modul-kachel ${m.id}" data-action="modulOeffne" data-m="${m.id}">
+      <span class="mk-icon">${m.icon}</span>
+      <span class="mk-label">${esc(m.label)}</span>
+      <span class="mk-status">${esc(m.status(state))}</span>
+    </button>`).join('')}
   </div>`;
 
   // Wochen-Statistik (zweistufig: Kopfzeile + Modul-Aufschlüsselung)
@@ -998,16 +884,11 @@ function render() {
       break;
     case 'heute':
       mainInner.innerHTML =
-        aktivesModul === RAD ? rad.heuteHtml()
-        : aktivesModul === WANDERN ? wandern.heuteHtml()
-        : aktivesModul === SCHWIMMEN ? schwimmen.heuteHtml()
-        : aktivesModul === KOERPER ? koerper.heuteHtml()
-        : aktivesModul === CHALLENGE ? challenge.heuteHtml()
-        : kraft.heuteHtml();
+        aktives().instanz.heuteHtml();
       break;
     case 'plan':
       // Plan ist Kraft-spezifisch (Rad hat keinen Zyklus)
-      mainInner.innerHTML = kraft.planHtml();
+      mainInner.innerHTML = module.nach(KRAFT).instanz.planHtml();
       break;
     case 'verlauf':
       mainInner.innerHTML = verlaufHtml();
