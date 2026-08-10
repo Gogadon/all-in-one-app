@@ -410,3 +410,37 @@ test('Alternativ-Wechsel: Vorschlag wird ersetzt, getippte Werte bleiben', async
   assert.equal(seg.altOf, null);
   assert.equal(seg.eintraege[0].messwerte.gewicht, 45, 'getippte Werte bleiben stehen');
 });
+
+test('Progressionsart umschalten: gleiche Art behält die Werte, andere Art startet frisch', async () => {
+  const { erstelleKraftModul, PROG_DEFAULTS } = await import('../js/modules/kraft.js');
+  const state = leererZustand();
+  const bank = addAktivitaet(state, { name: 'Bankdrücken', kategorie: 'kraft', messwerte: ['gewicht', 'wdh'] });
+
+  const ctx = {
+    get state() { return state; }, save: async () => {}, render: () => {},
+    sheet: { oeffne() {}, schliesse() {}, aktualisiere() {} },
+    esc: t => String(t ?? ''), formatDatum: i => i, tabWechsel: () => {},
+  };
+  const k = erstelleKraftModul(ctx);
+
+  // Erstmal einschalten → Standardwerte der Art, und `art` ist gesetzt.
+  await k.actions['k.progArt']({ akt: bank.id, art: 'double' });
+  assert.equal(bank.einstellungen.prog.art, 'double');
+  assert.equal(bank.einstellungen.prog.schritt, PROG_DEFAULTS.double.schritt);
+
+  // Eigener Wert bleibt beim erneuten Wählen DERSELBEN Art erhalten.
+  bank.einstellungen.prog.schritt = 1.25;
+  await k.actions['k.progArt']({ akt: bank.id, art: 'double' });
+  assert.equal(bank.einstellungen.prog.schritt, 1.25, 'eigener Schritt überlebt');
+  assert.equal(bank.einstellungen.prog.art, 'double');
+
+  // Andere Art → deren Standardwerte, und `art` zeigt wirklich die neue Art.
+  await k.actions['k.progArt']({ akt: bank.id, art: 'strength' });
+  assert.equal(bank.einstellungen.prog.art, 'strength', 'art wird nicht überschrieben');
+  assert.equal(bank.einstellungen.prog.wdh, PROG_DEFAULTS.strength.wdh);
+  assert.equal(bank.einstellungen.prog.schritt, PROG_DEFAULTS.strength.schritt);
+
+  // Ausschalten entfernt die Einstellung ganz.
+  await k.actions['k.progArt']({ akt: bank.id, art: 'off' });
+  assert.equal(bank.einstellungen.prog, undefined);
+});

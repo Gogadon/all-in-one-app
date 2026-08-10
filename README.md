@@ -17,8 +17,18 @@ GitHub Pages deployt automatisch (kann ein paar Minuten dauern).
 ```
 npm test
 ```
-Führt alle Node-Tests aus. Sie laufen ohne Browser — die gesamte Logik ist
-so gebaut, dass sie ohne DOM prüfbar ist.
+Führt alle Node-Tests aus. Sie laufen ohne Browser und **ohne jede
+Abhängigkeit** — die gesamte Logik ist so gebaut, dass sie ohne DOM prüfbar
+ist.
+
+**Prüfen (optional):**
+```
+npm install     # einmalig, holt ESLint
+npm run lint
+```
+Findet Fehler, die kein Test sehen kann (siehe „Tests"). Rein optional:
+`npm test` braucht es nicht, die App braucht es nicht, und auf GitHub Pages
+landet kein Byte davon — `node_modules/` steht in `.gitignore`.
 
 **Lokal ansehen:** Einen beliebigen statischen Server im Projektordner starten,
 z.B. `python3 -m http.server`. Direkt `index.html` öffnen geht *nicht*
@@ -385,9 +395,30 @@ heißt „was ich angefasst habe, war in Ordnung" — nicht „alles ist heil".
   niemand die Antwort. Sauber lösen ließe sich das, indem die Dialoge über
   `ctx` hereingereicht werden, so wie `sheet` es schon wird.
 - CSS und Layout. Dafür braucht es einen echten Browser.
-- Namen, die es nirgends gibt, in Code den kein Test aufruft. Ein Linter mit
-  `no-undef` findet diese Klasse vollständig und ohne Ausführen — bewusst
-  nicht eingebaut, weil das die Null-Abhängigkeiten-Linie bräche.
+- Namen, die es nirgends gibt, in Code den kein Test aufruft. Dafür gibt es
+  `npm run lint` (siehe unten).
+
+### `npm run lint` — die andere Hälfte
+
+```
+npm install     # einmalig
+npm run lint
+```
+
+ESLint liest den Code, ohne ihn auszuführen. Das ist der entscheidende
+Unterschied: Ein Test sieht nur Code, den er ausführt — ein Linter sieht
+allen Code, immer. Die Regel `no-undef` hätte alle fünf verlorenen Namen von
+oben in zwei Sekunden gezeigt, auch die drei, die noch niemand benutzt hatte.
+
+Dazu ein paar Nachbarn derselben Art: doppelte Schlüssel in einem Objekt
+(einer gewinnt still), Code hinter `return`, Selbstzuweisungen. Alles Dinge,
+bei denen der Code weiterläuft und trotzdem etwas anderes tut als gedacht.
+
+Es ist die **einzige** Abhängigkeit des Projekts und bewusst optional:
+`npm test` läuft ohne sie, die App sowieso, und `node_modules/` ist
+ignoriert. Vor jedem größeren Umbau einmal laufen lassen — dafür ist es da.
+
+Warnungen (unbenutzte Namen) dürfen stehen bleiben; **Fehler** nicht.
 
 ---
 
