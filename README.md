@@ -54,15 +54,49 @@ Derselbe Code-Pfad für beides.
 Wichtige Regel: **Abhängigkeiten zeigen immer nach unten.**
 
 ```
-app.js            ← kennt alle Module, wird von niemandem importiert
+app.js              ← die Hülle; wird von niemandem importiert
    ↓
-modules/          ← kennen den Kern, nie app.js
+module-registry.js  ← kennt alle Module, beschreibt sie EINMAL
    ↓
-core/ + ui/       ← kennen keine Module
+modules/ + views/   ← kennen den Kern, nie app.js
+   ↓
+core/ + ui/         ← kennen keine Module
 ```
 
 Ein Modul, das `app.js` importiert, erzeugt einen Zirkelbezug und macht die
 Tests unmöglich (sie laden Module einzeln, ohne DOM).
+
+### Die Registry: ein Modul, eine Stelle
+
+`js/module-registry.js` beschreibt jedes Modul genau einmal — Name, Icon,
+Tabs, planbar?, Statuszeile fürs Dashboard, die Fabrik. Alles Weitere fällt
+daraus ab: die Kacheln entstehen per `map`, die Navigation fragt `tabs`, das
+Routing fragt dieselbe Tabelle.
+
+Vorher lagen diese Angaben in acht parallelen Listen in `app.js`. Ein Modul
+einzuhängen hieß, an rund zehn Stellen daran zu denken — und genau dieses
+Vergessen war die Ursache eines Anzeigefehlers: Die Liste mit den
+Session-Namen kannte Schwimmen nicht, also hieß jede Schwimmeinheit
+„Wanderung".
+
+**Ein neues Modul kommt in die Registry, sonst nirgendwo hin.** Was das Modul
+über sich selbst weiß (Messwerte, Texte, Logik), bleibt in seiner eigenen
+Config — die Registry beschreibt nur, wie es in der Navigation auftaucht.
+
+### Ansichten bekommen ihren Zustand übergeben
+
+Alles unter `js/views/` sind Funktionen mit Argumenten, keine Funktionen mit
+Umgebung:
+
+```js
+tagSheetHtml(state, iso, { offen, krankBis })
+```
+
+Das ist der Unterschied zwischen prüfbar und nicht prüfbar. Solange diese
+Ansichten in `app.js` steckten, ließen sie sich in Node gar nicht laden
+(`app.js` fasst beim Start das DOM an) — und genau dort konnte ein
+Anzeigefehler monatelang unbemerkt wohnen. Neue Ansichten deshalb bitte
+genauso: Zustand rein, String raus.
 
 ---
 
@@ -70,7 +104,7 @@ Tests unmöglich (sie laden Module einzeln, ohne DOM).
 
 | Datei | Zweck |
 |---|---|
-| `js/app.js` | App-Shell: Tabs, Dashboard, Daten-Import/Export, Event-Verdrahtung |
+| `js/app.js` | Die Hülle: Tabs, Dashboard, Import/Export, Event-Verdrahtung |
 | `js/core/model.js` | Datenmodell + **alle Datums-Helfer** |
 | `js/core/metrics.js` | Messwert-Registry (welche Zahlen es gibt, wie sie formatiert werden) |
 | `js/core/statistik.js` | Zeitraum-Aggregation (Woche/Monat/Jahr) für die Statistik-Ansicht |
@@ -78,8 +112,18 @@ Tests unmöglich (sie laden Module einzeln, ohne DOM).
 | `js/core/library.js` | Übungs-Bibliothek |
 | `js/core/storage.js` | Speichern, Laden, Backup, Migration |
 | `js/core/koerper.js` | Körperwerte-Register + Verlauf (Gewicht, KFA …) |
+| `js/module-registry.js` | **Alle Module, einmal beschrieben.** Erste Anlaufstelle für ein neues Modul |
 | `js/route.js` | Adresse ⇄ Ansicht (Hash-Routing, reine Logik) |
-| `js/modules/kraft.js` | Kraftmodul (das größte — Progression, PRs, Sätze) |
+| `js/views/kalender-ansicht.js` | Wochen-Streifen, Monatsraster, Tages-Sheet |
+| `js/views/daten-ansicht.js` | Unterseite „Daten & Backup" |
+| `js/views/session-zeilen.js` | Die Zeile, die Kraft-Verlauf **und** Tages-Sheet teilen |
+| `js/ui/tastatur.js` | Bildschirmtastatur: „Weiter" ins nächste Feld, verdeckte Felder nachführen |
+| `js/modules/kraft.js` | Kraft-Fabrik: Oberflächen-Zustand, Ansichten zusammensetzen, Aktionen |
+| `js/modules/kraft/logik.js` | Die Rechenregeln: Progression, PRs, Verlauf, Prefill |
+| `js/modules/kraft/eingabe-html.js` | DER eine Renderer für Eingabefelder |
+| `js/modules/kraft/heute-ansicht.js` | Kraft: Heute-Tab |
+| `js/modules/kraft/plan-ansicht.js` | Kraft: Plan-Tab + Bottom-Sheets |
+| `js/modules/kraft/fortschritt-ansicht.js` | Kraft: Fortschritt (Charts) |
 | `js/modules/rad.js` | Radmodul (freie Touren, kein Plan) |
 | `js/modules/wandern.js` | Wandermodul (freie Touren; Schritte, Höhenmeter, Std:Min) |
 | `js/modules/schwimmen.js` | Schwimmmodul (freie Einheiten; Bahnen als Primär-Einheit) |
@@ -251,28 +295,108 @@ Historie, Progression und Einstellungen.
 - Die Migration von Schema 1→2 (in `storage.js`) wandelt alte eingebettete
   Alternativen in echte Übungen um und führt gleichnamige zusammen.
 
+### 6a. Ein Vorschlag gehört zu der Historie, aus der er stammt
+
+Beim Abhaken füllt `prefillEintrag` den ersten Satz mit den Werten der letzten
+Session — und markiert ihn mit `quelle: 'prefill'`. Sobald der Nutzer etwas
+tippt (oder Vorzeichen/Aufwärmsatz umschaltet), wird daraus `quelle:
+'manuell'`.
+
+Diese Markierung ist der ganze Trick beim Wechsel auf eine Alternative:
+
+- Steht dort nur noch ein unberührter Vorschlag, wird er durch den Vorschlag
+  der **neuen** Übung ersetzt — und bleibt **leer**, wenn es dazu keine
+  Historie gibt. Sonst stünden dort Gewichte, die für diese Übung nie
+  gehoben wurden, und die Alternative würde sich diese fremde Zahl beim
+  nächsten Mal auch noch merken.
+- Getippte Werte bleiben **immer** stehen, in beide Richtungen.
+
+Wer `k.wert` & Co. anfasst: die `beruehrt()`-Zeile nicht wegoptimieren, sonst
+ist der Marker wieder bedeutungslos.
+
+---
+
+## Ein neues Modul einhängen
+
+1. **Modul schreiben.** Ist es eine Sportart, die man einfach loggt (wie Rad,
+   Wandern, Schwimmen), reicht eine Config auf der Touren-Fabrik
+   (`modules/touren/tour-modul.js`) — das sind rund 70 Zeilen. Exportieren:
+   `MODUL`, `erstelleXModul`, `TITEL_EINZAHL`, `NOMEN` und die Statistik.
+2. **In `js/module-registry.js` eintragen.** Genau ein Eintrag: Name, Icon,
+   Tabs, planbar?, Statuszeile. Die Reihenfolge dort ist die Reihenfolge der
+   Kacheln auf dem Dashboard.
+3. **Kategorie ergänzen** in `KATEGORIEN` (`core/model.js`) und eine
+   Akzentfarbe in `css/style.css` (`--<modul>`), plus `.modul-kachel.<modul>`.
+4. **Fertig.** Navigation, Routing, Kalender-Punkte und Dashboard-Kachel
+   entstehen aus der Registry.
+
+Was du **nicht** tun musst: irgendwo eine Liste von Modulnamen erweitern. Wenn
+du beim Einbauen doch eine findest, gehört sie in die Registry.
+
 ---
 
 ## Tests
 
-221 Tests, alle ohne Browser lauffähig. Sie decken die Rechenlogik ab:
-Progression, PR-Erkennung, Zyklus-Berechnung, Zeiträume, Datumsgrenzen,
-Statistik-Aggregation und Challenge-Fortschritt.
+266 Tests, alle ohne Browser lauffähig, ohne eine einzige Abhängigkeit:
 
 ```
 npm test
 ```
 
-Neue Logik gehört in eine reine Funktion, die man ohne DOM testen kann. Wenn
-etwas nur im Browser prüfbar ist, ist es meist zu eng mit der Darstellung
-verwoben.
+Sie kommen in vier Sorten, und die Unterscheidung ist wichtig, weil jede
+Sorte eine andere Art von Fehler fängt:
+
+| Sorte | Datei(en) | fängt |
+|---|---|---|
+| **Logik** | `kraft.test.js`, `statistik.test.js`, `kalender.test.js` … | Rechenfehler: Progression, PRs, Zyklus, Zeiträume, Datumsgrenzen |
+| **Ansichten** | `ansichten.test.js` | Was im HTML steht: Namen, Einheiten, die drei Gesichter eines Tages |
+| **Render-Smoke** | `render-smoke.test.js` | Ob jedes Modul überhaupt sinnvoll rendert — inkl. Sweep auf `undefined`/`NaN` |
+| **Aktions-Smoke** | `aktionen-smoke.test.js` | Fehlende Namen: ruft **jede** Aktion **jedes** Moduls einmal auf |
+
+### Warum es die letzten beiden Sorten gibt
+
+Beide sind aus echten Fehlern entstanden, die vorher niemand gesehen hat:
+
+1. Im Kraft-Verlauf stand die Hauptübung statt der benutzten Alternative.
+   `loeseSegmentAuf` war sauber getestet und lieferte die richtige Antwort —
+   die Oberfläche hat sie nur nicht benutzt. Die Lücke lag nicht in der
+   Logik, sondern **zwischen** Logik und HTML.
+2. Beim Aufteilen von `kraft.js` fielen fünf Namen aus dem Import-Block.
+   Alle Tests blieben grün, weil die betroffenen Aktionen (Teilen,
+   Umbenennen) von keinem Test aufgerufen wurden. Aufgefallen ist es beim
+   Benutzen: „segmentZusammenfassungWerte is not defined".
+
+**Merksatz daraus:** Ein Test sieht nur Code, den er auch ausführt. Grün
+heißt „was ich angefasst habe, war in Ordnung" — nicht „alles ist heil".
+
+### Regeln für neue Tests
+
+- Neue Logik gehört in eine reine Funktion, die man ohne DOM testen kann.
+  Ist etwas nur im Browser prüfbar, ist es meist zu eng mit der Darstellung
+  verwoben.
+- Neue Ansichten bekommen ihren Zustand als Argument (siehe oben) — dann
+  reicht `tests/helpers/umgebung.js` als Browser-Attrappe.
+- Ein neuer, grüner Test beweist erst mal nichts. Kaputtmachen, was er prüfen
+  soll, und schauen, ob er umfällt. Sonst prüft er womöglich nichts.
+
+### Was die Tests NICHT abdecken
+
+- Alles hinter einer Rückfrage (`bestaetige`/`hinweis`) — im Test klickt
+  niemand die Antwort. Sauber lösen ließe sich das, indem die Dialoge über
+  `ctx` hereingereicht werden, so wie `sheet` es schon wird.
+- CSS und Layout. Dafür braucht es einen echten Browser.
+- Namen, die es nirgends gibt, in Code den kein Test aufruft. Ein Linter mit
+  `no-undef` findet diese Klasse vollständig und ohne Ausführen — bewusst
+  nicht eingebaut, weil das die Null-Abhängigkeiten-Linie bräche.
 
 ---
 
 ## Backup & Migration
 
 **Export:** Zahnrad im Dashboard → Daten → Backup exportieren.
-Erzeugt `all-in-one-backup-JJJJ-MM-TT.json`.
+Erzeugt `all-in-one-backup-JJJJ-MM-TT-HHMMSS.json` — mit Uhrzeit in Ortszeit,
+damit zwei Exporte am selben Tag nebeneinander liegen und die alphabetische
+Sortierung zugleich die chronologische ist.
 
 **Import:** Gleiche Stelle. Der Import prüft den `app`-Namen im JSON *nicht*,
 deshalb laden auch ältere Backups (mit dem früheren Namen) weiterhin.
@@ -328,6 +452,8 @@ deuten die Module an, der Punkt ist der Nutzer.
 ## Offene Ideen
 
 - Module: Joggen/Laufen
+- Dialoge (`bestaetige`/`hinweis`) über `ctx` hereinreichen statt direkt zu
+  importieren — dann sind auch die Aktionen dahinter testbar
 - Dashboard als kompaktes Kachel-Raster, wenn mehr Module dazukommen
 - Teilen vom Dashboard (Wochen-/Monatsstatistik)
 - App-weiter Kalender: Personal Training, geplante Touren
