@@ -65,6 +65,10 @@ const CONFIG = {
 // Standardname einer Session ohne eigenen Namen — kommt aus DIESER Config,
 // damit der Name nicht an anderer Stelle nochmal getippt werden muss.
 export const TITEL_EINZAHL = CONFIG.titelEinzahl;
+// Wie eine Aktivität dieses Moduls heißt — Einzahl und Mehrzahl. Steht in
+// DIESER Config, damit die Wörter nicht an zweiter Stelle nochmal getippt
+// werden müssen (z.B. für die Statuszeile der Dashboard-Kachel).
+export const NOMEN = { einzahl: CONFIG.nomenEinzahl, mehrzahl: CONFIG.nomenMehrzahl };
 export const alleTouren     = (state)        => tourenFuer(state, CONFIG);
 export const tourAktivitaet = (state, opts)  => aktivitaetFuer(state, CONFIG, opts);
 export const tourWerte      = (session)      => werteVon(session);

@@ -127,3 +127,50 @@ test('Registry: keine zwei Module beanspruchen denselben Aktionsnamen', () => {
   // und die Sammeltabelle hat wirklich alle.
   assert.equal(Object.keys(gebaut.actions).length, gesehen.size);
 });
+
+test('Registry: Statuszeilen zählen in Einzahl und Mehrzahl richtig', async () => {
+  // Auf den Kacheln stand „1 Touren" und „1 Einheiten". Die Wörter kommen
+  // jetzt aus der Config des jeweiligen Moduls, nicht aus einer zweiten
+  // Liste hier — deshalb sagt Wandern auch „Wanderung" und nicht „Tour".
+  const { neueSession, neuesSegment, neuerEintrag, addSegment, addEintrag } =
+    await import('../js/core/model.js');
+  const { addAktivitaet } = await import('../js/core/library.js');
+
+  function mit(modul, messwerte, anzahl) {
+    const state = leererZustand();
+    const akt = addAktivitaet(state, {
+      name: 'X', kategorie: modul, messwerte: Object.keys(messwerte),
+    });
+    for (let i = 0; i < anzahl; i++) {
+      const s = neueSession({ datum: `2026-08-0${i + 1}` });
+      s.modul = modul; s.abgeschlossen = true;
+      const seg = addSegment(s, neuesSegment(akt.id));
+      seg.erledigt = true;
+      addEintrag(seg, neuerEintrag(messwerte));
+      state.sessions.push(s);
+    }
+    return modulNach(modul).status(state);
+  }
+
+  assert.equal(mit(RAD, { distanz: 24300 }, 1), '1 Tour · 24 km');
+  assert.match(mit(RAD, { distanz: 24300 }, 2), /^2 Touren · /);
+  assert.equal(modulNach(RAD).status(leererZustand()), 'Noch keine Tour');
+
+  assert.equal(mit(WANDERN, { distanz: 8100 }, 1), '1 Wanderung · 8 km');
+  assert.match(mit(WANDERN, { distanz: 8100 }, 2), /^2 Wanderungen · /);
+  assert.equal(modulNach(WANDERN).status(leererZustand()), 'Noch keine Wanderung');
+
+  assert.equal(mit(SCHWIMMEN, { bahnen: 1 }, 1), '1 Einheit · 1 Bahn');
+  assert.equal(mit(SCHWIMMEN, { bahnen: 20 }, 2), '2 Einheiten · 40 Bahnen');
+  assert.equal(modulNach(SCHWIMMEN).status(leererZustand()), 'Noch keine Einheit');
+});
+
+test('Registry: kein Modul zeigt eine Statuszeile mit falscher Mehrzahl', () => {
+  // Ein neues Touren-Modul soll die Wörter mitbringen müssen, statt sie hier
+  // nachzupflegen — sonst steht beim nächsten Mal wieder „1 Touren" da.
+  for (const m of MODULE.filter(m => m.tour)) {
+    assert.ok(m.nomen?.einzahl?.length, `${m.id}: Einzahl fehlt`);
+    assert.ok(m.nomen?.mehrzahl?.length, `${m.id}: Mehrzahl fehlt`);
+    assert.notEqual(m.nomen.einzahl, m.nomen.mehrzahl, `${m.id}: Einzahl = Mehrzahl`);
+  }
+});

@@ -12,7 +12,7 @@ import { sparkline, balken, trend } from '../../ui/charts.js';
 import { MODUL, fortschrittsSerie, wochenVolumen } from './logik.js';
 
 export function erstelleFortschrittAnsicht(k) {
-  const { S, esc, formatDatum, offen, zu, progExpand, progGruppeAuf, progGruppeZu, ui, heutigeSession } = k;
+  const { S, esc, formatDatum, progExpand, progGruppeAuf, progGruppeZu, ui } = k;
 
 
   function fortschrittHtml() {

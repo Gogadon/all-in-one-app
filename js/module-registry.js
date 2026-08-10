@@ -23,11 +23,11 @@ import { letzterWert as letzterKoerperWert, veraenderung as koerperVeraenderung,
 
 import { erstelleKraftModul, MODUL as KRAFT } from './modules/kraft.js';
 import { erstelleRadModul, MODUL as RAD, tourStatistik,
-  TITEL_EINZAHL as RAD_TITEL } from './modules/rad.js';
+  TITEL_EINZAHL as RAD_TITEL, NOMEN as RAD_NOMEN } from './modules/rad.js';
 import { erstelleWanderModul, MODUL as WANDERN, wanderStatistik,
-  TITEL_EINZAHL as WANDERN_TITEL } from './modules/wandern.js';
+  TITEL_EINZAHL as WANDERN_TITEL, NOMEN as WANDERN_NOMEN } from './modules/wandern.js';
 import { erstelleSchwimmModul, MODUL as SCHWIMMEN, schwimmStatistik,
-  TITEL_EINZAHL as SCHWIMMEN_TITEL } from './modules/schwimmen.js';
+  TITEL_EINZAHL as SCHWIMMEN_TITEL, NOMEN as SCHWIMMEN_NOMEN } from './modules/schwimmen.js';
 import { erstelleKoerperModul, MODUL as KOERPER } from './modules/koerper.js';
 import { erstelleChallengeModul, MODUL as CHALLENGE, fortschritt } from './modules/challenge.js';
 
@@ -49,22 +49,28 @@ const ALLE_TABS = ['dashboard', 'heute', 'plan', 'verlauf'];
 const OHNE_PLAN = ['dashboard', 'heute', 'verlauf'];
 const NUR_HEUTE = ['dashboard', 'heute'];
 
+/** „1 Tour" statt „1 Touren" — die Wörter kommen aus der Modul-Config. */
+function mengenwort(anzahl, nomen) {
+  return anzahl === 1 ? nomen.einzahl : nomen.mehrzahl;
+}
+
 /**
  * Gemeinsame Züge der Touren-Module (Rad/Wandern/Schwimmen): spontanes
  * Loggen statt Plan, „Heute" ist eine Liste, „Verlauf" ist die Statistik.
  * Nur die Wörter unterscheiden sich — Schwimmen zählt Einheiten, nicht Touren.
  */
-function tourModul({ id, label, icon, erstelle, sessionName, statistik, heuteLabel, status }) {
+function tourModul({ id, label, icon, erstelle, sessionName, statistik, nomen, heuteLabel, status }) {
   return {
     id, label, icon, erstelle,
     tabs: OHNE_PLAN,
     planbar: true,
     tour: true,
     sessionName,
+    nomen,                    // Einzahl/Mehrzahl, aus der Config des Moduls
     heuteLabel, heuteIcon: ICON_TOUREN,
     verlaufLabel: 'Statistik', verlaufIcon: ICON_STATISTIK,
     verlaufHtml: (instanz) => instanz.statistikHtml(),
-    status: (state) => status(statistik(state)),
+    status: (state) => status(statistik(state), nomen),
   };
 }
 
@@ -87,26 +93,26 @@ export const MODULE = [
   tourModul({
     id: RAD, label: 'Rad', icon: ICON_RAD,
     erstelle: erstelleRadModul, sessionName: RAD_TITEL,
-    statistik: tourStatistik, heuteLabel: 'Touren',
-    status: (st) => st.anzahl > 0
-      ? `${st.anzahl} Touren · ${Math.round(st.distanz / 1000)} km`
-      : 'Noch keine Tour',
+    statistik: tourStatistik, nomen: RAD_NOMEN, heuteLabel: 'Touren',
+    status: (st, n) => st.anzahl > 0
+      ? `${st.anzahl} ${mengenwort(st.anzahl, n)} · ${Math.round(st.distanz / 1000)} km`
+      : `Noch keine ${n.einzahl}`,
   }),
   tourModul({
     id: WANDERN, label: 'Wandern', icon: ICON_WANDERN,
     erstelle: erstelleWanderModul, sessionName: WANDERN_TITEL,
-    statistik: wanderStatistik, heuteLabel: 'Touren',
-    status: (st) => st.anzahl > 0
-      ? `${st.anzahl} Touren · ${Math.round(st.distanz / 1000)} km`
-      : 'Noch keine Tour',
+    statistik: wanderStatistik, nomen: WANDERN_NOMEN, heuteLabel: 'Touren',
+    status: (st, n) => st.anzahl > 0
+      ? `${st.anzahl} ${mengenwort(st.anzahl, n)} · ${Math.round(st.distanz / 1000)} km`
+      : `Noch keine ${n.einzahl}`,
   }),
   tourModul({
     id: SCHWIMMEN, label: 'Schwimmen', icon: ICON_SCHWIMMEN,
     erstelle: erstelleSchwimmModul, sessionName: SCHWIMMEN_TITEL,
-    statistik: schwimmStatistik, heuteLabel: 'Einheiten',
-    status: (st) => st.anzahl > 0
-      ? `${st.anzahl} Einheiten · ${st.bahnen} Bahnen`
-      : 'Noch keine Einheit',
+    statistik: schwimmStatistik, nomen: SCHWIMMEN_NOMEN, heuteLabel: 'Einheiten',
+    status: (st, n) => st.anzahl > 0
+      ? `${st.anzahl} ${mengenwort(st.anzahl, n)} · ${st.bahnen} ${st.bahnen === 1 ? 'Bahn' : 'Bahnen'}`
+      : `Noch keine ${n.einzahl}`,
   }),
   {
     id: KOERPER,
