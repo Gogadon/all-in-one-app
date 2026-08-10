@@ -22,7 +22,7 @@ import {
 import { eintragInputsHtml, escT } from './eingabe-html.js';
 
 export function erstelleHeuteAnsicht(k) {
-  const { S, esc, formatDatum, sheet, offen, zu, verlaufOffen, altOffen,
+  const { S, esc, formatDatum, offen, zu, verlaufOffen, altOffen,
     heutigeSession, effektiveEinstellungen } = k;
 
 

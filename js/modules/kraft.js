@@ -22,7 +22,7 @@
 
 import { MESSWERTE, formatZahl, parseZahl, parseDauer } from '../core/metrics.js';
 import {
-  heuteIso, neuesSegment, neuerEintrag, addSegment, addEintrag, hatFlag,
+  heuteIso, neueSession, neuesSegment, neuerEintrag, addSegment, addEintrag, hatFlag,
   findeAktivitaet, loeseSegmentAuf,
 } from '../core/model.js';
 import {
@@ -40,8 +40,9 @@ import { teileKarte } from '../ui/share.js';
 import { bestaetige, hinweis } from '../ui/components.js';
 
 import {
-  MODUL, identVon, prefillEintrag, nurVorschlaege, beruehrt, kannKraftSessionStarten,
-  sessionVolumenErledigt, sessionHighlights,
+  MODUL, PROG_DEFAULTS, identVon, prefillEintrag, nurVorschlaege, beruehrt,
+  kannKraftSessionStarten, sessionVolumenErledigt, sessionHighlights,
+  fmtSatz, segmentZusammenfassungWerte,
 } from './kraft/logik.js';
 import { distanzZuMeter } from './kraft/eingabe-html.js';
 import { erstelleHeuteAnsicht } from './kraft/heute-ansicht.js';
@@ -67,8 +68,9 @@ export function erstelleKraftModul(ctx) {
   // wandern von allein mit (Referenz); diese beiden werden neu ZUGEWIESEN und
   // brauchen deshalb ein gemeinsames Objekt.
   const ui = {
-    picker: null,        // { ziel:'session'|'einheit', einheitId?, suche:'' }
+    picker: null,           // { ziel:'session'|'einheit', einheitId?, suche:'' }
     progMetrik: 'gewicht',  // Fortschritt: 'gewicht' | 'avg' | 'volumen'
+    umbenennen: null,       // { typ:'einheit'|'altName'|'altNeu', id?, altId?, wert }
   };
   const progExpand = new Set();     // Übungs-IDs mit vollständig ausgeklappter Verlaufsliste
   const progGruppeAuf = new Set();  // manuell aufgeklappte Einheiten-Gruppen im Fortschritt
@@ -462,23 +464,23 @@ export function erstelleKraftModul(ctx) {
     },
     'k.einheitName'(d) {
       const e = findeEinheit(S(), MODUL, d.einheit);
-      umbenennen = { typ: 'einheit', id: d.einheit, titel: 'Einheit umbenennen', wert: e?.name ?? '' };
+      ui.umbenennen = { typ: 'einheit', id: d.einheit, titel: 'Einheit ui.umbenennen', wert: e?.name ?? '' };
       sheet.oeffne(umbenennenHtml());
     },
-    'k.umbennSuche'(d, el) { if (umbenennen) { umbenennen.wert = el.value; sheet.aktualisiere(umbenennenHtml()); } },
+    'k.umbennSuche'(d, el) { if (ui.umbenennen) { ui.umbenennen.wert = el.value; sheet.aktualisiere(umbenennenHtml()); } },
     async 'k.umbennOk'() {
-      if (!umbenennen) return;
-      const name = umbenennen.wert.trim();
+      if (!ui.umbenennen) return;
+      const name = ui.umbenennen.wert.trim();
       if (!name) return;
-      if (umbenennen.typ === 'einheit') {
-        benenneEinheitUm(S(), MODUL, umbenennen.id, name);
-      } else if (umbenennen.typ === 'altName') {
-        // Alternative ist eine echte Übung → direkt umbenennen.
-        const alt = findeAktivitaet(S(), umbenennen.altId);
+      if (ui.umbenennen.typ === 'einheit') {
+        benenneEinheitUm(S(), MODUL, ui.umbenennen.id, name);
+      } else if (ui.umbenennen.typ === 'altName') {
+        // Alternative ist eine echte Übung → direkt ui.umbenennen.
+        const alt = findeAktivitaet(S(), ui.umbenennen.altId);
         if (alt) alt.name = name;
-      } else if (umbenennen.typ === 'altNeu') {
+      } else if (ui.umbenennen.typ === 'altNeu') {
         // Neue Alternative als echte Übung anlegen und verweisen.
-        const basis = findeAktivitaet(S(), umbenennen.id);
+        const basis = findeAktivitaet(S(), ui.umbenennen.id);
         const neu = addAktivitaet(S(), {
           name, kategorie: basis?.kategorie ?? 'kraft',
           messwerte: [...(basis?.messwerte ?? [])],
@@ -486,8 +488,8 @@ export function erstelleKraftModul(ctx) {
         if (basis?.cardio) neu.cardio = true;
         (basis.alternativen ??= []).push(neu.id);
       }
-      const reopenAkt = (umbenennen.typ === 'altName' || umbenennen.typ === 'altNeu') ? umbenennen.id : null;
-      umbenennen = null;
+      const reopenAkt = (ui.umbenennen.typ === 'altName' || ui.umbenennen.typ === 'altNeu') ? ui.umbenennen.id : null;
+      ui.umbenennen = null;
       sheet.schliesse();
       await ctx.save();
       if (reopenAkt) sheet.oeffne(einstellungenHtml(reopenAkt, null)); // zurück ins Übungs-Sheet
@@ -642,14 +644,14 @@ export function erstelleKraftModul(ctx) {
       await ctx.save(); ctx.render();
     },
     'k.altPlus'(d) {
-      umbenennen = { typ: 'altNeu', id: d.akt, titel: 'Neue Alternative',
+      ui.umbenennen = { typ: 'altNeu', id: d.akt, titel: 'Neue Alternative',
         hinweis: 'Name der Ersatzübung — z.B. „KH-Bankdrücken".', wert: '' };
       sheet.oeffne(umbenennenHtml());
     },
     'k.altName'(d) {
       // Alternative ist eine echte Übung → direkt finden.
       const alt = findeAktivitaet(S(), d.alt); if (!alt) return;
-      umbenennen = { typ: 'altName', id: d.akt, altId: d.alt, titel: 'Alternative umbenennen', wert: alt.name };
+      ui.umbenennen = { typ: 'altName', id: d.akt, altId: d.alt, titel: 'Alternative ui.umbenennen', wert: alt.name };
       sheet.oeffne(umbenennenHtml());
     },
     async 'k.altWeg'(d) {

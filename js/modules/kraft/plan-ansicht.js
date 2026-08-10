@@ -18,7 +18,7 @@ import {
 import { MODUL, PROG_DEFAULTS } from './logik.js';
 
 export function erstellePlanAnsicht(k) {
-  const { S, esc, sheet, zu, planOffen, ui, heutigeSession } = k;
+  const { S, esc, planOffen, ui, heutigeSession } = k;
 
 
   function planHtml() {
@@ -160,9 +160,8 @@ export function erstellePlanAnsicht(k) {
   }
 
   /** Generisches Umbenennen-Sheet (statt prompt). typ steuert, was gespeichert wird. */
-  let umbenennen = null;   // { typ:'einheit'|'altName'|'altNeu', id?, altId?, wert }
   function umbenennenHtml() {
-    const { titel, wert, hinweis } = umbenennen;
+    const { titel, wert, hinweis } = ui.umbenennen;
     return `<h3>${esc(titel)}</h3>
       ${hinweis ? `<p class="dim klein-text">${esc(hinweis)}</p>` : ''}
       <input class="suche" type="text" placeholder="Name eingeben…" value="${esc(wert)}" data-change="k.umbennSuche" autofocus>
