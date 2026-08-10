@@ -22,7 +22,7 @@ globalThis.document = {
 const { leererZustand } = await import('../js/core/storage.js');
 const { formatWert } = await import('../js/core/metrics.js');
 const {
-  erstelleRadModul, alleTouren, tourStatistik, tourWerte, tourAktivitaet,
+  erstelleRadModul, tourStatistik, tourWerte, tourAktivitaet,
 } = await import('../js/modules/rad.js');
 
 function neuesModulMitTab() {

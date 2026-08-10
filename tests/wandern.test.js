@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import { leererZustand } from '../js/core/storage.js';
 import {
-  erstelleWanderModul, wanderWerte, wanderHighlights, alleWanderungen, wanderStatistik,
+  erstelleWanderModul, wanderWerte, wanderHighlights, wanderStatistik,
 } from '../js/modules/wandern.js';
 
 function neuesModul() {

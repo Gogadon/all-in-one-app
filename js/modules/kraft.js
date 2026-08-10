@@ -631,7 +631,13 @@ export function erstelleKraftModul(ctx) {
       if (!ziel) return;
       ziel.einstellungen ??= {};
       if (d.art === 'off') delete ziel.einstellungen.prog;
-      else ziel.einstellungen.prog = { art: d.art, ...PROG_DEFAULTS[d.art], ...(ziel.einstellungen.prog?.art === d.art ? ziel.einstellungen.prog : {}), art: d.art };
+      else {
+        // Reihenfolge: Standardwerte der Art, darüber die bisherigen Werte
+        // (nur wenn es dieselbe Art ist), und `art` zuletzt — damit keine
+        // der beiden Spreizungen sie überschreibt.
+        const bisher = ziel.einstellungen.prog?.art === d.art ? ziel.einstellungen.prog : {};
+        ziel.einstellungen.prog = { ...PROG_DEFAULTS[d.art], ...bisher, art: d.art };
+      }
       await ctx.save();
       sheet.aktualisiere(einstellungenHtml(d.akt, d.alt || null));
       ctx.render();

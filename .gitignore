@@ -1,0 +1,8 @@
+# ESLint ist die einzige Abhängigkeit und rein optional (npm run lint).
+# Weder node_modules noch irgendetwas daraus gehört ins Repo — und schon
+# gar nicht auf GitHub Pages, wo alles ausgeliefert wird, was hier liegt.
+node_modules/
+
+# Betriebssystem-Krempel
+.DS_Store
+Thumbs.db
