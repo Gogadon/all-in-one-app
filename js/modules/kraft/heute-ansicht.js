@@ -244,11 +244,18 @@ export function erstelleHeuteAnsicht(k) {
 
   function satzZeileHtml(session, seg, aktivitaet, eintrag, idx) {
     const warm = hatFlag(eintrag, 'aufwaermsatz');
+    const unsauber = hatFlag(eintrag, 'unsauber');
     const pr = eintragPR(S(), identVon(seg), eintrag, session.datum);
-    return `<div class="satz ${warm ? 'warm' : ''}">
+    // Aufwärmsätze zählen ohnehin nicht fürs Ziel — dort wäre der
+    // Sauber-Schalter nur ein Knopf ohne Wirkung.
+    const sauberKnopf = warm ? '' : `<button class="satz-sauber ${unsauber ? 'aktiv' : ''}"
+        data-action="k.unsauber" data-seg="${seg.id}" data-eintrag="${eintrag.id}"
+        title="${unsauber ? 'Als sauber zurücknehmen' : 'Nicht sauber — zählt nicht fürs Ziel'}">~</button>`;
+    return `<div class="satz ${warm ? 'warm' : ''} ${unsauber ? 'unsauber' : ''}">
       <button class="satz-nr ${warm ? 'warm' : ''}" data-action="k.warmup" data-seg="${seg.id}" data-eintrag="${eintrag.id}" title="Aufwärmsatz umschalten">${warm ? 'A' : idx + 1}</button>
       ${kraftFelderHtml(aktivitaet, seg, eintrag)}
       ${pr ? `<span class="pr">🎉${pr === 'wdh' ? ' Wdh' : ''}</span>` : ''}
+      ${sauberKnopf}
       <button class="weg" data-action="k.satzWeg" data-seg="${seg.id}" data-eintrag="${eintrag.id}">✕</button>
     </div>`;
   }

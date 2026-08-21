@@ -147,6 +147,13 @@ h1,h2,h3,.num{font-family:var(--font-display);letter-spacing:-.02em}
   font-size:12px;font-weight:700;color:var(--dim)}
 .satz-nr.warm{background:rgba(252,180,75,.15);color:var(--wandern)}
 .satz.warm .feld input{color:var(--dim)}
+/* „Nicht sauber": der Satz bleibt sichtbar und zählt fürs Volumen, gilt aber
+   nicht als erreichtes Ziel. Deshalb markiert, nicht ausgegraut. */
+.satz-sauber{flex:none;width:26px;height:26px;border-radius:9px;
+  background:var(--surface-2);border:1px solid transparent;
+  font-size:14px;font-weight:700;line-height:1;color:var(--dim-2)}
+.satz-sauber.aktiv{background:rgba(252,180,75,.16);border-color:rgba(252,180,75,.5);color:var(--wandern)}
+.satz.unsauber .feld input{border-style:dashed}
 .feld{display:flex;align-items:center;gap:5px;min-width:0}
 .feld input{width:64px;padding:9px 8px;text-align:center;
   background:var(--surface-2);border:1px solid var(--line);
