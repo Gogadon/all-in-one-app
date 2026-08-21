@@ -444,3 +444,82 @@ test('Progressionsart umschalten: gleiche Art behält die Werte, andere Art star
   await k.actions['k.progArt']({ akt: bank.id, art: 'off' });
   assert.equal(bank.einstellungen.prog, undefined);
 });
+
+// ==================================================================
+// „Nicht sauber": Doppelprogression braucht vergleichbare Wiederholungen
+// ==================================================================
+
+test('Doppelprogression: 4×12 sauber → steigern', () => {
+  const { state, bank } = welt();
+  session(state, '2026-07-01', bank.id, [[80, 12], [80, 12], [80, 12], [80, 12]]);
+  const v = berechneVorschlag(state, bank.id, { art: 'double' }, HEUTE);
+  assert.equal(v.art, 'steigern');
+  assert.equal(v.nextKg, 82.5);
+});
+
+test('Doppelprogression: ein unsauberer Satz hält das Gewicht — und sagt warum', async () => {
+  const { hatFlag } = await import('../js/core/model.js');
+  const { state, bank } = welt();
+  const s = neueSession({ datum: '2026-07-01' });
+  const seg = addSegment(s, neuesSegment(bank.id));
+  seg.erledigt = true;
+  for (let i = 0; i < 4; i++) {
+    // Der letzte Satz: zwölf geschafft, aber die letzte Wdh war gegrindet.
+    addEintrag(seg, neuerEintrag({ gewicht: 80, wdh: 12 }, { flags: i === 3 ? ['unsauber'] : [] }));
+  }
+  state.sessions.push(s);
+
+  const v = berechneVorschlag(state, bank.id, { art: 'double' }, HEUTE);
+  assert.equal(v.art, 'halten', 'nicht steigern');
+  assert.equal(v.grund, 'unsauber');
+  assert.match(v.text, /80 kg halten/);
+  assert.match(v.text, /12 erreicht/, 'die Zahlen werden anerkannt');
+  assert.match(v.text, /ein Satz war nicht sauber/, 'und der Grund benannt');
+
+  // Zurücknehmen → wieder steigern.
+  seg.eintraege[3].flags = [];
+  assert.equal(berechneVorschlag(state, bank.id, { art: 'double' }, HEUTE).art, 'steigern');
+  assert.equal(hatFlag(seg.eintraege[3], 'unsauber'), false);
+});
+
+test('Nicht sauber: mehrere Sätze werden richtig gezählt', () => {
+  const { state, bank } = welt();
+  const s = neueSession({ datum: '2026-07-01' });
+  const seg = addSegment(s, neuesSegment(bank.id));
+  seg.erledigt = true;
+  for (let i = 0; i < 4; i++) {
+    addEintrag(seg, neuerEintrag({ gewicht: 80, wdh: 12 }, { flags: i >= 2 ? ['unsauber'] : [] }));
+  }
+  state.sessions.push(s);
+  assert.match(berechneVorschlag(state, bank.id, { art: 'double' }, HEUTE).text, /2 Sätze waren nicht sauber/);
+});
+
+test('Nicht sauber: gilt auch für die Strength-Progression', () => {
+  const { state, bank } = welt();
+  const s = neueSession({ datum: '2026-07-01' });
+  const seg = addSegment(s, neuesSegment(bank.id));
+  seg.erledigt = true;
+  for (let i = 0; i < 4; i++) {
+    addEintrag(seg, neuerEintrag({ gewicht: 80, wdh: 12 }, { flags: i === 0 ? ['unsauber'] : [] }));
+  }
+  state.sessions.push(s);
+  assert.equal(berechneVorschlag(state, bank.id, { art: 'strength' }, HEUTE).art, 'halten');
+});
+
+test('Nicht sauber: die Arbeit zählt weiter fürs Volumen', () => {
+  const { state, bank } = welt();
+  const s = neueSession({ datum: '2026-07-01' });
+  const seg = addSegment(s, neuesSegment(bank.id));
+  seg.erledigt = true;
+  addEintrag(seg, neuerEintrag({ gewicht: 80, wdh: 10 }, { flags: ['unsauber'] }));
+  state.sessions.push(s);
+  // Der Satz war da, also zählt er — markiert ist nur die Aussagekraft fürs Ziel.
+  assert.equal(sessionVolumenErledigt(s), 800);
+});
+
+test('Nicht sauber: im Satz-Text sichtbar, Aufwärmsatz bleibt daneben lesbar', () => {
+  const roh = neuerEintrag({ gewicht: 80, wdh: 12 });
+  assert.equal(fmtSatz(roh), '80×12');
+  assert.equal(fmtSatz(neuerEintrag({ gewicht: 80, wdh: 12 }, { flags: ['unsauber'] })), '80×12~');
+  assert.equal(fmtSatz(neuerEintrag({ gewicht: 40, wdh: 12 }, { flags: ['aufwaermsatz'] })), 'A 40×12');
+});

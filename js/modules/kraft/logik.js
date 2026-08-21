@@ -163,25 +163,49 @@ export function berechneVorschlag(state, identId, prog, vorIso = heuteIso()) {
 
   if (prog.art === 'double') {
     const p = { ...PROG_DEFAULTS.double, ...prog };
-    const fertig = topSaetze.length >= p.saetze &&
-      topSaetze.every(e => (effektiveWdh(e) ?? -1) >= p.wdhMax);
-    if (fertig) {
-      const next = Math.round((topKg + p.schritt) * 100) / 100;
-      return { text: `↗ Auf ${formatZahl(next)} kg steigern · Ziel ${p.wdhMin}×${p.saetze}`, art: 'steigern', nextKg: next };
-    }
-    return { text: `${formatZahl(topKg)} kg halten · Ziel ${p.wdhMax} Wdh in allen Sätzen`, art: 'halten', zielWdh: p.wdhMax };
+    return naechsterSchritt(topKg, topSaetze, p.saetze, p.wdhMax, p.schritt,
+      `Ziel ${p.wdhMin}×${p.saetze}`);
   }
   if (prog.art === 'strength') {
     const p = { ...PROG_DEFAULTS.strength, ...prog };
-    const fertig = topSaetze.length >= p.saetze &&
-      topSaetze.every(e => (effektiveWdh(e) ?? -1) >= p.wdh);
-    if (fertig) {
-      const next = Math.round((topKg + p.schritt) * 100) / 100;
-      return { text: `↗ Auf ${formatZahl(next)} kg steigern · Ziel ${p.wdh} Wdh`, art: 'steigern', nextKg: next };
-    }
-    return { text: `${formatZahl(topKg)} kg halten · Ziel ${p.wdh} Wdh in allen Sätzen`, art: 'halten', zielWdh: p.wdh };
+    return naechsterSchritt(topKg, topSaetze, p.saetze, p.wdh, p.schritt,
+      `Ziel ${p.wdh} Wdh`);
   }
   return null;
+}
+
+/**
+ * Steigern oder halten?
+ *
+ * Gesteigert wird erst, wenn die Zielwiederholungen in ALLEN Sätzen stehen —
+ * und zwar sauber. Ein als „nicht sauber" markierter Satz zählt nicht als
+ * erreicht: Doppelprogression vergleicht diese Woche mit der letzten, und das
+ * geht nur, solange eine Wiederholung jedes Mal dasselbe bedeutet. Eine mit
+ * Schwung erzwungene zwölfte Wiederholung verschiebt den Maßstab, statt
+ * Fortschritt zu zeigen.
+ *
+ * Wichtig: Der Satz zählt weiterhin voll fürs Volumen — die Arbeit war ja da.
+ * Nur als Beleg für „Ziel erreicht" taugt er nicht.
+ */
+function naechsterSchritt(topKg, topSaetze, zielSaetze, zielWdh, schritt, zielText) {
+  const genugSaetze = topSaetze.length >= zielSaetze;
+  const wdhErreicht = genugSaetze && topSaetze.every(e => (effektiveWdh(e) ?? -1) >= zielWdh);
+  const unsaubere = topSaetze.filter(e => hatFlag(e, 'unsauber')).length;
+
+  if (wdhErreicht && unsaubere === 0) {
+    const next = Math.round((topKg + schritt) * 100) / 100;
+    return { text: `↗ Auf ${formatZahl(next)} kg steigern · ${zielText}`, art: 'steigern', nextKg: next };
+  }
+  // Zahlen stimmen, Ausführung nicht: das sagen wir auch, statt wortlos
+  // dasselbe Gewicht vorzuschlagen und rätseln zu lassen, warum.
+  if (wdhErreicht) {
+    const wieViele = unsaubere === 1 ? 'ein Satz war' : `${unsaubere} Sätze waren`;
+    return {
+      text: `${formatZahl(topKg)} kg halten · ${zielWdh} erreicht, aber ${wieViele} nicht sauber`,
+      art: 'halten', zielWdh, grund: 'unsauber',
+    };
+  }
+  return { text: `${formatZahl(topKg)} kg halten · Ziel ${zielWdh} Wdh in allen Sätzen`, art: 'halten', zielWdh };
 }
 
 /** Prefill beim Abhaken: erster Arbeitssatz der letzten Session als Startwert. */
@@ -293,7 +317,8 @@ export function fmtSatz(e) {
     wTxt = w != null ? formatZahl(w, 0) : '?';
   }
   const kern = `${kgTxt}×${wTxt}`;
-  return hatFlag(e, 'aufwaermsatz') ? `A ${kern}` : kern;
+  const mitWarm = hatFlag(e, 'aufwaermsatz') ? `A ${kern}` : kern;
+  return hatFlag(e, 'unsauber') ? `${mitWarm}~` : mitWarm;
 }
 
 // --- Fortschritt (für den Progress-Bereich) ---

@@ -340,6 +340,18 @@ export function erstelleKraftModul(ctx) {
       beruehrt(e);
       await speichernUndZeigen();
     },
+    /**
+     * „Nicht sauber": der Satz bleibt mit seinen Zahlen stehen (die Arbeit war
+     * da und zählt fürs Volumen), taugt aber nicht als Beleg dafür, dass die
+     * Zielwiederholungen erreicht sind. Die Progression hält das Gewicht.
+     */
+    async 'k.unsauber'(d) {
+      const seg = segFinden(d.seg);
+      const e = seg?.eintraege.find(x => x.id === d.eintrag); if (!e) return;
+      e.flags = hatFlag(e, 'unsauber') ? e.flags.filter(f => f !== 'unsauber') : [...e.flags, 'unsauber'];
+      beruehrt(e);
+      await speichernUndZeigen();
+    },
     async 'k.wert'(d, el) {
       const seg = segFinden(d.seg);
       const e = seg?.eintraege.find(x => x.id === d.eintrag); if (!e) return;
