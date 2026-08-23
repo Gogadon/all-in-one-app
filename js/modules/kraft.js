@@ -333,22 +333,23 @@ export function erstelleKraftModul(ctx) {
       seg.eintraege = seg.eintraege.filter(e => e.id !== d.eintrag);
       await speichernUndZeigen();
     },
-    async 'k.warmup'(d) {
-      const seg = segFinden(d.seg);
-      const e = seg?.eintraege.find(x => x.id === d.eintrag); if (!e) return;
-      e.flags = hatFlag(e, 'aufwaermsatz') ? e.flags.filter(f => f !== 'aufwaermsatz') : [...e.flags, 'aufwaermsatz'];
-      beruehrt(e);
-      await speichernUndZeigen();
-    },
     /**
-     * „Nicht sauber": der Satz bleibt mit seinen Zahlen stehen (die Arbeit war
-     * da und zählt fürs Volumen), taugt aber nicht als Beleg dafür, dass die
-     * Zielwiederholungen erreicht sind. Die Progression hält das Gewicht.
+     * Art des Satzes weiterschalten: normal → Aufwärmsatz → nicht sauber →
+     * normal. Ein Knopf statt zwei, weil sich die drei Zustände gegenseitig
+     * ausschließen.
+     *
+     * „Nicht sauber" heißt: Der Satz bleibt mit seinen Zahlen stehen und
+     * zählt voll fürs Volumen — die Arbeit war ja da. Er taugt nur nicht als
+     * Beleg dafür, dass die Zielwiederholungen erreicht sind, also hält die
+     * Progression das Gewicht.
      */
-    async 'k.unsauber'(d) {
+    async 'k.satzArt'(d) {
       const seg = segFinden(d.seg);
       const e = seg?.eintraege.find(x => x.id === d.eintrag); if (!e) return;
-      e.flags = hatFlag(e, 'unsauber') ? e.flags.filter(f => f !== 'unsauber') : [...e.flags, 'unsauber'];
+      const ohne = (e.flags ?? []).filter(f => f !== 'aufwaermsatz' && f !== 'unsauber');
+      if (hatFlag(e, 'aufwaermsatz')) e.flags = [...ohne, 'unsauber'];
+      else if (hatFlag(e, 'unsauber')) e.flags = ohne;
+      else e.flags = [...ohne, 'aufwaermsatz'];
       beruehrt(e);
       await speichernUndZeigen();
     },
