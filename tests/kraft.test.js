@@ -523,3 +523,67 @@ test('Nicht sauber: im Satz-Text sichtbar, Aufwärmsatz bleibt daneben lesbar', 
   assert.equal(fmtSatz(neuerEintrag({ gewicht: 80, wdh: 12 }, { flags: ['unsauber'] })), '80×12~');
   assert.equal(fmtSatz(neuerEintrag({ gewicht: 40, wdh: 12 }, { flags: ['aufwaermsatz'] })), 'A 40×12');
 });
+
+test('Satz-Art: ein Knopf schaltet normal → Aufwärmsatz → nicht sauber → normal', async () => {
+  const { erstelleKraftModul } = await import('../js/modules/kraft.js');
+  const { hatFlag } = await import('../js/core/model.js');
+  const { addEinheit, addAktivitaetZuEinheit, addZuZyklus } = await import('../js/core/plan.js');
+  const state = leererZustand();
+  const bank = addAktivitaet(state, { name: 'Bankdrücken', kategorie: 'kraft', messwerte: ['gewicht', 'wdh'] });
+  const e = addEinheit(state, 'kraft', { name: 'Push A' });
+  addAktivitaetZuEinheit(state, 'kraft', e.id, bank.id);
+  addZuZyklus(state, 'kraft', e.id);
+
+  const ctx = {
+    get state() { return state; }, save: async () => {}, render: () => {},
+    sheet: { oeffne() {}, schliesse() {}, aktualisiere() {} },
+    esc: t => String(t ?? ''), formatDatum: i => i, tabWechsel: () => {},
+  };
+  const k = erstelleKraftModul(ctx);
+  await k.actions['k.start']({ einheit: e.id });
+  const seg = state.sessions[0].segmente[0];
+  const satz = seg.eintraege[0];
+  const art = () => [hatFlag(satz, 'aufwaermsatz'), hatFlag(satz, 'unsauber')];
+  const schalten = () => k.actions['k.satzArt']({ seg: seg.id, eintrag: satz.id });
+
+  assert.deepEqual(art(), [false, false], 'Start: normaler Satz');
+  await schalten();
+  assert.deepEqual(art(), [true, false], '1× → Aufwärmsatz');
+  await schalten();
+  assert.deepEqual(art(), [false, true], '2× → nicht sauber');
+  await schalten();
+  assert.deepEqual(art(), [false, false], '3× → wieder normal');
+
+  // Nie beides gleichzeitig, egal wie oft man tippt.
+  for (let i = 0; i < 7; i++) {
+    await schalten();
+    assert.ok(!(hatFlag(satz, 'aufwaermsatz') && hatFlag(satz, 'unsauber')),
+      'Aufwärmsatz und „nicht sauber" schließen sich aus');
+  }
+});
+
+test('Satz-Art: andere Flags bleiben beim Umschalten erhalten', async () => {
+  const { erstelleKraftModul } = await import('../js/modules/kraft.js');
+  const { hatFlag } = await import('../js/core/model.js');
+  const { addEinheit, addAktivitaetZuEinheit, addZuZyklus } = await import('../js/core/plan.js');
+  const state = leererZustand();
+  const bank = addAktivitaet(state, { name: 'Bankdrücken', kategorie: 'kraft', messwerte: ['gewicht', 'wdh'] });
+  const e = addEinheit(state, 'kraft', { name: 'Push A' });
+  addAktivitaetZuEinheit(state, 'kraft', e.id, bank.id);
+  addZuZyklus(state, 'kraft', e.id);
+  const ctx = {
+    get state() { return state; }, save: async () => {}, render: () => {},
+    sheet: { oeffne() {}, schliesse() {}, aktualisiere() {} },
+    esc: t => String(t ?? ''), formatDatum: i => i, tabWechsel: () => {},
+  };
+  const k = erstelleKraftModul(ctx);
+  await k.actions['k.start']({ einheit: e.id });
+  const seg = state.sessions[0].segmente[0];
+  const satz = seg.eintraege[0];
+  satz.flags = [...satz.flags, 'irgendwas'];
+
+  await k.actions['k.satzArt']({ seg: seg.id, eintrag: satz.id });
+  await k.actions['k.satzArt']({ seg: seg.id, eintrag: satz.id });
+  await k.actions['k.satzArt']({ seg: seg.id, eintrag: satz.id });
+  assert.ok(hatFlag(satz, 'irgendwas'), 'fremde Flags überleben den Durchlauf');
+});

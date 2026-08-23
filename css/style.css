@@ -141,18 +141,19 @@ h1,h2,h3,.num{font-family:var(--font-display);letter-spacing:-.02em}
 .verlauf-liste .dim{margin-right:6px}
 
 /* Satz-Zeilen */
-.satz{display:flex;align-items:center;gap:8px}
-.satz.cardio{flex-wrap:wrap}
+/* Umbruch statt Überlappung: Die Zeile hat im weitesten Fall (einarmig +
+   assistiert + PR-Abzeichen) mehr fixe Breiten, als ein schmales Handy
+   hergibt. Ohne wrap wurde das Einheiten-Label unter dem Abzeichen
+   begraben — lieber eine zweite Zeile als übereinanderliegender Text. */
+.satz{display:flex;align-items:center;gap:8px;flex-wrap:wrap;row-gap:6px}
 .satz-nr{flex:none;width:26px;height:26px;border-radius:9px;background:var(--surface-2);
   font-size:12px;font-weight:700;color:var(--dim)}
 .satz-nr.warm{background:rgba(252,180,75,.15);color:var(--wandern)}
 .satz.warm .feld input{color:var(--dim)}
 /* „Nicht sauber": der Satz bleibt sichtbar und zählt fürs Volumen, gilt aber
    nicht als erreichtes Ziel. Deshalb markiert, nicht ausgegraut. */
-.satz-sauber{flex:none;width:26px;height:26px;border-radius:9px;
-  background:var(--surface-2);border:1px solid transparent;
-  font-size:14px;font-weight:700;line-height:1;color:var(--dim-2)}
-.satz-sauber.aktiv{background:rgba(252,180,75,.16);border-color:rgba(252,180,75,.5);color:var(--wandern)}
+.satz-nr.unsauber{background:rgba(252,180,75,.16);
+  box-shadow:inset 0 0 0 1px rgba(252,180,75,.55);color:var(--wandern)}
 .satz.unsauber .feld input{border-style:dashed}
 .feld{display:flex;align-items:center;gap:5px;min-width:0}
 .feld input{width:64px;padding:9px 8px;text-align:center;
@@ -163,7 +164,9 @@ h1,h2,h3,.num{font-family:var(--font-display);letter-spacing:-.02em}
 .feld span{font-size:11px;color:var(--dim-2)}
 .feld.breit{flex-direction:column;align-items:stretch;gap:3px}
 .feld.breit span{text-align:center}
-.pr{font-size:12px;color:var(--kraft);white-space:nowrap}
+/* flex:none — sonst quetscht die Zeile das Abzeichen zusammen, bis es über
+   dem „Wdh" daneben liegt. */
+.pr{flex:none;font-size:12px;color:var(--kraft);white-space:nowrap}
 .weg{margin-left:auto;color:var(--dim-2);font-size:14px;padding:6px}
 
 /* Einarmig / Assistiert */

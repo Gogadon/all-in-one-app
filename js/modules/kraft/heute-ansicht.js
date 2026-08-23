@@ -242,20 +242,36 @@ export function erstelleHeuteAnsicht(k) {
     return html;
   }
 
+  /**
+   * Die Satz-Nummer ist zugleich der Umschalter für die Art des Satzes.
+   * Ein Tipp weiter: Nummer → A (Aufwärmsatz) → ~ (nicht sauber) → Nummer.
+   *
+   * Bewusst EIN Knopf statt zwei: Die drei Zustände schließen sich
+   * gegenseitig aus (ein Aufwärmsatz zählt nie fürs Ziel, „nicht sauber"
+   * wäre dort bedeutungslos), und die Zeile ist auf einem Handy schon voll —
+   * ein zweiter Knopf drängte das PR-Abzeichen aus dem Bild.
+   * Die Bedeutung des ERSTEN Tipps bleibt, was sie immer war: Aufwärmsatz.
+   */
+  function satzArtKnopf(seg, eintrag, idx) {
+    const warm = hatFlag(eintrag, 'aufwaermsatz');
+    const unsauber = hatFlag(eintrag, 'unsauber');
+    const zeichen = warm ? 'A' : unsauber ? '~' : idx + 1;
+    const titel = warm ? 'Aufwärmsatz — tippen für „nicht sauber"'
+      : unsauber ? 'Nicht sauber, zählt nicht fürs Ziel — tippen für normal'
+      : 'Normaler Satz — tippen für Aufwärmsatz';
+    return `<button class="satz-nr ${warm ? 'warm' : ''} ${unsauber ? 'unsauber' : ''}"
+      data-action="k.satzArt" data-seg="${seg.id}" data-eintrag="${eintrag.id}"
+      title="${titel}">${zeichen}</button>`;
+  }
+
   function satzZeileHtml(session, seg, aktivitaet, eintrag, idx) {
     const warm = hatFlag(eintrag, 'aufwaermsatz');
     const unsauber = hatFlag(eintrag, 'unsauber');
     const pr = eintragPR(S(), identVon(seg), eintrag, session.datum);
-    // Aufwärmsätze zählen ohnehin nicht fürs Ziel — dort wäre der
-    // Sauber-Schalter nur ein Knopf ohne Wirkung.
-    const sauberKnopf = warm ? '' : `<button class="satz-sauber ${unsauber ? 'aktiv' : ''}"
-        data-action="k.unsauber" data-seg="${seg.id}" data-eintrag="${eintrag.id}"
-        title="${unsauber ? 'Als sauber zurücknehmen' : 'Nicht sauber — zählt nicht fürs Ziel'}">~</button>`;
     return `<div class="satz ${warm ? 'warm' : ''} ${unsauber ? 'unsauber' : ''}">
-      <button class="satz-nr ${warm ? 'warm' : ''}" data-action="k.warmup" data-seg="${seg.id}" data-eintrag="${eintrag.id}" title="Aufwärmsatz umschalten">${warm ? 'A' : idx + 1}</button>
+      ${satzArtKnopf(seg, eintrag, idx)}
       ${kraftFelderHtml(aktivitaet, seg, eintrag)}
       ${pr ? `<span class="pr">🎉${pr === 'wdh' ? ' Wdh' : ''}</span>` : ''}
-      ${sauberKnopf}
       <button class="weg" data-action="k.satzWeg" data-seg="${seg.id}" data-eintrag="${eintrag.id}">✕</button>
     </div>`;
   }
