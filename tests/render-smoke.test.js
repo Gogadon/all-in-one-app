@@ -236,3 +236,90 @@ test('Smoke: keine Ansicht zeigt undefined, NaN oder [object Object]', () => {
     }
   }
 });
+
+// ==================================================================
+// Klassennamen: gibt es zu jeder benutzten Klasse auch eine CSS-Regel?
+// ==================================================================
+
+/**
+ * Bewusst NICHT gestylte Klassen — reine Struktur- oder JS-Haken.
+ * Wer hier etwas einträgt, sollte kurz begründen warum; alles andere ist
+ * mit ziemlicher Sicherheit ein Tippfehler.
+ */
+const OHNE_CSS_ABSICHT = new Set([
+  'plan-einheit',   // nur Gruppierung; das Aussehen macht .karte
+]);
+
+test('Klassennamen: jede benutzte Klasse hat eine CSS-Regel', async () => {
+  // WARUM: Beim Aufteilen von kraft.js hat ein Suchen-und-Ersetzen die
+  // Klassennamen in den HTML-Strings mitgeändert — aus „picker-zeile" wurde
+  // „ui.picker-zeile". Kein Test schlug an, der Linter konnte es nicht sehen
+  // (es sind Strings), und die Übungsliste verlor still ihr Layout: statt
+  // einer Zeile pro Übung flossen sie als Fließtext ineinander.
+  const { readFileSync } = await import('node:fs');
+  const css = readFileSync(new URL('../css/style.css', import.meta.url), 'utf8');
+
+  const state = leererZustand();
+  const bank = addAktivitaet(state, { name: 'Bankdrücken', kategorie: 'kraft', messwerte: ['gewicht', 'wdh'] });
+  const e = addEinheit(state, 'kraft', { name: 'Push A' });
+  addAktivitaetZuEinheit(state, 'kraft', e.id, bank.id);
+  addZuZyklus(state, 'kraft', e.id);
+  tour(state, 'rad', 'Radfahren', { distanz: 24300, dauer: 3600 });
+  tour(state, 'schwimmen', 'Schwimmen', { bahnen: 20, dauer: 1800 });
+  setzeMessung(state, HEUTE, { gewicht: 90.1 });
+  state.challenges.push({ id: 'z1', was: 'rad_km', zielwert: 100, zeitraum: 'monat' });
+
+  // Alle Ansichten UND die Bottom-Sheets einsammeln.
+  const stuecke = [];
+  const sammleVon = (fabrik, sheets = []) => {
+    const { ctx, protokoll } = testKontext(state, { esc, formatDatum });
+    const m = fabrik(ctx);
+    stuecke.push(m.heuteHtml());
+    if (m.planHtml) stuecke.push(m.planHtml());
+    if (m.statistikHtml) stuecke.push(m.statistikHtml());
+    if (m.fortschrittHtml) stuecke.push(m.fortschrittHtml());
+    for (const oeffne of sheets) { oeffne(m); stuecke.push(protokoll.sheet); }
+  };
+  sammleVon(erstelleKraftModul, [
+    m => m.actions['k.uebungPlus'](),
+    m => m.actions['k.zyklusPlus']?.(),
+    m => m.actions['k.heuteWaehlen']?.(),
+  ]);
+  sammleVon(erstelleRadModul);
+  sammleVon(erstelleWanderModul);
+  sammleVon(erstelleSchwimmModul);
+  sammleVon(erstelleKoerperModul);
+  sammleVon(erstelleChallengeModul);
+
+  const klassen = new Set();
+  for (const html of stuecke) {
+    for (const treffer of String(html).matchAll(/class="([^"]*)"/g)) {
+      for (const name of treffer[1].split(/\s+/)) if (name) klassen.add(name);
+    }
+  }
+  assert.ok(klassen.size > 25, `zu wenig gerendert (${klassen.size} Klassen)`);
+
+  const ohneRegel = [...klassen]
+    .filter(k => !OHNE_CSS_ABSICHT.has(k))
+    .filter(k => !new RegExp(`\\.${k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w-])`).test(css))
+    .sort();
+  assert.deepEqual(ohneRegel, [],
+    'Klassen ohne CSS-Regel (Tippfehler? oder in OHNE_CSS_ABSICHT eintragen):\n' + ohneRegel.join('\n'));
+});
+
+test('Übungs-Auswahl: eine Zeile pro Übung', async () => {
+  const state = leererZustand();
+  const namen = ['Bankdrücken', 'Lat-Zug Dreiecksgriff', 'Kurzhanteln, Armbeugen, Hammerposition, abwechselnd'];
+  for (const name of namen) {
+    addAktivitaet(state, { name, kategorie: 'kraft', messwerte: ['gewicht', 'wdh'] });
+  }
+  const { ctx, protokoll } = testKontext(state, { esc, formatDatum });
+  const kraft = erstelleKraftModul(ctx);
+  kraft.actions['k.uebungPlus']();
+
+  const html = protokoll.sheet;
+  assert.match(html, /class="picker-liste"/, 'die Liste trägt ihre Klasse');
+  const zeilen = [...html.matchAll(/class="picker-zeile[^"]*"/g)];
+  assert.equal(zeilen.length, namen.length, 'genau eine Zeile pro Übung');
+  for (const name of namen) assert.ok(html.includes(esc(name)), `„${name}" fehlt`);
+});

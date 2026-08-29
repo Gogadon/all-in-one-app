@@ -273,7 +273,7 @@ export function erstelleKraftModul(ctx) {
       await speichernUndZeigen();
     },
 
-    'k.ui.progMetrik'(d) { ui.progMetrik = d.m; ctx.render(); },
+    'k.progMetrik'(d) { ui.progMetrik = d.m; ctx.render(); },
     'k.progExpand'(d) { progExpand.has(d.akt) ? progExpand.delete(d.akt) : progExpand.add(d.akt); ctx.render(); },
     'k.progGruppe'(d) {
       const eid = d.eid;

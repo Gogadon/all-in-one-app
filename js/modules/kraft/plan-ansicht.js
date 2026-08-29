@@ -140,8 +140,8 @@ export function erstellePlanAnsicht(k) {
     const pos = planFuer(S(), MODUL)?.position ?? 0;
     return `<h3>Welcher Tag ist heute dran?</h3>
       <p class="dim klein-text">Setzt den Zyklus auf diese Stelle — ab dort läuft er normal weiter.</p>
-      <div class="ui.picker-liste">${zyklus.map((e, i) =>
-        `<button class="ui.picker-zeile ${i === pos ? 'aktiv' : ''}" data-action="k.heuteSetzen" data-i="${i}">
+      <div class="picker-liste">${zyklus.map((e, i) =>
+        `<button class="picker-zeile ${i === pos ? 'aktiv' : ''}" data-action="k.heuteSetzen" data-i="${i}">
           <span class="tag-nr">${i + 1}</span> ${esc(e.name)}${i === pos ? ' <span class="dim">· aktuell</span>' : ''}
         </button>`).join('')}
       </div>`;
@@ -175,8 +175,8 @@ export function erstellePlanAnsicht(k) {
     const treffer = q ? bib.filter(e => e.name.toLowerCase().includes(q)) : bib;
     return `<h3>Einheit in den Zyklus</h3>
       <input class="suche" type="text" placeholder="Suchen oder neu benennen…" value="${esc(suche)}" data-change="k.zyklusSuche">
-      <div class="ui.picker-liste">${treffer.map(e =>
-        `<button class="ui.picker-zeile" data-action="k.zyklusWaehle" data-einheit="${e.id}"><span class="punkt kraft"></span>${esc(e.name)}</button>`).join('') || '<p class="dim">Keine Treffer.</p>'}
+      <div class="picker-liste">${treffer.map(e =>
+        `<button class="picker-zeile" data-action="k.zyklusWaehle" data-einheit="${e.id}"><span class="punkt kraft"></span>${esc(e.name)}</button>`).join('') || '<p class="dim">Keine Treffer.</p>'}
       </div>
       ${suche.trim() ? `<button class="knopf primaer" data-action="k.zyklusNeu">„${esc(suche.trim())}" neu anlegen & einfügen</button>` : ''}`;
   }
@@ -197,8 +197,8 @@ export function erstellePlanAnsicht(k) {
     const titel = ui.picker.ziel === 'alternative' ? 'Alternative wählen' : 'Übung wählen';
     return `<h3>${titel}</h3>
       <input class="suche" type="text" placeholder="Suchen oder neu benennen…" value="${esc(q)}" data-change="k.suche">
-      <div class="ui.picker-liste">${treffer.filter(a => !a.archiviert).map(a =>
-        `<button class="ui.picker-zeile" data-action="k.waehle" data-akt="${a.id}"><span class="punkt ${a.kategorie}"></span>${esc(a.name)}</button>`).join('') || '<p class="dim">Keine Treffer.</p>'}
+      <div class="picker-liste">${treffer.filter(a => !a.archiviert).map(a =>
+        `<button class="picker-zeile" data-action="k.waehle" data-akt="${a.id}"><span class="punkt ${a.kategorie}"></span>${esc(a.name)}</button>`).join('') || '<p class="dim">Keine Treffer.</p>'}
       </div>
       ${q.trim() ? `<div class="knopf-zeile">
         <button class="knopf primaer" data-action="k.neu" data-kat="kraft">„${esc(q.trim())}" als Kraftübung anlegen</button>

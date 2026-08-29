@@ -35,9 +35,9 @@ export function erstelleFortschrittAnsicht(k) {
 
     // Metrik-Umschalter (3 Metriken)
     html += `<div class="chip-zeile" style="margin:16px 2px 4px">
-      <button class="chip ${ui.progMetrik === 'gewicht' ? 'aktiv' : ''}" data-action="k.ui.progMetrik" data-m="gewicht">Top-Gewicht</button>
-      <button class="chip ${ui.progMetrik === 'avg' ? 'aktiv' : ''}" data-action="k.ui.progMetrik" data-m="avg">Ø-Gewicht</button>
-      <button class="chip ${ui.progMetrik === 'volumen' ? 'aktiv' : ''}" data-action="k.ui.progMetrik" data-m="volumen">Volumen</button>
+      <button class="chip ${ui.progMetrik === 'gewicht' ? 'aktiv' : ''}" data-action="k.progMetrik" data-m="gewicht">Top-Gewicht</button>
+      <button class="chip ${ui.progMetrik === 'avg' ? 'aktiv' : ''}" data-action="k.progMetrik" data-m="avg">Ø-Gewicht</button>
+      <button class="chip ${ui.progMetrik === 'volumen' ? 'aktiv' : ''}" data-action="k.progMetrik" data-m="volumen">Volumen</button>
     </div>`;
 
     // Wert + Anzeigetext je nach gewählter Metrik
