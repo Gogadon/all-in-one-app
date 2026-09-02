@@ -323,3 +323,92 @@ test('Übungs-Auswahl: eine Zeile pro Übung', async () => {
   assert.equal(zeilen.length, namen.length, 'genau eine Zeile pro Übung');
   for (const name of namen) assert.ok(html.includes(esc(name)), `„${name}" fehlt`);
 });
+
+// ==================================================================
+// Hantelscheiben pro Seite
+// ==================================================================
+
+async function kraftWeltMitSession(einstellungen = {}) {
+  const state = leererZustand();
+  const bank = addAktivitaet(state, { name: 'Bankdrücken', kategorie: 'kraft', messwerte: ['gewicht', 'wdh'], einstellungen });
+  const e = addEinheit(state, 'kraft', { name: 'Push A' });
+  addAktivitaetZuEinheit(state, 'kraft', e.id, bank.id);
+  addZuZyklus(state, 'kraft', e.id);
+  const { ctx, protokoll } = testKontext(state, { esc, formatDatum });
+  const kraft = erstelleKraftModul(ctx);
+  await kraft.actions['k.start']({ einheit: e.id });
+  const seg = state.sessions[0].segmente[0];
+  return { state, bank, kraft, seg, protokoll };
+}
+const setzeGewicht = (kraft, seg, eintrag, wert) =>
+  kraft.actions['k.wert']({ seg: seg.id, eintrag: eintrag.id, typ: 'gewicht' }, { value: wert });
+// Die Scheiben stehen fett — fürs Lesen im Test die Tags entfernen.
+const lesbar = (html) => html.replace(/<\/?strong>/g, '');
+
+test('Scheiben: ohne Stangengewicht keine Anzeige', async () => {
+  const { kraft, seg } = await kraftWeltMitSession();
+  await setzeGewicht(kraft, seg, seg.eintraege[0], '60');
+  assert.doesNotMatch(kraft.heuteHtml(), /pro Seite/, 'Maschinen und Kabelzug bleiben still');
+});
+
+test('Scheiben: eine Zeile pro verschiedenem Gewicht, immer „pro Seite", Stange dabei', async () => {
+  const { kraft, seg } = await kraftWeltMitSession({ stange: 15 });
+  await setzeGewicht(kraft, seg, seg.eintraege[0], '97,5');
+  await kraft.actions['k.satzPlus']({ seg: seg.id });          // kopiert 97,5
+  await kraft.actions['k.satzPlus']({ seg: seg.id });
+  await setzeGewicht(kraft, seg, seg.eintraege[2], '40');        // Aufwärmgewicht
+
+  const html = kraft.heuteHtml();
+  const zeilen = [...html.matchAll(/<div class="scheiben-zeile[^"]*">([^<]*(?:<strong>[^<]*<\/strong>)?[^<]*)<\/div>/g)].map(m => m[1].replace(/<\/?strong>/g, ''));
+  assert.deepEqual(zeilen, [
+    '97,5 kg → 2×20 + 1,25 pro Seite',      // 41,25: drei Scheiben statt vier
+    '40 kg → 10 + 2,5 pro Seite',
+    'Stange 15 kg',
+  ], 'zwei Gewichte → zwei Zeilen (nicht drei Sätze → drei Zeilen), plus die Stange');
+});
+
+test('Scheiben: nicht darstellbar wird gesagt, mit dem nächsten Gewicht', async () => {
+  const { kraft, seg } = await kraftWeltMitSession({ stange: 20 });
+  await setzeGewicht(kraft, seg, seg.eintraege[0], '21');
+  const html = kraft.heuteHtml();
+  assert.match(html, /scheiben-zeile warnung/);
+  assert.match(html, /21 kg → nicht mit diesen Scheiben · nächste: 22,5 kg/);
+});
+
+test('Scheiben: Alternative rechnet mit ihrer eigenen Stange', async () => {
+  const { state, bank, kraft, seg } = await kraftWeltMitSession({ stange: 20 });
+  const multi = addAktivitaet(state, { name: 'Bankdrücken Multipresse', kategorie: 'kraft',
+    messwerte: ['gewicht', 'wdh'], einstellungen: { stange: 15 } });
+  addAlternative(state, bank.id, multi.id);
+  await setzeGewicht(kraft, seg, seg.eintraege[0], '85');
+  assert.ok(lesbar(kraft.heuteHtml()).includes('85 kg → 20 + 10 + 2,5 pro Seite'), 'Langhantel 20: (85−20)/2 = 32,5');
+
+  await kraft.actions['k.altWahl']({ seg: seg.id, alt: multi.id });
+  await setzeGewicht(kraft, seg, seg.eintraege[0], '85');
+  assert.ok(lesbar(kraft.heuteHtml()).includes('85 kg → 20 + 15 pro Seite'), 'Multipresse 15: (85−15)/2 = 35');
+  assert.match(kraft.heuteHtml(), /Stange 15 kg/);
+});
+
+test('Scheiben: eigener Scheibensatz des Studios wirkt überall', async () => {
+  const { kraft, seg } = await kraftWeltMitSession({ stange: 20 });
+  await setzeGewicht(kraft, seg, seg.eintraege[0], '70');
+  assert.ok(lesbar(kraft.heuteHtml()).includes('70 kg → 20 + 5 pro Seite'));
+  await kraft.actions['k.scheibenSatz']({}, { value: '25 · 20 · 10 · 5 · 2,5' });
+  assert.ok(lesbar(kraft.heuteHtml()).includes('70 kg → 25 pro Seite'), 'mit 25er-Scheibe eine statt zwei');
+});
+
+test('Scheiben: Einstellungs-Sheet hat das Stangen-Feld, Scheibensatz erst mit Stange', async () => {
+  const { state, bank, kraft, protokoll } = await kraftWeltMitSession();
+  kraft.actions['k.einstellungen']({ akt: bank.id });
+  assert.match(protokoll.sheet, /data-change="k.stange"/);
+  assert.doesNotMatch(protokoll.sheet, /k\.scheibenSatz/, 'ohne Stange kein Scheibensatz-Feld');
+
+  await kraft.actions['k.stange']({ akt: bank.id }, { value: '20' });
+  assert.equal(bank.einstellungen.stange, 20);
+  assert.match(protokoll.sheet, /data-change="k.scheibenSatz"/, 'mit Stange erscheint der Scheibensatz');
+  assert.match(protokoll.sheet, /20 · 15 · 10 · 5 · 2,5 · 1,25/, 'Standard-Satz vorbelegt');
+
+  await kraft.actions['k.stange']({ akt: bank.id }, { value: '' });
+  assert.equal(bank.einstellungen.stange, undefined, 'leer löscht die Einstellung');
+  assert.equal(state.einstellungen.scheiben, undefined, 'Scheibensatz unangetastet');
+});

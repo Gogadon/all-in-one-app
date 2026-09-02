@@ -122,6 +122,7 @@ genauso: Zustand rein, String raus.
 | `js/core/library.js` | Übungs-Bibliothek |
 | `js/core/storage.js` | Speichern, Laden, Backup, Migration |
 | `js/core/koerper.js` | Körperwerte-Register + Verlauf (Gewicht, KFA …) |
+| `js/core/scheiben.js` | Hantelscheiben pro Seite: Ziel − Stange, halbiert, von der schwersten Scheibe abwärts |
 | `js/module-registry.js` | **Alle Module, einmal beschrieben.** Erste Anlaufstelle für ein neues Modul |
 | `js/route.js` | Adresse ⇄ Ansicht (Hash-Routing, reine Logik) |
 | `js/views/kalender-ansicht.js` | Wochen-Streifen, Monatsraster, Tages-Sheet |
@@ -304,6 +305,29 @@ Historie, Progression und Einstellungen.
   Alternativ-Listen, damit keine toten Verweise zurückbleiben.
 - Die Migration von Schema 1→2 (in `storage.js`) wandelt alte eingebettete
   Alternativen in echte Übungen um und führt gleichnamige zusammen.
+
+### 6b. Scheiben werden IMMER „pro Seite" angezeigt
+
+Eine Übung kann ein Stangengewicht tragen (`einstellungen.stange`, im
+⚙️ der Übung — auch pro Alternative, die Multipresse hat eine andere Stange
+als die freie Langhantel). Steht eins drin, zeigt der Heute-Tab unter den
+Sätzen eine graue Zeile pro *verschiedenem* Gewicht:
+
+```
+97,5 kg → 20 + 15 + 5 + 1,25 pro Seite
+Stange 15 kg
+```
+
+Zwei Regeln, die nicht verhandelbar sind:
+
+- **Immer pro Seite, und das steht auch dran.** „2×20" ohne diesen Zusatz
+  ist genau die Zweideutigkeit, bei der eine Stange doppelt beladen wird.
+- **Eingetragen wird das Gesamtgewicht**, Stange inklusive. Die Stange wird
+  fürs Rechnen abgezogen, nie vom gespeicherten Wert.
+
+Der Scheibensatz (`einstellungen.scheiben`) ist **app-weit** — er beschreibt
+das Studio, nicht die Übung. Leer heißt Standard (20/15/10/5/2,5/1,25).
+Stückzahlen gibt es nicht; die Rechnung geht davon aus, dass genug da ist.
 
 ### 6a. Ein Vorschlag gehört zu der Historie, aus der er stammt
 

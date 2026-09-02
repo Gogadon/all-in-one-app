@@ -20,6 +20,7 @@ import {
   sessionVolumenErledigt, fmtSatz,
 } from './logik.js';
 import { eintragInputsHtml, escT } from './eingabe-html.js';
+import { scheibenSatz, scheibenProSeite, formatScheiben } from '../../core/scheiben.js';
 
 export function erstelleHeuteAnsicht(k) {
   const { S, esc, formatDatum, offen, zu, verlaufOffen, altOffen,
@@ -187,6 +188,7 @@ export function erstelleHeuteAnsicht(k) {
       // Einträge
       if (istKraft) {
         html += seg.eintraege.map((e, i) => satzZeileHtml(session, seg, aktivitaet, e, i)).join('');
+        html += scheibenZeilenHtml(seg);
         html += `<button class="knopf klein" data-action="k.satzPlus" data-seg="${seg.id}">+ Satz</button>`;
       } else {
         let e = seg.eintraege[0];
@@ -262,6 +264,34 @@ export function erstelleHeuteAnsicht(k) {
     return `<button class="satz-nr ${warm ? 'warm' : ''} ${unsauber ? 'unsauber' : ''}"
       data-action="k.satzArt" data-seg="${seg.id}" data-eintrag="${eintrag.id}"
       title="${titel}">${zeichen}</button>`;
+  }
+
+  /**
+   * Welche Scheiben auf die Stange müssen — eine graue Zeile pro
+   * verschiedenem Gewicht in den Sätzen, immer „pro Seite", immer mit der
+   * Stange dabei. Erscheint nur, wenn die Übung ein Stangengewicht hat
+   * (Einstellungen); Maschinen und Kabelzüge zeigen nichts.
+   *
+   * Bewusst keine Zeile pro Satz: meist haben alle Arbeitssätze dasselbe
+   * Gewicht, und die Satz-Zeile ist auf dem Handy ohnehin voll.
+   */
+  function scheibenZeilenHtml(seg) {
+    const stange = effektiveEinstellungen(seg).stange;
+    if (!(stange > 0)) return '';
+    const satz = scheibenSatz(S());
+    const gewichte = [...new Set(seg.eintraege
+      .map(e => e.messwerte?.gewicht)
+      .filter(g => typeof g === 'number' && g > 0))];
+    if (!gewichte.length) return '';
+    const zeilen = gewichte.map(g => {
+      const p = scheibenProSeite(g, stange, satz);
+      if (!p) return `<div class="scheiben-zeile">${formatZahl(g)} kg → leichter als die Stange (${formatZahl(stange)} kg)</div>`;
+      if (p.erreichbar) {
+        return `<div class="scheiben-zeile">${formatZahl(g)} kg → <strong>${escT(formatScheiben(p.proSeite, formatZahl))}</strong> pro Seite</div>`;
+      }
+      return `<div class="scheiben-zeile warnung">${formatZahl(g)} kg → nicht mit diesen Scheiben · nächste: ${formatZahl(p.naechste)} kg</div>`;
+    });
+    return `<div class="scheiben">${zeilen.join('')}<div class="scheiben-zeile dim">Stange ${formatZahl(stange)} kg</div></div>`;
   }
 
   function satzZeileHtml(session, seg, aktivitaet, eintrag, idx) {
