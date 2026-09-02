@@ -36,6 +36,7 @@ import {
   verschiebeImZyklus, setzeAnker, naechsteEinheit, sessionAusEinheit,
   setzeRuhetag,
 } from '../core/plan.js';
+import { setzeScheibenSatz, parseScheibenListe } from '../core/scheiben.js';
 import { teileKarte } from '../ui/share.js';
 import { bestaetige, hinweis } from '../ui/components.js';
 
@@ -619,6 +620,24 @@ export function erstelleKraftModul(ctx) {
       } catch (err) {
         await hinweis('Nicht möglich', err.message);
       }
+    },
+    /** Stangengewicht der Übung (oder Alternative). Leer/0 = keine Anzeige. */
+    async 'k.stange'(d, el) {
+      const ziel = d.alt ? findeAktivitaet(S(), d.alt) : findeAktivitaet(S(), d.akt);
+      if (!ziel) return;
+      ziel.einstellungen ??= {};
+      const n = parseZahl(el.value);
+      if (n != null && n > 0) ziel.einstellungen.stange = n;
+      else delete ziel.einstellungen.stange;
+      await ctx.save();
+      sheet.aktualisiere(einstellungenHtml(d.akt, d.alt || null));
+      ctx.render();
+    },
+    /** Scheibensatz des Studios — app-weit, nicht pro Übung. Leer = Standard. */
+    async 'k.scheibenSatz'(d, el) {
+      setzeScheibenSatz(S(), parseScheibenListe(el.value));
+      await ctx.save();
+      ctx.render();
     },
     async 'k.flagEinarmig'(d) {
       const akt = findeAktivitaet(S(), d.akt); if (!akt) return;
