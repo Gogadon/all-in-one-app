@@ -14,7 +14,7 @@
 //   Zahl), heroEinheit, Platzhalter-Map, Share-Konfiguration.
 // ============================================================
 
-import { MESSWERTE, formatWert, formatZahl, parseZahl } from '../../core/metrics.js';
+import { MESSWERTE, formatWert, formatZahl, parseZahl, formatZahlEingabe } from '../../core/metrics.js';
 import {
   heuteIso, neueSession, neuesSegment, neuerEintrag,
   addSegment, addEintrag, findeAktivitaet,
@@ -307,8 +307,10 @@ export function erstelleTourModul(ctx, config) {
     if (roh != null) {
       if (def.anzeige === 'zeit') wert = dauerInput(roh);
       else if (def.anzeige === 'distanz') wert = formatZahl(roh / 1000, 2);
-      else if (typ === 'tempo_avg' || typ === 'tempo_max') wert = formatZahl(roh, 1);
-      else wert = formatZahl(roh, def.dezimal ?? 0);
+      // formatZahlEingabe: ohne Tausendertrenner, sonst liest das Feld beim
+      // Bearbeiten seinen eigenen Wert falsch zurück (12.000 → 12).
+      else if (typ === 'tempo_avg' || typ === 'tempo_max') wert = formatZahlEingabe(roh, 1);
+      else wert = formatZahlEingabe(roh, def.dezimal ?? 0);
     }
     const einheit = def.anzeige === 'zeit' ? ''
       : def.anzeige === 'distanz' ? 'km' : (def.einheit || '');

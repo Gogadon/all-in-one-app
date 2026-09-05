@@ -296,3 +296,40 @@ test('Grundzustand & Migration: termine-Liste vorhanden bzw. nachgetragen', () =
   assert.ok(Array.isArray(migriert.termine));
   assert.equal(migriert.termine.length, 0);
 });
+
+// ==================================================================
+// Zahlen in Eingabefeldern: was drinsteht, muss zurücklesbar sein
+// ==================================================================
+
+test('Eingabefelder: Anzeige und Einlesen passen zusammen (kein Tausenderpunkt)', async () => {
+  const { formatZahlEingabe, parseZahl, formatZahl } = await import('../js/core/metrics.js');
+  // Der Fehler: formatZahl setzte Tausenderpunkte, parseZahl las den Punkt als
+  // Dezimaltrenner. Aus 12.000 angezeigten Schritten wurden beim Bearbeiten 12.
+  for (const n of [12000, 12500, 1200, 1250, 999, 82.5, 1.25, 24.3, 0.5]) {
+    const imFeld = formatZahlEingabe(n, Number.isInteger(n) ? 0 : 2);
+    assert.ok(!imFeld.includes('.'), `${n} → "${imFeld}" darf keinen Punkt enthalten`);
+    assert.equal(parseZahl(imFeld), n, `${n} → "${imFeld}" → zurück`);
+  }
+  assert.equal(formatZahlEingabe(null), '');
+  assert.equal(formatZahlEingabe(NaN), '');
+  // Die ANZEIGE (nicht das Feld) behält ihre Tausenderpunkte.
+  assert.equal(formatZahl(12000, 0), '12.000');
+});
+
+test('parseZahl: deutscher Tausenderpunkt wird als solcher erkannt', async () => {
+  const { parseZahl } = await import('../js/core/metrics.js');
+  // Komma da → Komma ist der Dezimaltrenner, Punkte sind Gruppierung.
+  assert.equal(parseZahl('1.234,5'), 1234.5);
+  assert.equal(parseZahl('1.000.000,25'), 1000000.25);
+  assert.equal(parseZahl('82,5'), 82.5);
+  // Kein Komma → Punkt + genau drei Ziffern je Gruppe = Gruppierung.
+  assert.equal(parseZahl('12.000'), 12000);
+  assert.equal(parseZahl('1.000.000'), 1000000);
+  // Kein Komma, keine Dreiergruppe → Dezimalpunkt (so tippt man auf dem Handy).
+  assert.equal(parseZahl('12.5'), 12.5);
+  assert.equal(parseZahl('1.25'), 1.25);
+  assert.equal(parseZahl('0.5'), 0.5);
+  assert.equal(parseZahl('100'), 100);
+  assert.equal(parseZahl(''), null);
+  assert.equal(parseZahl('Quatsch'), null);
+});

@@ -164,3 +164,29 @@ test('Körper: Messungen erzeugen keine Sessions und keine Aktivitäten', () => 
   assert.equal(u.aktivitaeten, 0);
   assert.equal(u.aktiveTage, 0);
 });
+
+test('Körper: ein abgewähltes Feld wird wirklich gelöscht', async () => {
+  const { installiereBrowserAttrappe, testKontext } = await import('./helpers/umgebung.js');
+  installiereBrowserAttrappe();
+  const { esc, formatDatum } = await import('../js/ui/components.js');
+  const { erstelleKoerperModul } = await import('../js/modules/koerper.js');
+  const { setzeMessung, messungAmTag } = await import('../js/core/koerper.js');
+  const HEUTE = new Date().toISOString().slice(0, 10);
+
+  const state = leererZustand();
+  setzeMessung(state, HEUTE, { gewicht: 95.5, muskelmasse: 40 });
+  const { ctx } = testKontext(state, { esc, formatDatum });
+  const k = erstelleKoerperModul(ctx);
+
+  // Feld abwählen und speichern — der alte Wert blieb vorher einfach stehen,
+  // weil ein weggelassenes Feld für setzeMessung kein Löschauftrag ist.
+  k.actions['koerper.feldWeg']({ typ: 'muskelmasse' });
+  await k.actions['koerper.speichern']();
+  assert.deepEqual(messungAmTag(state, HEUTE).werte, { gewicht: 95.5 });
+
+  // Der verbliebene Wert bleibt unangetastet, und Wiedereintragen geht.
+  k.actions['koerper.feldPlus']?.({ typ: 'muskelmasse' });
+  k.actions['koerper.wert']({ typ: 'muskelmasse' }, { value: '41' });
+  await k.actions['koerper.speichern']();
+  assert.deepEqual(messungAmTag(state, HEUTE).werte, { gewicht: 95.5, muskelmasse: 41 });
+});

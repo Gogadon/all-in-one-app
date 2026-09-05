@@ -14,7 +14,7 @@ import {
   messungen, messungAmTag, verlauf, letzterWert, veraenderung,
   setzeMessung, entferneMessung,
 } from '../core/koerper.js';
-import { parseZahl, formatZahl } from '../core/metrics.js';
+import { parseZahl, formatZahl, formatZahlEingabe } from '../core/metrics.js';
 import { heuteIso } from '../core/model.js';
 import { sparkline } from '../ui/charts.js';
 import { bestaetige, hinweis } from '../ui/components.js';
@@ -105,7 +105,7 @@ export function erstelleKoerperModul(ctx) {
     const zeilen = d.felder.map(typ => {
       const def = KOERPER_WERTE[typ];
       const roh = d.werte[typ];
-      const wert = roh == null ? '' : formatZahl(roh, def.dezimal ?? 1);
+      const wert = roh == null ? '' : formatZahlEingabe(roh, def.dezimal ?? 1);
       const abwaehlbar = !def.standard;
       return `<div class="kw-feld">
         <label>${esc(def.label)}</label>
@@ -198,9 +198,15 @@ export function erstelleKoerperModul(ctx) {
         await hinweis('Nichts eingetragen', 'Trag mindestens einen Wert ein — Gewicht reicht.');
         return;
       }
-      // Nur die sichtbaren Felder schreiben; abgewählte Werte werden entfernt.
+      // Nur die sichtbaren Felder schreiben — UND die abgewählten ausdrücklich
+      // auf null setzen. Ohne das zweite blieb der alte Wert einfach stehen:
+      // setzeMessung() sieht nur, was man ihm gibt, und ein weggelassenes Feld
+      // ist für sie kein Löschauftrag, sondern gar keine Aussage.
       const werte = {};
       for (const typ of dd.felder) werte[typ] = dd.werte[typ] ?? null;
+      for (const typ of Object.keys(messungAmTag(S(), dd.datum)?.werte ?? {})) {
+        if (!(typ in werte)) werte[typ] = null;
+      }
       setzeMessung(S(), dd.datum, werte);
       entwurf = null;                 // Formular für den nächsten Tag frisch
       await speichernUndZeigen();

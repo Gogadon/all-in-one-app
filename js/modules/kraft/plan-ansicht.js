@@ -17,7 +17,7 @@ import {
 } from '../../core/plan.js';
 import { MODUL, PROG_DEFAULTS } from './logik.js';
 import { scheibenSatz } from '../../core/scheiben.js';
-import { formatZahl } from '../../core/metrics.js';
+import { formatZahl, formatZahlEingabe } from '../../core/metrics.js';
 
 export function erstellePlanAnsicht(k) {
   const { S, esc, planOffen, ui, heutigeSession } = k;
@@ -274,14 +274,14 @@ export function erstellePlanAnsicht(k) {
       const stange = ziel.einstellungen?.stange;
       html += `<p class="sheet-abschnitt">Stange</p>
         <div class="param-zeile">
-          <label class="feld breit"><input type="text" inputmode="decimal" value="${stange > 0 ? formatZahl(stange) : ''}" placeholder="z.B. 20" data-change="k.stange" data-akt="${aktId}" ${altId ? `data-alt="${altId}"` : ''}><span>kg Stange</span></label>
+          <label class="feld breit"><input type="text" inputmode="decimal" value="${stange > 0 ? formatZahlEingabe(stange) : ''}" placeholder="z.B. 20" data-change="k.stange" data-akt="${aktId}" ${altId ? `data-alt="${altId}"` : ''}><span>kg Stange</span></label>
         </div>
         <p class="dim klein-text">${stange > 0
           ? `Beim Training steht unter den Sätzen, welche Scheiben pro Seite drauf müssen.`
           : `Leer lassen bei Maschinen und Kabelzug. Mit Gewicht zeigt die App beim Training die Scheiben pro Seite.`}</p>`;
       if (stange > 0) {
         html += `<div class="param-zeile">
-            <label class="feld breit" style="flex:1"><input type="text" inputmode="decimal" value="${scheibenSatz(S()).map(n => formatZahl(n)).join(' · ')}" data-change="k.scheibenSatz"><span>Scheiben im Studio (für alle Übungen)</span></label>
+            <label class="feld breit" style="flex:1"><input type="text" inputmode="decimal" value="${scheibenSatz(S()).map(n => formatZahlEingabe(n)).join(' · ')}" data-change="k.scheibenSatz"><span>Scheiben im Studio (für alle Übungen)</span></label>
           </div>`;
       }
 

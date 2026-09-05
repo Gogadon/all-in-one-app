@@ -152,14 +152,50 @@ export function eintragVolumen(messwerte) {
 // Formatierung & Parsen (deutsch: Komma als Dezimaltrenner)
 // ------------------------------------------------------------
 
-/** "82,5" → 82.5 · "" → null. Akzeptiert Komma UND Punkt. */
+/**
+ * "82,5" → 82.5 · "" → null. Akzeptiert Komma UND Punkt als Dezimaltrenner.
+ *
+ * Der Punkt ist im Deutschen doppelt belegt: Dezimaltrenner (wie man ihn auf
+ * einer Handytastatur tippt) und Tausendertrenner ("12.000"). Beides wird hier
+ * auseinandergehalten, sonst wurden aus 12.000 Schritten glatt 12:
+ *
+ *   - Ist ein Komma da, ist es der Dezimaltrenner. Punkte sind dann
+ *     Tausendertrenner und fliegen raus: "1.234,5" → 1234.5
+ *   - Ohne Komma gilt: Ein Punkt, auf den GENAU drei Ziffern folgen und nach
+ *     denen nichts mehr kommt, ist ein Tausendertrenner ("12.000" → 12000).
+ *     Alles andere ist ein Dezimalpunkt ("12.5" → 12.5, "1.25" → 1.25).
+ *
+ * Eingabefelder zeigen ihre Werte über formatZahlEingabe() ohne
+ * Tausendertrenner an — die Erkennung hier ist die zweite Verteidigungslinie
+ * für von Hand getippte Zahlen.
+ */
 export function parseZahl(str) {
   if (typeof str === 'number') return Number.isFinite(str) ? str : null;
   if (typeof str !== 'string') return null;
-  const s = str.trim().replace(',', '.');
+  let s = str.trim();
   if (s === '') return null;
+  if (s.includes(',')) {
+    s = s.replaceAll('.', '').replace(',', '.');       // deutsches Format
+  } else if (/^-?\d{1,3}(\.\d{3})+$/.test(s)) {
+    s = s.replaceAll('.', '');                          // reine Tausendergruppen
+  }
   const n = Number(s);
   return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Zahl für ein EINGABEFELD — deutsch, aber ohne Tausendertrenner.
+ *
+ * Ein Feld muss das zurücklesen können, was es anzeigt. Mit Trennern ging das
+ * schief: 12000 wurde als "12.000" angezeigt, und wer daraus "12.500" machte,
+ * speicherte 12,5. Deshalb steht in Feldern nie ein Tausendertrenner.
+ */
+export function formatZahlEingabe(wert, dezimal = null) {
+  if (wert == null || !Number.isFinite(wert)) return '';
+  const opts = dezimal == null
+    ? { useGrouping: false, maximumFractionDigits: 2 }
+    : { useGrouping: false, minimumFractionDigits: 0, maximumFractionDigits: dezimal };
+  return wert.toLocaleString('de-DE', opts);
 }
 
 /** Zahl mit deutschem Format, feste Dezimalstellen nur wenn nötig. */

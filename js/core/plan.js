@@ -105,13 +105,20 @@ export function loescheEinheit(state, modul, einheitId) {
   const plan = mussPlan(state, modul);
   const iB = plan.einheiten.findIndex(e => e.id === einheitId);
   if (iB === -1) throw new Error('Einheit nicht gefunden.');
-  // Vorkommen im Zyklus einsammeln (für Positions- + Anker-Korrektur), dann raus.
-  const zeigtAuf = plan.zyklus[plan.position];
-  const ankerId = plan.anker ? plan.zyklus[plan.anker.index] : null;
+  // Welche Stellen fallen weg? Dieselbe Indexrechnung wie beim Entfernen einer
+  // einzelnen Stelle — auch hier hat die Suche über die Einheiten-ID bei
+  // Mehrfach-Vorkommen die falsche Stelle getroffen.
+  const entfernteStellen = plan.zyklus
+    .map((id, i) => (id === einheitId ? i : -1)).filter(i => i >= 0);
   plan.einheiten.splice(iB, 1);
   plan.zyklus = plan.zyklus.filter(id => id !== einheitId);
-  reparierePosition(plan, zeigtAuf);
-  repariereAnker(plan, ankerId);
+  if (plan.zyklus.length === 0) {
+    plan.position = 0;
+    if (plan.anker) plan.anker.index = 0;
+    return;
+  }
+  plan.position = nachEntfernen(plan.position, entfernteStellen, plan.zyklus.length);
+  if (plan.anker) plan.anker.index = nachEntfernen(plan.anker.index, entfernteStellen, plan.zyklus.length);
 }
 
 // ------------------------------------------------------------
@@ -160,20 +167,35 @@ export function addZuZyklus(state, modul, einheitId) {
 export function entferneAusZyklus(state, modul, index) {
   const plan = mussPlan(state, modul);
   if (index < 0 || index >= plan.zyklus.length) return;
-  const zeigtAuf = plan.zyklus[plan.position];
-  const warZeiger = index === plan.position;
-  const ankerId = plan.anker ? plan.zyklus[plan.anker.index] : null;
-  const warAnker = plan.anker ? index === plan.anker.index : false;
   plan.zyklus.splice(index, 1);
   if (plan.zyklus.length === 0) {
     plan.position = 0;
     if (plan.anker) plan.anker.index = 0;
     return;
   }
-  if (warZeiger) plan.position %= plan.zyklus.length;         // Zeiger-Stelle gelöscht → nächste rückt nach
-  else reparierePosition(plan, zeigtAuf);
-  if (warAnker) plan.anker.index %= plan.zyklus.length;       // Anker-Stelle gelöscht → nächste rückt nach
-  else repariereAnker(plan, ankerId);
+  plan.position = nachEntfernen(plan.position, [index], plan.zyklus.length);
+  if (plan.anker) plan.anker.index = nachEntfernen(plan.anker.index, [index], plan.zyklus.length);
+}
+
+/**
+ * Wohin rutscht eine Zyklus-STELLE, wenn an `entfernt` eine Stelle wegfällt?
+ *
+ * Es geht um die Stelle, nicht um die Einheit, die dort steht. Vorher wurde die
+ * Einheit gemerkt und ihre neue Stelle mit indexOf gesucht — das trifft bei
+ * mehrfach vorkommenden Einheiten immer das ERSTE Vorkommen. Bei A→B→A→C und
+ * dem Zeiger auf dem zweiten A sprang er nach dem Löschen von B aufs erste A,
+ * also eine Einheit zurück.
+ *
+ * Reine Indexrechnung kennt dieses Problem nicht:
+ *   davor gelöscht  → eine Stelle nach vorn rücken
+ *   selbst gelöscht → die nachrückende Stelle übernehmen (Index bleibt)
+ *   dahinter        → unverändert
+ */
+function nachEntfernen(stelle, entfernteStellen, laenge) {
+  if (laenge === 0) return 0;
+  const davor = entfernteStellen.filter(i => i < stelle).length;
+  const neu = stelle - davor;
+  return ((neu % laenge) + laenge) % laenge;
 }
 
 /** Zyklus-Stelle verschieben (richtung: -1 hoch / +1 runter). Zeiger folgt der Stelle. */
@@ -202,7 +224,13 @@ export function setzeAnker(state, modul, index, heute = heuteIso()) {
   const plan = mussPlan(state, modul);
   if (plan.zyklus.length === 0) return;
   const idx = ((index % plan.zyklus.length) + plan.zyklus.length) % plan.zyklus.length;
-  plan.anker = { iso: heute, index: idx };
+  // Übersprungene Tage rücken den Zyklus weiter — auch heutige, sofort.
+  // Wer heute schon übersprungen hat und DANN „Heute korrigieren" benutzt,
+  // meint aber die Stelle, die er sieht: die Skips sind in seiner Wahl bereits
+  // enthalten. Ohne diese Merkung wurden sie ein zweites Mal addiert, und die
+  // Auswahl landete eine Einheit daneben (bei drei Einheiten sogar wieder am
+  // Anfang). Später hinzukommende Skips rücken weiterhin ganz normal.
+  plan.anker = { iso: heute, index: idx, skipsVerrechnet: skipsAmTag(state, modul, heute) };
   plan.position = idx;
 }
 
@@ -242,27 +270,7 @@ function mussEinheit(state, modul, einheitId) {
   if (!e) throw new Error('Einheit nicht gefunden.');
   return e;
 }
-/** Zeiger wieder auf „seine" Zyklus-Stelle setzen (nach Umbau). */
-function reparierePosition(plan, zeigerId) {
-  if (plan.zyklus.length === 0) { plan.position = 0; return; }
-  const i = plan.zyklus.indexOf(zeigerId);
-  plan.position = i === -1 ? plan.position % plan.zyklus.length : i;
-}
 
-/**
- * Anker wieder auf „seine" Einheit setzen (nach Zyklus-Umbau) — analog
- * reparierePosition, aber für plan.anker.index. Wichtig, weil aktuelleEinheit
- * die Position aus dem ANKER berechnet (nicht aus position): ohne Nachführen
- * würde der Index nach Löschen/Verschieben auf die falsche Einheit zeigen.
- * `ankerId` = die vor dem Umbau verankerte Einheit (plan.zyklus[anker.index]).
- * Ist sie selbst weg, greift derselbe Fallback wie bei position (index % len).
- */
-function repariereAnker(plan, ankerId) {
-  if (!plan.anker) return;
-  if (plan.zyklus.length === 0) { plan.anker.index = 0; return; }
-  const i = plan.zyklus.indexOf(ankerId);
-  plan.anker.index = i === -1 ? plan.anker.index % plan.zyklus.length : i;
-}
 
 // ============================================================
 // DYNAMISCHE ZYKLUS-POSITION (Teil 1)
@@ -352,7 +360,11 @@ export function berechnePositionHeute(state, modul, anker, heute = heuteIso(), i
   }
   // Heute selbst: jeder Skip ist sofort „durch" und rückt weiter.
   // (Erledigt/offen wirken erst morgen — der Tag ist ja noch nicht vorbei.)
-  pos = (pos + skipsAmTag(state, modul, heute)) % len;
+  // Skips, die beim Setzen des Ankers schon da waren, stecken bereits in
+  // anker.index — die dürfen nicht doppelt zählen.
+  const schonVerrechnet = anker.iso === heute ? (anker.skipsVerrechnet ?? 0) : 0;
+  const offeneSkips = Math.max(0, skipsAmTag(state, modul, heute) - schonVerrechnet);
+  pos = (pos + offeneSkips) % len;
   return pos;
 }
 

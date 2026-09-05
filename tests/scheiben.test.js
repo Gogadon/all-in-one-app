@@ -99,3 +99,22 @@ test('Scheibensatz: Rechnung folgt dem eigenen Satz (ohne 15er)', () => {
   assert.deepEqual(p.proSeite, [20, 10, 5]);
   assert.equal(p.erreichbar, true);
 });
+
+test('Scheiben: zu kleine Scheiben fliegen raus statt die App einzufrieren', async () => {
+  const { MIN_SCHEIBE } = await import('../js/core/scheiben.js');
+  // 0,001 kg rundete intern auf 0 — die Auffüll-Schleife wurde dadurch nie
+  // fertig und die App fror ein. Jetzt gilt eine Untergrenze.
+  assert.equal(scheibenProSeite(60, 20, [0.001]), null, 'kein Satz mehr übrig → null');
+  assert.equal(scheibenProSeite(60, 20, [0, -5, 0.004]), null);
+  assert.deepEqual(scheibenProSeite(60, 20, [20, 0.001]).proSeite, [20], 'gültige bleiben');
+  assert.deepEqual(parseScheibenListe('0,001 20 15'), [20, 15]);
+  assert.deepEqual(parseScheibenListe('0,001'), []);
+
+  const state = leererZustand();
+  setzeScheibenSatz(state, [0.001]);
+  assert.deepEqual(scheibenSatz(state), [...STANDARD_SCHEIBEN], 'nur Unsinn → Standard');
+  // Auch ein von Hand ins Backup geschriebener Satz darf nicht hängen bleiben.
+  state.einstellungen.scheiben = [0.001, 0];
+  assert.deepEqual(scheibenSatz(state), [...STANDARD_SCHEIBEN]);
+  assert.ok(MIN_SCHEIBE >= 0.01);
+});
