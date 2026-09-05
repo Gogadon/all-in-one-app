@@ -25,6 +25,15 @@ export const STANDARD_SCHEIBEN = Object.freeze([20, 15, 10, 5, 2.5, 1.25]);
  */
 export const MIN_SCHEIBE = 0.01;
 
+/**
+ * Obergrenze für die Rechnung: 500 kg pro Seite.
+ * Die exakte Suche legt eine Tabelle über alle Zwischenbeträge an — bei
+ * absurden Eingaben soll das nicht ins Uferlose wachsen. Über der Grenze
+ * gibt es keine Anzeige statt einer teuren Rechnung für ein Gewicht, das
+ * niemand auflegt.
+ */
+const MAX_PRO_SEITE_CENT = 50000;
+
 /** Taugt der Wert als Scheibe? */
 function istScheibe(n) {
   return typeof n === 'number' && Number.isFinite(n) && n >= MIN_SCHEIBE;
@@ -83,23 +92,56 @@ export function scheibenProSeite(ziel, stange, scheiben = STANDARD_SCHEIBEN) {
 
   // Auf 1/100 kg runden, damit 0,1 + 0,2 nicht an Gleitkomma scheitert.
   const cent = (n) => Math.round(n * 100);
-  let rest = cent((ziel - stange) / 2);
-  const proSeite = [];
-  for (const s of satz) {
-    const c = cent(s);
-    while (rest >= c) { proSeite.push(s); rest -= c; }
-  }
-  const erreichbar = rest === 0;
+  const zielCent = cent((ziel - stange) / 2);
+  if (zielCent > MAX_PRO_SEITE_CENT) return null;
 
-  let naechste = null;
-  if (!erreichbar) {
-    // Kleinste Scheibe bestimmt die Schrittweite pro Seite → mal zwei.
-    const schritt = cent(satz[satz.length - 1]);
-    const proSeiteCent = cent((ziel - stange) / 2);
-    const hoch = Math.ceil(proSeiteCent / schritt) * schritt;
-    naechste = (cent(stange) + 2 * hoch) / 100;
+  const satzCent = satz.map(cent);
+  const kleinste = satzCent[satzCent.length - 1];
+  // Eine kleinste Scheibe über das Ziel hinaus rechnen: weiter kann das
+  // nächste erreichbare Gewicht nicht liegen. Wäre der größte erreichbare
+  // Betrag unter dem Ziel plus die kleinste Scheibe noch unter dem Ziel,
+  // wäre er nicht der größte gewesen.
+  const bis = zielCent + kleinste;
+
+  // Minimale Scheibenzahl für jeden Betrag — vollständige Suche statt gierig.
+  // Gierig von der schwersten Scheibe abwärts ist nur bei "schöner" Staffelung
+  // richtig (jede Scheibe teilt die nächstgrößere). Bei einem selbst
+  // eingetragenen Satz wie 4/3 kg scheiterte es: für 6 kg nahm es die 4 und
+  // meldete den Rest als nicht darstellbar — obwohl 3 + 3 genau passt.
+  const anzahl = new Array(bis + 1).fill(Infinity);
+  const letzte = new Array(bis + 1).fill(0);
+  anzahl[0] = 0;
+  for (let c = 1; c <= bis; c++) {
+    for (const s of satzCent) {          // schwerste zuerst → bei Gleichstand gewinnt sie
+      if (s <= c && anzahl[c - s] + 1 < anzahl[c]) {
+        anzahl[c] = anzahl[c - s] + 1;
+        letzte[c] = s;
+      }
+    }
   }
-  return { proSeite, rest: rest / 100, erreichbar, stange, ziel, naechste };
+  const packe = (c) => {
+    const raus = [];
+    while (c > 0) { const s = letzte[c]; raus.push(s / 100); c -= s; }
+    return raus.sort((a, b) => b - a);
+  };
+
+  if (Number.isFinite(anzahl[zielCent])) {
+    return { proSeite: packe(zielCent), rest: 0, erreichbar: true, stange, ziel, naechste: null };
+  }
+  // Nicht darstellbar: das Beste darunter zeigen und das Nächste darüber
+  // nennen. `naechste` ist dadurch immer echt größer als das Ziel — vorher
+  // kam hier bei krummen Sätzen dasselbe Gewicht zurück.
+  let darunter = zielCent;
+  while (darunter > 0 && !Number.isFinite(anzahl[darunter])) darunter--;
+  let darueber = zielCent + 1;
+  while (darueber <= bis && !Number.isFinite(anzahl[darueber])) darueber++;
+  return {
+    proSeite: packe(darunter),
+    rest: (zielCent - darunter) / 100,
+    erreichbar: false,
+    stange, ziel,
+    naechste: darueber <= bis ? (cent(stange) + 2 * darueber) / 100 : null,
+  };
 }
 
 /** „2×20 + 15 + 1,25" — gleiche Scheiben zusammengefasst, schwerste zuerst. */

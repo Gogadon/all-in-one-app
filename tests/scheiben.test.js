@@ -118,3 +118,52 @@ test('Scheiben: zu kleine Scheiben fliegen raus statt die App einzufrieren', asy
   assert.deepEqual(scheibenSatz(state), [...STANDARD_SCHEIBEN]);
   assert.ok(MIN_SCHEIBE >= 0.01);
 });
+
+test('Scheiben: eigene Sätze werden vollständig durchsucht, nicht nur gierig', () => {
+  // Gierig von der schwersten Scheibe abwärts stimmt nur, wenn jede Scheibe
+  // die nächstgrößere teilt. Bei 4/3 kg nahm es für 6 kg pro Seite die 4 und
+  // meldete "nicht erreichbar" — 3 + 3 passt aber genau.
+  const p = scheibenProSeite(32, 20, [4, 3]);
+  assert.equal(p.erreichbar, true);
+  assert.deepEqual(p.proSeite, [3, 3]);
+  assert.equal(p.rest, 0);
+
+  // Auch hier gilt: Stange + 2 × Seite ergibt das Ziel.
+  for (const [ziel, stange, satz] of [[32, 20, [4, 3]], [34, 20, [4, 3]], [50, 20, [7, 5, 3]]]) {
+    const r = scheibenProSeite(ziel, stange, satz);
+    if (!r.erreichbar) continue;
+    assert.equal(stange + 2 * r.proSeite.reduce((a, b) => a + b, 0), ziel, `${ziel} mit ${satz}`);
+  }
+});
+
+test('Scheiben: die Lösung nimmt die wenigsten Scheiben', () => {
+  // 97,5 bei Stange 15 → 41,25 pro Seite. 2×20 + 1,25 sind drei Scheiben,
+  // 20 + 15 + 5 + 1,25 wären vier. Weniger schleppen ist besser.
+  assert.deepEqual(scheibenProSeite(97.5, 15).proSeite, [20, 20, 1.25]);
+  assert.deepEqual(scheibenProSeite(95, 15).proSeite, [20, 20]);
+  // Bei gleicher Anzahl gewinnt die schwerere Scheibe (stabile Ausgabe).
+  assert.deepEqual(scheibenProSeite(60, 20, [10, 5]).proSeite, [10, 10]);
+});
+
+test('Scheiben: „nächste" ist immer echt schwerer als das Ziel', () => {
+  // Vorher konnte hier dasselbe Gewicht zurückkommen ("32 → nächste: 32"),
+  // weil die Zahl aus der kleinsten Scheibe hochgerundet wurde statt aus dem,
+  // was wirklich erreichbar ist.
+  for (const [ziel, stange, satz] of [
+    [21, 20, undefined], [96, 15, undefined], [32.5, 20, [4, 3]], [33, 20, [4, 3]],
+  ]) {
+    const p = scheibenProSeite(ziel, stange, satz);
+    if (p.erreichbar) continue;
+    assert.ok(p.naechste > ziel, `${ziel}: nächste war ${p.naechste}`);
+    // ...und wirklich erreichbar.
+    assert.equal(scheibenProSeite(p.naechste, stange, satz).erreichbar, true,
+      `${p.naechste} muss darstellbar sein`);
+  }
+});
+
+test('Scheiben: absurde Gewichte werden nicht gerechnet', () => {
+  // Die vollständige Suche legt eine Tabelle an — die soll nicht ins
+  // Uferlose wachsen, nur weil jemand sich vertippt.
+  assert.notEqual(scheibenProSeite(1000, 20), null, '1000 kg wird noch gerechnet');
+  assert.equal(scheibenProSeite(5000, 20), null, 'darüber lieber gar keine Anzeige');
+});

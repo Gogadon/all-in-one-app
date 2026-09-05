@@ -344,12 +344,27 @@ function importiereDatei(input) {
 
       // 3) Rettungspunkt vom AKTUELLEN Stand — erzwungen, denn der heutige
       //    Tages-Snapshot ist der Stand von heute früh, nicht der von eben.
-      sichereSnapshot(state, heuteIso(), { erzwingen: true, grund: 'vor Import' });
+      //    Schlägt das fehl (voller Speicher), wird NICHT einfach weiter-
+      //    gemacht: vorher versprach die App hinterher trotzdem, der alte
+      //    Stand liege bereit — ausgerechnet dann, wenn er weg ist.
+      const gesichert = sichereSnapshot(state, heuteIso(), { erzwingen: true, grund: 'vor Import' });
+      if (!gesichert) {
+        const trotzdem = await bestaetige({
+          titel: 'Kein Rettungspunkt möglich',
+          text: 'Der Wiederherstellungspunkt konnte nicht angelegt werden — der Speicher ist voll oder blockiert. '
+            + 'Wenn du jetzt importierst, ist der Stand auf diesem Gerät endgültig weg. '
+            + 'Sicherer: abbrechen und ihn erst über „Backup exportieren" als Datei sichern.',
+          jaText: 'Trotzdem importieren', gefahr: true,
+        });
+        if (!trotzdem) return;
+      }
 
       // 4) Erst jetzt ersetzen.
       state = neu;
       await ctx.save();
-      await hinweis('Backup importiert ✓', 'Der vorherige Stand liegt als Wiederherstellungspunkt bereit.');
+      await hinweis('Backup importiert ✓', gesichert
+        ? 'Der vorherige Stand liegt als Wiederherstellungspunkt bereit.'
+        : 'Achtung: Ein Wiederherstellungspunkt war nicht möglich — der vorherige Stand ist weg.');
       // Zurück ins Dashboard: dort sieht man sofort alle Module und die
       // Wochenstatistik mit den frisch importierten Daten.
       unterseite = null; tab = 'dashboard';
