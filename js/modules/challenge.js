@@ -215,7 +215,7 @@ export function erstelleChallengeModul(ctx) {
       <p class="sheet-abschnitt">Was?</p>
       <div class="chip-zeile">${groessenChips}</div>
       <p class="sheet-abschnitt">Zielwert${g ? ` (${esc(g.einheit)})` : ''}</p>
-      <input class="ch-ziel-feld" type="text" inputmode="decimal" value="${d.zielwert ?? ''}"
+      <input class="ch-ziel-feld" type="text" inputmode="decimal" value="${esc(d.zielwert ?? '')}"
         placeholder="z.B. 100" data-change="ch.zielwert">
       <p class="sheet-abschnitt">Zeitraum</p>
       <div class="chip-zeile">${zeitChips}</div>

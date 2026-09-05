@@ -478,7 +478,7 @@ export function erstelleKraftModul(ctx) {
     },
     'k.einheitName'(d) {
       const e = findeEinheit(S(), MODUL, d.einheit);
-      ui.umbenennen = { typ: 'einheit', id: d.einheit, titel: 'Einheit ui.umbenennen', wert: e?.name ?? '' };
+      ui.umbenennen = { typ: 'einheit', id: d.einheit, titel: 'Einheit umbenennen', wert: e?.name ?? '' };
       sheet.oeffne(umbenennenHtml());
     },
     'k.umbennSuche'(d, el) { if (ui.umbenennen) { ui.umbenennen.wert = el.value; sheet.aktualisiere(umbenennenHtml()); } },
@@ -489,7 +489,7 @@ export function erstelleKraftModul(ctx) {
       if (ui.umbenennen.typ === 'einheit') {
         benenneEinheitUm(S(), MODUL, ui.umbenennen.id, name);
       } else if (ui.umbenennen.typ === 'altName') {
-        // Alternative ist eine echte Übung → direkt ui.umbenennen.
+        // Alternative ist eine echte Übung → direkt umbenennen.
         const alt = findeAktivitaet(S(), ui.umbenennen.altId);
         if (alt) alt.name = name;
       } else if (ui.umbenennen.typ === 'altNeu') {
@@ -689,7 +689,7 @@ export function erstelleKraftModul(ctx) {
     'k.altName'(d) {
       // Alternative ist eine echte Übung → direkt finden.
       const alt = findeAktivitaet(S(), d.alt); if (!alt) return;
-      ui.umbenennen = { typ: 'altName', id: d.akt, altId: d.alt, titel: 'Alternative ui.umbenennen', wert: alt.name };
+      ui.umbenennen = { typ: 'altName', id: d.akt, altId: d.alt, titel: 'Alternative umbenennen', wert: alt.name };
       sheet.oeffne(umbenennenHtml());
     },
     async 'k.altWeg'(d) {
