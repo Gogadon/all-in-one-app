@@ -306,6 +306,21 @@ Historie, Progression und Einstellungen.
 - Die Migration von Schema 1→2 (in `storage.js`) wandelt alte eingebettete
   Alternativen in echte Übungen um und führt gleichnamige zusammen.
 
+### 6c. In Eingabefeldern steht nie ein Tausendertrenner
+
+Ein Feld muss zurücklesen können, was es anzeigt. `formatZahl` setzt deutsche
+Tausenderpunkte (12.000) — `parseZahl` liest einen Punkt sonst als
+Dezimaltrenner. Aus 12.000 Schritten wurden beim Bearbeiten 12, aus
+12.500 wurden 12,5.
+
+Deshalb: **Werte in `<input>` immer über `formatZahlEingabe()`**, nie über
+`formatZahl()`. Letzteres ist ausschließlich für Anzeigetexte.
+
+`parseZahl` erkennt zusätzlich von Hand getippte Gruppierung: Ist ein Komma
+da, ist es der Dezimaltrenner und Punkte sind Gruppierung (1.234,5). Ohne
+Komma gilt ein Punkt mit genau drei folgenden Ziffern als Tausendertrenner
+(12.000 wird 12000), alles andere als Dezimalpunkt (12.5 wird 12,5).
+
 ### 6b. Scheiben werden IMMER „pro Seite" angezeigt
 
 Eine Übung kann ein Stangengewicht tragen (`einstellungen.stange`, im
@@ -371,7 +386,7 @@ du beim Einbauen doch eine findest, gehört sie in die Registry.
 
 ## Tests
 
-266 Tests, alle ohne Browser lauffähig, ohne eine einzige Abhängigkeit:
+298 Tests, alle ohne Browser lauffähig, ohne eine einzige Abhängigkeit:
 
 ```
 npm test

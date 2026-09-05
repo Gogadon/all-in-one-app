@@ -9,7 +9,7 @@
 // Reine Strings, also auch in Node renderbar; der Akzeptanztest hängt hieran.
 // ============================================================
 
-import { MESSWERTE, formatZahl, parseZahl } from '../../core/metrics.js';
+import { MESSWERTE, formatZahl, formatZahlEingabe, parseZahl } from '../../core/metrics.js';
 
 export function escT(t) { // lokales Escaping (components.js braucht DOM-Umfeld nicht, aber Import-Trennung hält Tests schlank)
   return String(t ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;')
@@ -26,8 +26,8 @@ export function dauerInputWert(sek) {
 /** Anzeigewert fürs Distanz-Eingabefeld: 1930 m → "1,93" (km) bzw. "1930" (Schwimmen, m). */
 export function distanzInputWert(meter, kategorie) {
   if (meter == null) return '';
-  if (kategorie === 'schwimmen') return formatZahl(Math.round(meter), 0);
-  return formatZahl(meter / 1000, 2);   // km, bis 2 Nachkommastellen
+  if (kategorie === 'schwimmen') return formatZahlEingabe(Math.round(meter), 0);
+  return formatZahlEingabe(meter / 1000, 2);   // km, bis 2 Nachkommastellen
 }
 
 /** Eingabe-Distanz → Meter. "1,93" km → 1930 m; Schwimmen: Meter direkt. */
@@ -51,7 +51,7 @@ export function eintragInputsHtml(aktivitaet, segment, eintrag) {
     if (roh == null) wert = '';
     else if (def.anzeige === 'zeit') wert = dauerInputWert(roh);
     else if (def.anzeige === 'distanz') wert = distanzInputWert(roh, kat);
-    else wert = formatZahl(roh, def.dezimal ?? 2);
+    else wert = formatZahlEingabe(roh, def.dezimal ?? 2);
     // Feld-Label (Einheit): Distanz zeigt km bzw. m je nach Sportart
     const einheitLabel = def.anzeige === 'zeit' ? 'min'
       : def.anzeige === 'distanz' ? (kat === 'schwimmen' ? 'm' : 'km')

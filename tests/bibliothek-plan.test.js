@@ -504,3 +504,100 @@ test('Referenzen: Alternativ-Verweis blockiert nicht, wird aber aufgeräumt', ()
   entferneAktivitaet(state, kh.id);                 // nur verlinkt → löschbar
   assert.deepEqual(bank.alternativen, []);          // Verweis ist weg, nicht tot
 });
+
+// ==================================================================
+// Zyklus-Stellen: Position und Anker bei mehrfachen Einheiten
+// ==================================================================
+
+test('Zyklus: Entfernen verschiebt die STELLE, nicht die Einheit', async () => {
+  const P = await import('../js/core/plan.js');
+  // Fehler war: die neue Stelle wurde per indexOf über die Einheiten-ID
+  // gesucht. Bei A→B→A→C und dem Anker auf dem ZWEITEN A traf das immer das
+  // erste — der Zeiger sprang eine Einheit zurück.
+  const bau = () => {
+    const state = leererZustand();
+    const A = P.addEinheit(state, 'kraft', { name: 'A' });
+    const B = P.addEinheit(state, 'kraft', { name: 'B' });
+    const C = P.addEinheit(state, 'kraft', { name: 'C' });
+    for (const e of [A, B, A, C]) P.addZuZyklus(state, 'kraft', e.id);
+    return { state, A, B, C, plan: state.plaene.kraft };
+  };
+
+  // Stelle DAVOR entfernt → eine Stelle nach vorn
+  let w = bau();
+  P.setzeAnker(w.state, 'kraft', 2, '2026-09-05');
+  P.entferneAusZyklus(w.state, 'kraft', 1);
+  assert.deepEqual(w.plan.zyklus, [w.A.id, w.A.id, w.C.id]);
+  assert.equal(w.plan.anker.index, 1, 'weiterhin das zweite A');
+  assert.equal(w.plan.position, 1);
+
+  // Stelle DAHINTER entfernt → unverändert
+  w = bau();
+  P.setzeAnker(w.state, 'kraft', 1, '2026-09-05');
+  P.entferneAusZyklus(w.state, 'kraft', 3);
+  assert.equal(w.plan.anker.index, 1);
+
+  // Die Stelle SELBST entfernt → die nachrückende übernimmt
+  w = bau();
+  P.setzeAnker(w.state, 'kraft', 1, '2026-09-05');
+  P.entferneAusZyklus(w.state, 'kraft', 1);
+  assert.equal(w.plan.anker.index, 1, 'jetzt steht dort das zweite A');
+  assert.equal(w.plan.zyklus[1], w.A.id);
+
+  // Letzte Stelle entfernt, Anker war dort → läuft sauber um
+  w = bau();
+  P.setzeAnker(w.state, 'kraft', 3, '2026-09-05');
+  P.entferneAusZyklus(w.state, 'kraft', 3);
+  assert.equal(w.plan.anker.index, 0);
+  assert.equal(w.plan.zyklus.length, 3);
+});
+
+test('Zyklus: Einheit löschen entfernt alle Vorkommen und rechnet richtig um', async () => {
+  const P = await import('../js/core/plan.js');
+  const state = leererZustand();
+  const A = P.addEinheit(state, 'kraft', { name: 'A' });
+  const B = P.addEinheit(state, 'kraft', { name: 'B' });
+  const C = P.addEinheit(state, 'kraft', { name: 'C' });
+  for (const e of [B, A, B, A, C]) P.addZuZyklus(state, 'kraft', e.id);
+  const plan = state.plaene.kraft;
+  P.setzeAnker(state, 'kraft', 3, '2026-09-05');      // zweites A
+  P.loescheEinheit(state, 'kraft', B.id);             // zwei Stellen fallen weg
+  assert.deepEqual(plan.zyklus, [A.id, A.id, C.id]);
+  assert.equal(plan.anker.index, 1, 'immer noch das zweite A');
+
+  // Alles gelöscht → Zyklus leer, Indizes auf 0
+  P.loescheEinheit(state, 'kraft', A.id);
+  P.loescheEinheit(state, 'kraft', C.id);
+  assert.deepEqual(plan.zyklus, []);
+  assert.equal(plan.anker.index, 0);
+  assert.equal(plan.position, 0);
+});
+
+test('Zyklus: „Heute korrigieren" nach einem Überspringen landet nicht daneben', async () => {
+  const P = await import('../js/core/plan.js');
+  const HEUTE = '2026-09-05';
+  const state = leererZustand();
+  const r = P.addEinheit(state, 'kraft', { name: 'Rücken' });
+  const b = P.addEinheit(state, 'kraft', { name: 'Brust' });
+  const be = P.addEinheit(state, 'kraft', { name: 'Beine' });
+  for (const e of [r, b, be]) P.addZuZyklus(state, 'kraft', e.id);
+  P.setzeAnker(state, 'kraft', 0, HEUTE);
+  assert.equal(P.aktuelleEinheit(state, 'kraft', HEUTE).name, 'Rücken');
+
+  // Heute übersprungen → rückt sofort weiter. Das soll so bleiben.
+  state.sessions.push({ id: 'sk1', datum: HEUTE, modul: 'kraft', uebersprungen: true, segmente: [] });
+  assert.equal(P.aktuelleEinheit(state, 'kraft', HEUTE).name, 'Brust');
+
+  // Jetzt ausdrücklich korrigieren: heute ist Beine. Der bereits verrechnete
+  // Skip steckt in dieser Wahl — vorher wurde er ein zweites Mal addiert und
+  // die Anzeige sprang bei drei Einheiten sogar wieder auf Rücken.
+  P.setzeAnker(state, 'kraft', 2, HEUTE);
+  assert.equal(P.aktuelleEinheit(state, 'kraft', HEUTE).name, 'Beine');
+
+  // Ein SPÄTERER Skip rückt weiterhin ganz normal weiter.
+  state.sessions.push({ id: 'sk2', datum: HEUTE, modul: 'kraft', uebersprungen: true, segmente: [] });
+  assert.equal(P.aktuelleEinheit(state, 'kraft', HEUTE).name, 'Rücken');
+
+  // Und am Folgetag zählt der Anker-Tag ganz normal mit.
+  assert.equal(P.aktuelleEinheit(state, 'kraft', '2026-09-06').name, 'Brust');
+});

@@ -14,17 +14,34 @@ import { parseZahl } from './metrics.js';
 /** Was in den meisten Studios liegt. Änderbar in den Einstellungen. */
 export const STANDARD_SCHEIBEN = Object.freeze([20, 15, 10, 5, 2.5, 1.25]);
 
+/**
+ * Kleinste Scheibe, die die App annimmt: 10 g.
+ *
+ * Nicht Willkür, sondern Notwendigkeit: Gerechnet wird in 1/100 kg, damit
+ * Gleitkomma nicht stört. Alles darunter rundet auf 0 — und eine Scheibe mit
+ * dem Gewicht 0 lässt die Auffüll-Schleife ewig laufen, weil der Rest nie
+ * kleiner wird. Die App fror dabei ein. Deshalb fliegt so etwas raus, statt
+ * gerechnet zu werden.
+ */
+export const MIN_SCHEIBE = 0.01;
+
+/** Taugt der Wert als Scheibe? */
+function istScheibe(n) {
+  return typeof n === 'number' && Number.isFinite(n) && n >= MIN_SCHEIBE;
+}
+
 /** Der Scheibensatz des Studios — app-weit, schwerste zuerst. */
 export function scheibenSatz(state) {
   const eigene = state?.einstellungen?.scheiben;
-  const liste = Array.isArray(eigene) && eigene.length ? eigene : STANDARD_SCHEIBEN;
-  return [...new Set(liste.filter(n => typeof n === 'number' && n > 0))].sort((a, b) => b - a);
+  const liste = Array.isArray(eigene) ? eigene.filter(istScheibe) : [];
+  const satz = liste.length ? liste : STANDARD_SCHEIBEN;
+  return [...new Set(satz)].sort((a, b) => b - a);
 }
 
 /** Scheibensatz setzen. Leer oder ungültig → zurück auf den Standard. */
 export function setzeScheibenSatz(state, liste) {
   state.einstellungen ??= {};
-  const sauber = [...new Set((liste ?? []).filter(n => typeof n === 'number' && n > 0))].sort((a, b) => b - a);
+  const sauber = [...new Set((liste ?? []).filter(istScheibe))].sort((a, b) => b - a);
   if (sauber.length) state.einstellungen.scheiben = sauber;
   else delete state.einstellungen.scheiben;
   return scheibenSatz(state);
@@ -41,7 +58,7 @@ export function parseScheibenListe(text) {
     .map(t => t.replace(/#/g, ','))
     .filter(Boolean)
     .map(parseZahl)
-    .filter(n => n != null && n > 0);
+    .filter(istScheibe);
   return [...new Set(teile)].sort((a, b) => b - a);
 }
 
@@ -61,7 +78,7 @@ export function parseScheibenListe(text) {
 export function scheibenProSeite(ziel, stange, scheiben = STANDARD_SCHEIBEN) {
   if (typeof ziel !== 'number' || typeof stange !== 'number') return null;
   if (!(ziel > 0) || !(stange > 0) || ziel < stange) return null;
-  const satz = [...scheiben].filter(n => n > 0).sort((a, b) => b - a);
+  const satz = [...scheiben].filter(istScheibe).sort((a, b) => b - a);
   if (!satz.length) return null;
 
   // Auf 1/100 kg runden, damit 0,1 + 0,2 nicht an Gleitkomma scheitert.
