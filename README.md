@@ -340,6 +340,12 @@ Zwei Regeln, die nicht verhandelbar sind:
 - **Eingetragen wird das Gesamtgewicht**, Stange inklusive. Die Stange wird
   fürs Rechnen abgezogen, nie vom gespeicherten Wert.
 
+Gesucht wird die Lösung mit den **wenigsten Scheiben**, und zwar vollständig
+statt gierig von oben: Gierig stimmt nur, wenn jede Scheibe die nächstgrößere
+teilt — bei einem eigenen Satz wie 4/3 kg fand es für 6 kg nichts, obwohl
+3 + 3 passt. Über 1000 kg wird nicht mehr gerechnet, dann gibt es keine
+Anzeige.
+
 Der Scheibensatz (`einstellungen.scheiben`) ist **app-weit** — er beschreibt
 das Studio, nicht die Übung. Leer heißt Standard (20/15/10/5/2,5/1,25).
 Stückzahlen gibt es nicht; die Rechnung geht davon aus, dass genug da ist.
@@ -386,7 +392,7 @@ du beim Einbauen doch eine findest, gehört sie in die Registry.
 
 ## Tests
 
-298 Tests, alle ohne Browser lauffähig, ohne eine einzige Abhängigkeit:
+305 Tests, alle ohne Browser lauffähig, ohne eine einzige Abhängigkeit:
 
 ```
 npm test

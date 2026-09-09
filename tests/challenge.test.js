@@ -213,3 +213,23 @@ test('Challenge: offene Kraft-Einheit zählt nicht ins Volumen', () => {
   // Wie bei Rad/Wandern/Schwimmen: erst nach dem Speichern zählt es mit
   assert.equal(fortschritt(state, { was: 'kraft_volumen', zielwert: 5000, zeitraum: 'monat' }, HEUTE).ist, 500);
 });
+
+test('Challenge: der eingetippte Zielwert landet escaped im Feld', async () => {
+  const { installiereBrowserAttrappe, testKontext } = await import('./helpers/umgebung.js');
+  installiereBrowserAttrappe();
+  const { esc, formatDatum } = await import('../js/ui/components.js');
+  const { erstelleChallengeModul } = await import('../js/modules/challenge.js');
+
+  const state = leererZustand();
+  const { ctx, protokoll } = testKontext(state, { esc, formatDatum });
+  const c = erstelleChallengeModul(ctx);
+  c.actions['ch.neu']();
+  c.actions['ch.zielwert']({}, { value: '100" autofocus data-pwn="1' });
+
+  // Vorher stand der Rohwert im value-Attribut und konnte daraus ausbrechen.
+  assert.ok(!protokoll.sheet.includes('data-pwn="1"'), 'kein Ausbruch aus dem Attribut');
+  assert.ok(protokoll.sheet.includes('&quot;'), 'Anführungszeichen sind ersetzt');
+  // Normale Eingaben bleiben normal lesbar.
+  c.actions['ch.zielwert']({}, { value: '100' });
+  assert.ok(protokoll.sheet.includes('value="100"'));
+});

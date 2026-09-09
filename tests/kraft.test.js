@@ -587,3 +587,42 @@ test('Satz-Art: andere Flags bleiben beim Umschalten erhalten', async () => {
   await k.actions['k.satzArt']({ seg: seg.id, eintrag: satz.id });
   assert.ok(hatFlag(satz, 'irgendwas'), 'fremde Flags überleben den Durchlauf');
 });
+
+test('Umbenennen-Sheets tragen einen lesbaren Titel', async () => {
+  const { installiereBrowserAttrappe, testKontext } = await import('./helpers/umgebung.js');
+  installiereBrowserAttrappe();
+  const { esc, formatDatum } = await import('../js/ui/components.js');
+  const { erstelleKraftModul } = await import('../js/modules/kraft.js');
+  const { addEinheit } = await import('../js/core/plan.js');
+
+  // Beim Aufteilen von kraft.js hat ein Suchen-und-Ersetzen aus „umbenennen"
+  // ein „ui.umbenennen" gemacht — sichtbar als Überschrift im Sheet.
+  const state = leererZustand();
+  const einheit = addEinheit(state, 'kraft', { name: 'Push A' });
+  const bank = addAktivitaet(state, { name: 'Bankdrücken', kategorie: 'kraft', messwerte: ['gewicht', 'wdh'] });
+  const kh = addAktivitaet(state, { name: 'KH-Bank', kategorie: 'kraft', messwerte: ['gewicht', 'wdh'] });
+  const { ctx, protokoll } = testKontext(state, { esc, formatDatum });
+  const k = erstelleKraftModul(ctx);
+
+  k.actions['k.einheitName']({ einheit: einheit.id });
+  assert.match(protokoll.sheet, /<h3>Einheit umbenennen<\/h3>/);
+  k.actions['k.altName']({ akt: bank.id, alt: kh.id });
+  assert.match(protokoll.sheet, /<h3>Alternative umbenennen<\/h3>/);
+});
+
+test('Progressions-Parameter aus einem Backup landen escaped im Feld', async () => {
+  const { installiereBrowserAttrappe, testKontext } = await import('./helpers/umgebung.js');
+  installiereBrowserAttrappe();
+  const { esc, formatDatum } = await import('../js/ui/components.js');
+  const { erstelleKraftModul } = await import('../js/modules/kraft.js');
+
+  // Eigene Eingaben sind hier immer Zahlen — ein importiertes Backup ist
+  // aber fremde Daten und kann alles enthalten.
+  const state = leererZustand();
+  const akt = addAktivitaet(state, { name: 'X', kategorie: 'kraft', messwerte: ['gewicht', 'wdh'] });
+  akt.einstellungen = { prog: { art: 'double', saetze: '4" autofocus data-pwn="2', wdhMin: 8, wdhMax: 12, schritt: 2.5 } };
+  const { ctx, protokoll } = testKontext(state, { esc, formatDatum });
+  const k = erstelleKraftModul(ctx);
+  k.actions['k.einstellungen']({ akt: akt.id });
+  assert.ok(!protokoll.sheet.includes('data-pwn="2"'), 'kein Ausbruch aus dem Attribut');
+});

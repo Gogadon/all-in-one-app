@@ -218,7 +218,7 @@ export function erstellePlanAnsicht(k) {
     const chip = (art, label) =>
       `<button class="chip ${prog.art === art || (!prog.art && art === 'off') ? 'aktiv' : ''}" data-action="k.progArt" data-akt="${aktId}" ${altId ? `data-alt="${altId}"` : ''} data-art="${art}">${label}</button>`;
     const param = (name, label, wert) =>
-      `<label class="feld breit"><input type="text" inputmode="decimal" value="${wert}" data-change="k.progParam" data-akt="${aktId}" ${altId ? `data-alt="${altId}"` : ''} data-param="${name}"><span>${label}</span></label>`;
+      `<label class="feld breit"><input type="text" inputmode="decimal" value="${esc(wert)}" data-change="k.progParam" data-akt="${aktId}" ${altId ? `data-alt="${altId}"` : ''} data-param="${name}"><span>${label}</span></label>`;
 
     let html = `<h3>${esc(ziel.name)}</h3>`;
 
