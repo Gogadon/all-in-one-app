@@ -15,11 +15,23 @@ self.addEventListener('install', () => {
   self.skipWaiting();
 });
 
+// Präfix für Caches, die zu DIESER App gehören. Beim Aufräumen wird nur
+// angefasst, was so heißt.
+const CACHE_PRAEFIX = 'all-in-one-';
+
 self.addEventListener('activate', (e) => {
-  // Alte Caches (falls je welche angelegt wurden) aufräumen.
+  // Alte eigene Caches (falls je welche angelegt wurden) aufräumen.
+  //
+  // Vorher wurden ALLE Caches des Origins gelöscht. Auf GitHub Pages teilen
+  // sich sämtliche Projekte eines Kontos einen Origin — diese App hätte also
+  // die Caches fremder Projekte unter derselben Adresse mit weggeräumt.
+  // Nichts, was hier je jemandem aufgefallen wäre, aber schlicht nicht unsere
+  // Zuständigkeit.
   e.waitUntil(
     caches.keys()
-      .then((namen) => Promise.all(namen.map((n) => caches.delete(n))))
+      .then((namen) => Promise.all(
+        namen.filter((n) => n.startsWith(CACHE_PRAEFIX)).map((n) => caches.delete(n))
+      ))
       .then(() => self.clients.claim())
   );
 });

@@ -1,6 +1,7 @@
 // tests/koerper.test.js — Körperwerte: eigene Liste, kein Training.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { heuteIso } from '../js/core/model.js';
 
 const {
   KOERPER_WERTE, istKoerperWert, standardWerte, formatKoerperWert,
@@ -171,7 +172,7 @@ test('Körper: ein abgewähltes Feld wird wirklich gelöscht', async () => {
   const { esc, formatDatum } = await import('../js/ui/components.js');
   const { erstelleKoerperModul } = await import('../js/modules/koerper.js');
   const { setzeMessung, messungAmTag } = await import('../js/core/koerper.js');
-  const HEUTE = new Date().toISOString().slice(0, 10);
+  const HEUTE = heuteIso();   // wie die App: Ortszeit, nicht UTC
 
   const state = leererZustand();
   setzeMessung(state, HEUTE, { gewicht: 95.5, muskelmasse: 40 });

@@ -150,7 +150,7 @@ test('Rad: Highlights erkennen persönliche Rekorde', async () => {
 });
 
 test('Rad: fertige Tour taucht in der Statistik-Ansicht auf (aufklappbar)', async () => {
-  const { state, rad } = neuesModul();
+  const { rad } = neuesModul();
   await rad.actions['rad.neu']();
   await rad.actions['rad.wert']({ typ: 'distanz' }, { value: '10' });
   await rad.actions['rad.fertig']();
@@ -161,7 +161,7 @@ test('Rad: fertige Tour taucht in der Statistik-Ansicht auf (aufklappbar)', asyn
 // ---- Statistik-Ansicht (Etappe 2) ----
 
 test('Rad: Statistik-Ansicht zeigt Umschalter, Navigation und Kennzahlen', async () => {
-  const { state, rad } = neuesModul();
+  const { rad } = neuesModul();
   // Zwei Touren „heute" → liegen im laufenden Monat (Default-Zeitraum)
   for (const km of ['10', '20']) {
     await rad.actions['rad.neu']();

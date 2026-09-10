@@ -11,7 +11,7 @@ import {
   merkeExport, tageSeitExport, brauchtExportErinnerung, verschiebeErinnerung,
 } from './core/storage.js';
 import { formatZahl, formatWert } from './core/metrics.js';
-import { heuteIso, findeAktivitaet, sessionKategorien, verschiebeZeitraum,
+import { heuteIso, sessionKategorien, verschiebeZeitraum,
   neuerTermin, markiereAusfall, entferneAusfall } from './core/model.js';
 import { findeEinheit } from './core/plan.js';
 import { esc, formatDatum, sheet, bestaetige, hinweis } from './ui/components.js';

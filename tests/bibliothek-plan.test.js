@@ -148,7 +148,7 @@ test('Plan: optional pro Modul — kein Plan ist der Normalzustand', () => {
 });
 
 test('Bibliothek vs. Zyklus: dieselbe Einheit mehrfach, Übungen & Historie geteilt', () => {
-  const { state, push } = baueKraftWelt();
+  const { state } = baueKraftWelt();
   assert.equal(einheitenBibliothek(state, 'kraft').length, 3);
   const z = zyklusEinheiten(state, 'kraft');
   assert.equal(z.length, 5);

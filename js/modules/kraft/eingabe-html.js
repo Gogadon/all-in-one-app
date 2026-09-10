@@ -9,7 +9,7 @@
 // Reine Strings, also auch in Node renderbar; der Akzeptanztest hängt hieran.
 // ============================================================
 
-import { MESSWERTE, formatZahl, formatZahlEingabe, parseZahl } from '../../core/metrics.js';
+import { MESSWERTE, formatZahlEingabe, parseZahl } from '../../core/metrics.js';
 
 export function escT(t) { // lokales Escaping (components.js braucht DOM-Umfeld nicht, aber Import-Trennung hält Tests schlank)
   return String(t ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;')

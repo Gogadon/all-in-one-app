@@ -17,7 +17,7 @@ import {
 } from '../../core/plan.js';
 import { MODUL, PROG_DEFAULTS } from './logik.js';
 import { scheibenSatz } from '../../core/scheiben.js';
-import { formatZahl, formatZahlEingabe } from '../../core/metrics.js';
+import { formatZahlEingabe } from '../../core/metrics.js';
 
 export function erstellePlanAnsicht(k) {
   const { S, esc, planOffen, ui, heutigeSession } = k;

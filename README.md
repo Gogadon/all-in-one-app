@@ -26,6 +26,10 @@ ist.
 npm install     # einmalig, holt ESLint
 npm run lint
 ```
+
+Beides läuft außerdem automatisch bei jedem Push und jedem Pull Request
+(`.github/workflows/pruefen.yml`) — die Tests in zwei Zeitzonen, damit
+Datumsfehler auffallen und nicht vom Rechner abhängen, auf dem sie liefen.
 Findet Fehler, die kein Test sehen kann (siehe „Tests"). Rein optional:
 `npm test` braucht es nicht, die App braucht es nicht, und auf GitHub Pages
 landet kein Byte davon — `node_modules/` steht in `.gitignore`.
