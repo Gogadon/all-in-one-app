@@ -24,13 +24,13 @@ installiereBrowserAttrappe();
 const { leererZustand } = await import('../js/core/storage.js');
 const { esc, formatDatum } = await import('../js/ui/components.js');
 const { neueSession, neuesSegment, neuerEintrag, addSegment, addEintrag,
-  neuerTermin } = await import('../js/core/model.js');
+  neuerTermin, heuteIso } = await import('../js/core/model.js');
 const { addAktivitaet, addAlternative } = await import('../js/core/library.js');
 const { addEinheit, addAktivitaetZuEinheit, addZuZyklus } = await import('../js/core/plan.js');
 const { setzeMessung } = await import('../js/core/koerper.js');
 const { erstelleModule, MODULE } = await import('../js/module-registry.js');
 
-const HEUTE = new Date().toISOString().slice(0, 10);
+const HEUTE = heuteIso();   // wie die App: Ortszeit, nicht UTC
 
 /** Ein Zustand, in dem jede Aktion etwas zu tun vorfindet. */
 function welt() {

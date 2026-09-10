@@ -10,7 +10,7 @@
 // ============================================================
 
 import { istMesswert } from './metrics.js';
-import { neueAktivitaet, neueId, findeAktivitaet } from './model.js';
+import { neueAktivitaet, findeAktivitaet } from './model.js';
 
 // ------------------------------------------------------------
 // Anlegen & Ändern

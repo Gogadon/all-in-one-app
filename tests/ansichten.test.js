@@ -16,7 +16,7 @@ installiereBrowserAttrappe();
 
 const { leererZustand } = await import('../js/core/storage.js');
 const { neueSession, neuesSegment, neuerEintrag, addSegment, addEintrag,
-  neuerTermin, markiereAusfall } = await import('../js/core/model.js');
+  neuerTermin, markiereAusfall, heuteIso } = await import('../js/core/model.js');
 const { addAktivitaet, addAlternative } = await import('../js/core/library.js');
 const { addEinheit, addAktivitaetZuEinheit } = await import('../js/core/plan.js');
 const { tagSheetHtml, kalenderStreifenHtml, kalenderMonatHtml, langesDatum, kalPunkte } =
@@ -24,10 +24,10 @@ const { tagSheetHtml, kalenderStreifenHtml, kalenderMonatHtml, langesDatum, kalP
 const { datenHtml, exportStatusText } = await import('../js/views/daten-ansicht.js');
 const { erledigteSegmentZeilen } = await import('../js/views/session-zeilen.js');
 
-const HEUTE = new Date().toISOString().slice(0, 10);
+const HEUTE = heuteIso();   // wie die App: Ortszeit, nicht UTC
 const tagPlus = (n) => {
   const d = new Date(); d.setDate(d.getDate() + n);
-  return d.toISOString().slice(0, 10);
+  return heuteIso(d);          // Ortszeit, sonst kippt es westlich von Greenwich
 };
 
 /** Fertige Session eines Moduls in den Zustand legen. */

@@ -9,8 +9,7 @@ import assert from 'node:assert/strict';
 import { MESSWERTE } from '../js/core/metrics.js';
 import { leererZustand } from '../js/core/storage.js';
 import {
-  neueSession, neuesSegment, neuerEintrag, addSegment, addEintrag,
-} from '../js/core/model.js';
+  neueSession, neuesSegment, neuerEintrag, addSegment, addEintrag, heuteIso } from '../js/core/model.js';
 import { addAktivitaet, addAlternative } from '../js/core/library.js';
 import {
   berechneVorschlag, bestVorTag, eintragPR, letzteSaetze, verlaufLetzte,
@@ -371,7 +370,7 @@ test('Alternativ-Wechsel: Vorschlag wird ersetzt, getippte Werte bleiben', async
   addAlternative(state, bank.id, kh.id);
   addAlternative(state, bank.id, chest.id);
 
-  const heute = new Date().toISOString().slice(0, 10);
+  const heute = heuteIso();   // wie die App: Ortszeit, nicht UTC
   session(state, '2026-01-02', bank.id, [[80, 8]]);                    // Historie Hauptübung
   session(state, '2026-01-09', kh.id, [[32, 10]], { altOf: kh.id });   // Historie Alternative
 

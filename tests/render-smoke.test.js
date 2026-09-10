@@ -22,7 +22,7 @@ installiereBrowserAttrappe();
 
 const { leererZustand } = await import('../js/core/storage.js');
 const { esc, formatDatum } = await import('../js/ui/components.js');
-const { neueSession, neuesSegment, neuerEintrag, addSegment, addEintrag } = await import('../js/core/model.js');
+const { neueSession, neuesSegment, neuerEintrag, addSegment, addEintrag, heuteIso } = await import('../js/core/model.js');
 const { addAktivitaet, addAlternative } = await import('../js/core/library.js');
 const { addEinheit, addAktivitaetZuEinheit, addZuZyklus } = await import('../js/core/plan.js');
 const { setzeMessung } = await import('../js/core/koerper.js');
@@ -34,7 +34,7 @@ const { erstelleSchwimmModul } = await import('../js/modules/schwimmen.js');
 const { erstelleKoerperModul } = await import('../js/modules/koerper.js');
 const { erstelleChallengeModul } = await import('../js/modules/challenge.js');
 
-const HEUTE = new Date().toISOString().slice(0, 10);
+const HEUTE = heuteIso();   // wie die App: Ortszeit, nicht UTC
 
 function modul(fabrik, state) {
   const { ctx, protokoll } = testKontext(state, { esc, formatDatum });

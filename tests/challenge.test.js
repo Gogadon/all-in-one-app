@@ -10,7 +10,6 @@ globalThis.localStorage = {
 
 const { leererZustand } = await import('../js/core/storage.js');
 const { neueSession, neuesSegment, neuerEintrag, addSegment, addEintrag } = await import('../js/core/model.js');
-const { addAktivitaet } = await import('../js/core/library.js');
 const {
   fortschritt, zeitraumStart, zeitraumText,
 } = await import('../js/modules/challenge.js');

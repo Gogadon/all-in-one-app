@@ -7,7 +7,7 @@
 // → gleiche Struktur, ein Code-Pfad. Kein Cardio-Sonderfall.
 // ============================================================
 
-import { MESSWERTE, istMesswert, aggregiere, eintragVolumen } from './metrics.js';
+import { istMesswert, aggregiere, eintragVolumen } from './metrics.js';
 
 export const KATEGORIEN = Object.freeze(['kraft', 'rad', 'wandern', 'schwimmen', 'sonstiges']);
 

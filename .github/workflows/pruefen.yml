@@ -1,0 +1,54 @@
+# ============================================================
+# Tests und Linter bei jedem Push und jedem Pull Request.
+#
+# Warum: Beide Prüfungen liefen bisher nur, wenn jemand daran dachte. Genau
+# so ist der Teilen-Fehler nach main gekommen — die Tests waren grün, aber
+# der Linter lief nicht.
+#
+# Die Tests brauchen KEINE Abhängigkeiten (node --test), der Linter schon.
+# Deshalb laufen sie in getrennten Schritten: Selbst wenn npm mal nicht
+# erreichbar ist, sagt der Test-Schritt trotzdem, ob die App in Ordnung ist.
+# ============================================================
+name: Prüfen
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Zwei Zeitzonen, eine östlich und eine westlich von Greenwich.
+        # Die Tests waren mal von der Zeitzone des Rechners abhängig; das
+        # soll hier auffallen und nicht erst beim Benutzen.
+        zeitzone: [Europe/Berlin, America/Los_Angeles]
+    env:
+      TZ: ${{ matrix.zeitzone }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: node --test (ohne Abhängigkeiten)
+        run: npm test
+
+  lint:
+    name: Linter
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: ESLint (no-undef & Co.)
+        run: npm run lint
