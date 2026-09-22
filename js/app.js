@@ -6,7 +6,8 @@
 // ============================================================
 
 import {
-  load, save, exportBackup, pruefeBackup, leererZustand, backupDateiname,
+  load, save, fremderStand, STORAGE_KEY,
+  exportBackup, pruefeBackup, leererZustand, backupDateiname,
   snapshots, sichereSnapshot, ladeSnapshot, loescheSnapshots,
   merkeExport, tageSeitExport, brauchtExportErinnerung, verschiebeErinnerung,
 } from './core/storage.js';
@@ -14,7 +15,7 @@ import { formatZahl } from './core/metrics.js';
 import { heuteIso, sessionKategorien, verschiebeZeitraum,
   neuerTermin, markiereAusfall, entferneAusfall } from './core/model.js';
 import { findeEinheit } from './core/plan.js';
-import { esc, formatDatum, sheet, bestaetige, hinweis } from './ui/components.js';
+import { esc, formatDatum, sheet, bestaetige, hinweis, dialogOffen } from './ui/components.js';
 import { sessionVolumenErledigt } from './modules/kraft.js';
 import {
   erstelleModule, MODULE, MODUL_TABS, KRAFT, modulNach,
@@ -55,11 +56,65 @@ const tagDetailOffen = new Set(); // welche Sessions im Tages-Sheet aufgeklappt 
 let krankBis = '';                // optionales Enddatum beim Krankmelden (nur UI)
 
 // ------------------------------------------------------------
+// Zwei Fenster, ein Speicher
+//
+// Die App lädt beim Start alles in den Speicher und schreibt beim Sichern
+// alles zurück. Ist dieselbe App noch in einem zweiten Fenster offen — ein
+// vergessener Tab von gestern reicht —, gewann bisher schlicht, wer zuletzt
+// speicherte, und zwar vollständig. Ein ganzer Trainingstag konnte so still
+// verschwinden.
+//
+// Zwei Netze dagegen:
+//  1. Das `storage`-Ereignis: schreibt ein anderes Fenster, holt sich dieses
+//     hier den neuen Stand SOFORT — meist, bevor überhaupt jemand hinschaut.
+//  2. Schlägt das fehl (Ereignis verpasst, App schlief), merkt save() den
+//     fremden Stand und fragt, statt ihn zu überschreiben.
+// ------------------------------------------------------------
+
+/**
+ * Speichern mit Rückfrage im Konfliktfall.
+ * Im Normalfall — also fast immer — passiert hier nichts Zusätzliches.
+ */
+async function speichere() {
+  try {
+    await save(state);
+  } catch (err) {
+    if (!err.konflikt) throw err;
+    // Beide Wege verlieren etwas. Das muss dastehen, sonst klickt man
+    // ahnungslos den eigenen Trainingstag weg.
+    const behalten = await bestaetige({
+      titel: 'In einem anderen Fenster geändert',
+      text: 'Diese App ist noch in einem anderen Fenster offen und hat dort gespeichert. '
+        + 'Speicherst du hier weiter, wird das Andere überschrieben. '
+        + 'Lädst du den anderen Stand, geht verloren, was du gerade hier gemacht hast.',
+      jaText: 'Hier weiterspeichern', neinText: 'Anderen laden', gefahr: true,
+    });
+    if (behalten) {
+      await save(state, { erzwingen: true });
+    } else {
+      state = await load();
+      render();
+    }
+  }
+}
+
+// Ereignis kommt nur in den ANDEREN Fenstern an, nie im schreibenden — genau
+// richtig. Mitten in einem Dialog oder Sheet wird nicht neu gezeichnet: das
+// würde unter den Fingern wegspringen. Dann greift beim Speichern Netz 2.
+window.addEventListener('storage', async (e) => {
+  if (e.key !== null && e.key !== STORAGE_KEY) return;
+  if (!fremderStand()) return;
+  if (dialogOffen() || sheet.istOffen()) return;
+  state = await load();
+  render();
+});
+
+// ------------------------------------------------------------
 // Kontext für Module
 // ------------------------------------------------------------
 const ctx = {
   get state() { return state; },
-  save: async () => { await save(state); },
+  save: async () => { await speichere(); },
   render, sheet, esc, formatDatum,
   tabWechsel: (t) => { tab = t; },
 };

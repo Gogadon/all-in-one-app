@@ -163,6 +163,39 @@ Unter diesem Schlüssel liegen die Trainingsdaten im localStorage des Geräts.
 Eine Umbenennung macht alle gespeicherten Trainings unauffindbar. Der Name ist
 historisch — die App heißt inzwischen anders, der Schlüssel bleibt.
 
+### 1b. Zwei Fenster, ein Speicher
+
+Die App lädt beim Start **alles** in den Speicher und schreibt beim Sichern
+**alles** zurück. Ist dieselbe App noch in einem zweiten Fenster offen — ein
+vergessener Tab reicht —, gewann früher schlicht, wer zuletzt speicherte, und
+zwar vollständig. Kein Zusammenführen, keine Meldung: ein ganzer Trainingstag
+konnte still verschwinden.
+
+Zwei Netze dagegen, beide in `core/storage.js` bzw. `app.js`:
+
+1. **Das `storage`-Ereignis.** Schreibt ein anderes Fenster, holt dieses hier
+   sich den neuen Stand sofort — meist, bevor überhaupt jemand hinschaut. Das
+   Ereignis kommt nur in den *anderen* Fenstern an, nie im schreibenden.
+   Während ein Dialog oder Sheet offen ist, wird bewusst **nicht** neu
+   gezeichnet; das würde unter den Fingern wegspringen.
+2. **Der Konflikt beim Speichern.** `save()` merkt sich den Rohtext, den es
+   zuletzt gelesen oder geschrieben hat. Steht beim nächsten Speichern etwas
+   anderes im Speicher, wird nicht geschrieben, sondern ein Fehler mit
+   `.konflikt === true` geworfen. Die Oberfläche fragt dann nach —
+   `save(state, { erzwingen: true })` ist die Antwort „meiner gilt".
+
+Verglichen wird der **Rohtext**, kein Zähler: ein zweiter Speicher-Schlüssel
+wäre nicht im selben Zug geschrieben worden wie die Daten, der Rohtext ist es
+zwangsläufig.
+
+Zwei Fälle sind ausdrücklich **kein** Konflikt: derselbe Inhalt (da ist nichts
+zu verlieren) und ein leerer Speicher (Browserdaten gelöscht — dann gibt es
+kein anderes Fenster, von dem man erzählen könnte).
+
+Wer hier etwas ändert: `zuletztGesehen` muss nach **jedem** erfolgreichen
+Schreiben aktualisiert werden. Fehlt das, blockiert sich die App ab dem
+zweiten Speichern selbst.
+
 ### 2. Datumsrechnung: immer über die Helfer in `model.js`
 
 Nie `new Date()` + `toISOString()` kombinieren. Das rechnet die lokale Zeit
@@ -419,7 +452,7 @@ sogar: Die Kachel sagte „2 Wanderungen", die Zeile darunter „2 Touren".)
 
 ## Tests
 
-315 Tests, alle ohne Browser lauffähig, ohne eine einzige Abhängigkeit:
+319 Tests, alle ohne Browser lauffähig, ohne eine einzige Abhängigkeit:
 
 ```
 npm test
