@@ -83,9 +83,11 @@ Tests unmöglich (sie laden Module einzeln, ohne DOM).
 ### Die Registry: ein Modul, eine Stelle
 
 `js/module-registry.js` beschreibt jedes Modul genau einmal — Name, Icon,
-Tabs, planbar?, Statuszeile fürs Dashboard, die Fabrik. Alles Weitere fällt
-daraus ab: die Kacheln entstehen per `map`, die Navigation fragt `tabs`, das
-Routing fragt dieselbe Tabelle.
+Tabs, planbar?, Zählwort (`nomen`), Statuszeile fürs Dashboard, die Kennzahl
+der Wochenzeile (`wochenKennzahl`), die Fabrik. Alles Weitere fällt daraus
+ab: die Kacheln entstehen per `map`, die Navigation fragt `tabs`, das Routing
+fragt dieselbe Tabelle, und `DASHBOARD_MODULE` — wer überhaupt eine
+Wochenzeile bekommt — ist schlicht „alle mit einer Wochen-Kennzahl".
 
 Vorher lagen diese Angaben in acht parallelen Listen in `app.js`. Ein Modul
 einzuhängen hieß, an rund zehn Stellen daran zu denken — und genau dieses
@@ -399,7 +401,8 @@ ist der Marker wieder bedeutungslos.
    (`modules/touren/tour-modul.js`) — das sind rund 70 Zeilen. Exportieren:
    `MODUL`, `erstelleXModul`, `TITEL_EINZAHL`, `NOMEN` und die Statistik.
 2. **In `js/module-registry.js` eintragen.** Genau ein Eintrag: Name, Icon,
-   Tabs, planbar?, Statuszeile. Die Reihenfolge dort ist die Reihenfolge der
+   Tabs, planbar?, Statuszeile — und, wenn das Modul eigene Einheiten erzeugt,
+   `nomen` plus `wochenKennzahl`. Die Reihenfolge dort ist die Reihenfolge der
    Kacheln auf dem Dashboard.
 3. **Kategorie ergänzen** in `KATEGORIEN` (`core/model.js`) und eine
    Akzentfarbe in `css/style.css` (`--<modul>`), plus `.modul-kachel.<modul>`.
@@ -407,13 +410,16 @@ ist der Marker wieder bedeutungslos.
    entstehen aus der Registry.
 
 Was du **nicht** tun musst: irgendwo eine Liste von Modulnamen erweitern. Wenn
-du beim Einbauen doch eine findest, gehört sie in die Registry.
+du beim Einbauen doch eine findest, gehört sie in die Registry. (Zwei gab es
+noch: `DASHBOARD_MODULE` in `dashboard.js` und eine Wörter-Tabelle in
+`app.js`. Beide sind weg — und die Wörter-Tabelle widersprach der Registry
+sogar: Die Kachel sagte „2 Wanderungen", die Zeile darunter „2 Touren".)
 
 ---
 
 ## Tests
 
-311 Tests, alle ohne Browser lauffähig, ohne eine einzige Abhängigkeit:
+315 Tests, alle ohne Browser lauffähig, ohne eine einzige Abhängigkeit:
 
 ```
 npm test

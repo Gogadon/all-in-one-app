@@ -16,12 +16,12 @@
 // beschreibt nur, wie ein Modul in der Navigation auftaucht.
 // ============================================================
 
-import { formatZahl } from './core/metrics.js';
+import { formatZahl, formatWert } from './core/metrics.js';
 import { naechsteEinheit } from './core/plan.js';
 import { letzterWert as letzterKoerperWert, veraenderung as koerperVeraenderung,
   formatKoerperWert } from './core/koerper.js';
 
-import { erstelleKraftModul, MODUL as KRAFT } from './modules/kraft.js';
+import { erstelleKraftModul, MODUL as KRAFT, NOMEN as KRAFT_NOMEN } from './modules/kraft.js';
 import { erstelleRadModul, MODUL as RAD, tourStatistik,
   TITEL_EINZAHL as RAD_TITEL, NOMEN as RAD_NOMEN } from './modules/rad.js';
 import { erstelleWanderModul, MODUL as WANDERN, wanderStatistik,
@@ -59,7 +59,8 @@ function mengenwort(anzahl, nomen) {
  * Loggen statt Plan, „Heute" ist eine Liste, „Verlauf" ist die Statistik.
  * Nur die Wörter unterscheiden sich — Schwimmen zählt Einheiten, nicht Touren.
  */
-function tourModul({ id, label, icon, erstelle, sessionName, statistik, nomen, heuteLabel, status }) {
+function tourModul({ id, label, icon, erstelle, sessionName, statistik, nomen,
+  heuteLabel, wochenKennzahl, status }) {
   return {
     id, label, icon, erstelle,
     tabs: OHNE_PLAN,
@@ -67,12 +68,22 @@ function tourModul({ id, label, icon, erstelle, sessionName, statistik, nomen, h
     tour: true,
     sessionName,
     nomen,                    // Einzahl/Mehrzahl, aus der Config des Moduls
+    wochenKennzahl,
     heuteLabel, heuteIcon: ICON_TOUREN,
     verlaufLabel: 'Statistik', verlaufIcon: ICON_STATISTIK,
     verlaufHtml: (instanz) => instanz.statistikHtml(),
     status: (state) => status(statistik(state), nomen),
   };
 }
+
+/**
+ * Sekundäre Kennzahl in der Wochenzeile des Dashboards: kg, km, Bahnen.
+ *
+ * Bekommt die `kennzahlen` aus wochenUebersicht() und gibt den fertigen Text.
+ * `null` heißt: dieses Modul erzeugt keine eigenen Einheiten und bekommt
+ * deshalb gar keine Wochenzeile (Körper misst nur, Challenge wertet nur aus).
+ * Genau daraus leitet sich DASHBOARD_MODULE weiter unten ab.
+ */
 
 /**
  * Alle Module in Anzeige-Reihenfolge. Die Reihenfolge hier IST die
@@ -88,12 +99,16 @@ export const MODULE = [
     planbar: true,
     tour: false,
     sessionName: null,        // Kraft-Sessions tragen den Namen ihrer Einheit
+    nomen: KRAFT_NOMEN,
+    // Volumen = gewicht x wdh, in kg. Die Zahl rechnet dashboard.js aus.
+    wochenKennzahl: (k) => `${formatZahl(k.volumen ?? 0, 0)} kg`,
     status: (state) => naechsteEinheit(state, KRAFT)?.name ?? 'Kein Plan',
   },
   tourModul({
     id: RAD, label: 'Rad', icon: ICON_RAD,
     erstelle: erstelleRadModul, sessionName: RAD_TITEL,
     statistik: tourStatistik, nomen: RAD_NOMEN, heuteLabel: 'Touren',
+    wochenKennzahl: (k) => formatWert('distanz', k.distanz ?? 0),
     status: (st, n) => st.anzahl > 0
       ? `${st.anzahl} ${mengenwort(st.anzahl, n)} · ${Math.round(st.distanz / 1000)} km`
       : `Noch keine ${n.einzahl}`,
@@ -102,6 +117,7 @@ export const MODULE = [
     id: WANDERN, label: 'Wandern', icon: ICON_WANDERN,
     erstelle: erstelleWanderModul, sessionName: WANDERN_TITEL,
     statistik: wanderStatistik, nomen: WANDERN_NOMEN, heuteLabel: 'Touren',
+    wochenKennzahl: (k) => formatWert('distanz', k.distanz ?? 0),
     status: (st, n) => st.anzahl > 0
       ? `${st.anzahl} ${mengenwort(st.anzahl, n)} · ${Math.round(st.distanz / 1000)} km`
       : `Noch keine ${n.einzahl}`,
@@ -110,6 +126,7 @@ export const MODULE = [
     id: SCHWIMMEN, label: 'Schwimmen', icon: ICON_SCHWIMMEN,
     erstelle: erstelleSchwimmModul, sessionName: SCHWIMMEN_TITEL,
     statistik: schwimmStatistik, nomen: SCHWIMMEN_NOMEN, heuteLabel: 'Einheiten',
+    wochenKennzahl: (k) => `${formatZahl(k.bahnen ?? 0, 0)} Bahnen`,
     status: (st, n) => st.anzahl > 0
       ? `${st.anzahl} ${mengenwort(st.anzahl, n)} · ${st.bahnen} ${st.bahnen === 1 ? 'Bahn' : 'Bahnen'}`
       : `Noch keine ${n.einzahl}`,
@@ -169,6 +186,17 @@ export const MODUL_TABS = Object.fromEntries(MODULE.map(m => [m.id, m.tabs]));
 
 /** Anzeigename eines Moduls, z.B. für die Kalender-Chips. */
 export const MODUL_LABEL = Object.fromEntries(MODULE.map(m => [m.id, m.label]));
+
+/**
+ * Module, die eigene Einheiten erzeugen — in Anzeige-Reihenfolge.
+ *
+ * Das sind genau die mit einer Wochen-Kennzahl. Körper und Challenge fallen
+ * raus: Körper misst nur, Challenge liest fremde Einheiten aus. Die Liste
+ * stand früher als handgeschriebenes Array in dashboard.js; wer ein Modul
+ * ergänzt hat und sie vergaß, bekam eine Kachel ohne Wochenzeile.
+ */
+export const DASHBOARD_MODULE = Object.freeze(
+  MODULE.filter(m => m.wochenKennzahl).map(m => m.id));
 
 /**
  * Name für eine Session, die keinen eigenen trägt — kommt aus der jeweiligen

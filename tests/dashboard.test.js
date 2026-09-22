@@ -7,8 +7,11 @@ const {
   neueSession, neuesSegment, neuerEintrag, addSegment, addEintrag,
 } = await import('../js/core/model.js');
 const {
-  wochenUebersicht, zeitraumUebersicht, DASHBOARD_MODULE,
+  wochenUebersicht, zeitraumUebersicht,
 } = await import('../js/dashboard.js');
+// Welche Module eine Zeile bekommen, sagt die Registry — dashboard.js führt
+// dafür keine eigene Liste mehr.
+const { DASHBOARD_MODULE } = await import('../js/module-registry.js');
 
 // ------------------------------------------------------------
 // Hilfs-Fabriken

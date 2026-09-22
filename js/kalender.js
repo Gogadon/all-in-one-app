@@ -36,7 +36,7 @@ import {
   naechsterTag, wochenStart, zeitraum, isoZuDatum, termineAmTag, ausfallAmTag,
 } from './core/model.js';
 import { zeitraumLabel } from './core/statistik.js';
-import { DASHBOARD_MODULE } from './dashboard.js';
+import { DASHBOARD_MODULE } from './module-registry.js';
 
 // Kurz-Labels der Wochentage, Montag zuerst (Mo=0). Fest statt via
 // toLocaleDateString, damit der Kern ohne Locale-Überraschungen auskommt.

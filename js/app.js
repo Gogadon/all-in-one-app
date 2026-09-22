@@ -10,14 +10,14 @@ import {
   snapshots, sichereSnapshot, ladeSnapshot, loescheSnapshots,
   merkeExport, tageSeitExport, brauchtExportErinnerung, verschiebeErinnerung,
 } from './core/storage.js';
-import { formatZahl, formatWert } from './core/metrics.js';
+import { formatZahl } from './core/metrics.js';
 import { heuteIso, sessionKategorien, verschiebeZeitraum,
   neuerTermin, markiereAusfall, entferneAusfall } from './core/model.js';
 import { findeEinheit } from './core/plan.js';
 import { esc, formatDatum, sheet, bestaetige, hinweis } from './ui/components.js';
 import { sessionVolumenErledigt } from './modules/kraft.js';
 import {
-  erstelleModule, MODULE, MODUL_TABS, KRAFT,
+  erstelleModule, MODULE, MODUL_TABS, KRAFT, modulNach,
 } from './module-registry.js';
 import { wochenUebersicht } from './dashboard.js';
 import { routeVonZustand, routeParsen } from './route.js';
@@ -416,21 +416,6 @@ function importiereDatei(input) {
 // Dashboard (Start-Tab): Module wählen + Wochen-Übersicht
 // ------------------------------------------------------------
 
-// Anzeige-Konfig je Modul für die Wochen-Aufschlüsselung. Reine UI-Sache:
-// Name, Zählwort (Ein-/Mehrzahl) und die Sekundär-Kennzahl als fertiger Text.
-// Rechnen tut die Kern-Funktion wochenUebersicht() — hier nur formatieren.
-// Reihenfolge/Farbe kommen aus dem Ergebnis (module[]) bzw. via --<modul>.
-const WOCHE_MODUL = {
-  kraft:   { name: 'Kraft',   ein: 'Einheit', mehr: 'Einheiten',
-             metrik: m => `${formatZahl0(m.kennzahlen.volumen ?? 0)} kg` },
-  rad:     { name: 'Rad',     ein: 'Tour',    mehr: 'Touren',
-             metrik: m => formatWert('distanz', m.kennzahlen.distanz ?? 0) },
-  wandern: { name: 'Wandern', ein: 'Tour',    mehr: 'Touren',
-             metrik: m => formatWert('distanz', m.kennzahlen.distanz ?? 0) },
-  schwimmen: { name: 'Schwimmen', ein: 'Einheit', mehr: 'Einheiten',
-             metrik: m => `${formatZahl0(m.kennzahlen.bahnen ?? 0)} Bahnen` },
-};
-
 /**
  * Zweistufige Wochen-Statistik fürs Dashboard.
  *   Stufe 1: universelle Kopfzeile (Aktivitäten + aktive Tage).
@@ -447,14 +432,17 @@ function wochenStatistikHtml() {
       <div class="wo-stat"><span class="wo-zahl">${u.aktiveTage}</span><span class="dim">aktive Tage</span></div>
     </div>`;
 
+  // Name, Zählwort und Kennzahl kommen aus der Registry — dieselbe Stelle,
+  // die auch die Kacheln und die Navigation beschreibt. Reihenfolge und Farbe
+  // liefern das Ergebnis (module[]) bzw. die CSS-Variable --<modul>.
   const zeilen = u.module
-    .filter(m => m.anzahl > 0 && WOCHE_MODUL[m.modul])
+    .filter(m => m.anzahl > 0 && modulNach(m.modul)?.wochenKennzahl)
     .map(m => {
-      const cfg = WOCHE_MODUL[m.modul];
-      const zaehlwort = m.anzahl === 1 ? cfg.ein : cfg.mehr;
+      const cfg = modulNach(m.modul);
+      const zaehlwort = m.anzahl === 1 ? cfg.nomen.einzahl : cfg.nomen.mehrzahl;
       return `<div class="wo-modul" style="--akzent:var(--${m.modul})">
-        <span class="wo-name">${cfg.name}</span>
-        <span class="wo-werte"><b>${m.anzahl}</b> ${zaehlwort} <span class="wo-trenn">·</span> <b>${cfg.metrik(m)}</b></span>
+        <span class="wo-name">${cfg.label}</span>
+        <span class="wo-werte"><b>${m.anzahl}</b> ${zaehlwort} <span class="wo-trenn">·</span> <b>${cfg.wochenKennzahl(m.kennzahlen)}</b></span>
       </div>`;
     }).join('');
 
@@ -514,10 +502,6 @@ function dashboardHtml() {
   html += kalenderStreifenHtml(state);
 
   return html;
-}
-
-function formatZahl0(n) {
-  return Math.round(n).toLocaleString('de-DE');
 }
 
 // ------------------------------------------------------------
