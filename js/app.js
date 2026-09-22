@@ -6,7 +6,7 @@
 // ============================================================
 
 import {
-  load, save, exportBackup, importBackup, leererZustand, backupDateiname,
+  load, save, exportBackup, pruefeBackup, leererZustand, backupDateiname,
   snapshots, sichereSnapshot, ladeSnapshot, loescheSnapshots,
   merkeExport, tageSeitExport, brauchtExportErinnerung, verschiebeErinnerung,
 } from './core/storage.js';
@@ -322,6 +322,30 @@ function verlaufHtml() {
  * dazugekommen war. Gefragt wird erst NACH dem Prüfen, damit niemand einen
  * Import bestätigen muss, der ohnehin an einer kaputten Datei scheitert.
  */
+/**
+ * Was beim Prüfen auffiel, in einem Satz pro Sorte — oder gar nichts, wenn
+ * die Datei sauber ist. Bewusst mit Datum: so weiß man, welche Einheit
+ * betroffen ist, statt nur eine Anzahl zu sehen.
+ */
+function befundText(verworfen, repariert, ersetzt) {
+  const teile = [];
+  if (verworfen.length) {
+    const liste = verworfen.slice(0, 3).map(v => `${v.datum} (${v.grund})`).join(', ');
+    const rest = verworfen.length > 3 ? ` und ${verworfen.length - 3} weitere` : '';
+    teile.push(`\n\n⚠ ${verworfen.length} Einheit(en) werden NICHT übernommen: ${liste}${rest}.`);
+  }
+  if (repariert.length) {
+    const tage = [...new Set(repariert.map(r => r.datum))];
+    const liste = tage.slice(0, 3).join(', ');
+    const rest = tage.length > 3 ? ` und ${tage.length - 3} weitere` : '';
+    teile.push(`\n\n${repariert.length} unlesbare(r) Messwert(e) werden entfernt (${liste}${rest}); die Einheiten bleiben erhalten.`);
+  }
+  if (ersetzt.length) {
+    teile.push(`\n\nUnbrauchbare Listen werden geleert: ${ersetzt.join(', ')}.`);
+  }
+  return teile.join('');
+}
+
 function importiereDatei(input) {
   const datei = input.files?.[0];
   if (!datei) return;
@@ -329,15 +353,19 @@ function importiereDatei(input) {
   leser.onload = async () => {
     try {
       // 1) Prüfen — wirft bei Müll, ersetzt aber noch nichts.
-      const neu = importBackup(String(leser.result));
+      const { state: neu, verworfen, repariert, ersetzt } = pruefeBackup(String(leser.result));
 
-      // 2) Fragen, mit Zahlen von beiden Seiten.
+      // 2) Fragen, mit Zahlen von beiden Seiten — UND mit dem, was dabei
+      //    unter den Tisch fällt. Das stand vorher nur in der Konsole, die
+      //    auf einem Handy niemand sieht: Man bestätigte einen Import und
+      //    erfuhr nie, dass dabei Einheiten weggeworfen wurden.
       const jetzt = `${state.sessions.length} Sessions · ${state.bibliothek.length} Übungen`;
       const dann = `${neu.sessions.length} Sessions · ${neu.bibliothek.length} Übungen`;
       const ok = await bestaetige({
         titel: 'Backup importieren?',
         text: `Der Stand auf diesem Gerät (${jetzt}) wird ersetzt durch ${dann}. `
-          + 'Vorher wird automatisch ein Wiederherstellungspunkt angelegt.',
+          + 'Vorher wird automatisch ein Wiederherstellungspunkt angelegt.'
+          + befundText(verworfen, repariert, ersetzt),
         jaText: 'Importieren', gefahr: true,
       });
       if (!ok) return;

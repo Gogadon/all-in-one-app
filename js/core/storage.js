@@ -129,6 +129,19 @@ export function backupDateiname(jetzt = new Date()) {
  * Wirft mit verständlicher Meldung, wenn die Datei nichts taugt.
  */
 export function importBackup(jsonString) {
+  return pruefeBackup(jsonString).state;
+}
+
+/**
+ * Wie importBackup, aber MIT Bericht: was wurde verworfen, was repariert.
+ *
+ * Für den Import-Dialog gedacht — der Nutzer soll vor dem Ersetzen sehen, was
+ * dabei unter den Tisch fällt. Vorher landete das nur in der Konsole, die auf
+ * einem Handy niemand sieht.
+ *
+ * @returns {{ state: object, verworfen: Array, repariert: Array, ersetzt: string[] }}
+ */
+export function pruefeBackup(jsonString) {
   let obj;
   try {
     obj = JSON.parse(jsonString);
@@ -141,12 +154,13 @@ export function importBackup(jsonString) {
   } catch {
     throw new Error('Diese Datei sieht nicht wie ein Backup dieser App aus.');
   }
-  // Kaputte Einzel-Sessions (z.B. aus einem von Hand bearbeiteten Backup) still
+  // Kaputte Einzel-Sessions (z.B. aus einem von Hand bearbeiteten Backup)
   // rauswerfen, BEVOR migriert wird — so kann ein defekter Datensatz weder die
-  // Migration noch später das UI zum Absturz bringen, ohne das ganze Backup
-  // unbrauchbar zu machen.
-  normalisiereSessions(state);
-  return migriere(state);
+  // Migration noch später das UI stören, ohne das ganze Backup unbrauchbar zu
+  // machen.
+  const ersetzt = normalisiereListen(state);
+  const { verworfen, repariert } = normalisiereSessions(state);
+  return { state: migriere(state), verworfen, repariert, ersetzt };
 }
 
 // ------------------------------------------------------------
@@ -193,43 +207,106 @@ function istObjekt(x) {
   return x != null && typeof x === 'object' && !Array.isArray(x);
 }
 
-/**
- * Kann die App diese Session gefahrlos rendern und aggregieren?
- * Prüft nur die Struktur, die der restliche Code voraussetzt:
- *   datum = nicht-leerer String (Datums-Helfer/Sortierung vergleichen Strings),
- *   segmente = Array, jedes Segment ein Objekt mit eintraege-Array,
- *   jeder Eintrag ein Objekt, dessen messwerte (falls vorhanden) ein Objekt ist.
- * Bewusst nicht strenger — es geht ums Verhindern von Abstürzen, nicht ums
- * Aussortieren inhaltlich fragwürdiger, aber strukturell heiler Daten.
- */
-function istGueltigeSession(s) {
-  if (!istObjekt(s)) return false;
-  if (typeof s.datum !== 'string' || s.datum === '') return false;
-  if (!Array.isArray(s.segmente)) return false;
-  for (const seg of s.segmente) {
-    if (!istObjekt(seg) || !Array.isArray(seg.eintraege)) return false;
-    for (const e of seg.eintraege) {
-      if (!istObjekt(e)) return false;
-      if (e.messwerte != null && !istObjekt(e.messwerte)) return false;
-    }
-  }
-  return true;
+
+/** "2026-09-22" — und ein Datum, das es wirklich gibt. */
+function istIsoDatum(wert) {
+  if (typeof wert !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(wert)) return false;
+  const [j, m, t] = wert.split('-').map(Number);
+  const d = new Date(j, m - 1, t);
+  return d.getFullYear() === j && d.getMonth() === m - 1 && d.getDate() === t;
 }
 
 /**
- * Wirft strukturell kaputte Sessions still raus (z.B. aus einem von Hand
- * bearbeiteten Backup) und behält nur, was die App gefahrlos verarbeiten kann.
- * Meldet die Anzahl entfernter Sessions in der Konsole. Mutiert state.sessions.
+ * Eine Session prüfen — und dabei zwei Dinge auseinanderhalten:
+ *
+ *   UNBRAUCHBAR: ohne Datum oder ohne Segment-Liste lässt sich nichts
+ *                anfangen. Solche Sessions fliegen raus.
+ *   REPARIERBAR: ein einzelner Messwert, der keine Zahl ist. Den entfernen
+ *                wir und behalten den Rest.
+ *
+ * Der Unterschied ist wichtig: Eine ganze Trainingseinheit wegen einer
+ * krummen Zahl wegzuwerfen wäre schlimmer als das Problem. Mutiert die
+ * Session (entfernt nur das Kaputte).
+ *
+ * @returns {{ ok: boolean, grund?: string, reparaturen: string[] }}
+ */
+function pruefeSession(s) {
+  const reparaturen = [];
+  if (!istObjekt(s)) return { ok: false, grund: 'kein Datensatz', reparaturen };
+  if (!istIsoDatum(s.datum)) {
+    return { ok: false, grund: `Datum fehlt oder ist unlesbar (${JSON.stringify(s.datum)})`, reparaturen };
+  }
+  if (!Array.isArray(s.segmente)) return { ok: false, grund: 'Übungsliste fehlt', reparaturen };
+
+  for (const [i, seg] of s.segmente.entries()) {
+    if (!istObjekt(seg)) return { ok: false, grund: `Übung ${i + 1} ist kein Datensatz`, reparaturen };
+    if (typeof seg.aktivitaetId !== 'string' || seg.aktivitaetId === '') {
+      return { ok: false, grund: `Übung ${i + 1} verweist auf nichts`, reparaturen };
+    }
+    if (!Array.isArray(seg.eintraege)) {
+      return { ok: false, grund: `Übung ${i + 1} hat keine Satzliste`, reparaturen };
+    }
+    for (const e of seg.eintraege) {
+      if (!istObjekt(e)) return { ok: false, grund: `Übung ${i + 1} enthält einen kaputten Satz`, reparaturen };
+      if (e.messwerte != null && !istObjekt(e.messwerte)) {
+        return { ok: false, grund: `Übung ${i + 1}: Messwerte sind kein Datensatz`, reparaturen };
+      }
+      // Ab hier reparieren statt verwerfen.
+      if (e.messwerte == null) e.messwerte = {};
+      for (const [typ, wert] of Object.entries(e.messwerte)) {
+        if (typeof wert !== 'number' || !Number.isFinite(wert)) {
+          delete e.messwerte[typ];
+          reparaturen.push(`${typ} war keine Zahl`);
+        }
+      }
+      if (!Array.isArray(e.flags)) e.flags = [];
+    }
+  }
+  return { ok: true, reparaturen };
+}
+
+/**
+ * Sessions durchsehen: Unbrauchbares entfernen, Reparierbares reparieren.
+ * Mutiert state.sessions.
+ *
+ * Gibt einen Bericht zurück, statt nur in die Konsole zu schreiben — wer ein
+ * Backup einspielt, soll VORHER sehen, was dabei verloren geht. Auf einem
+ * Handy sieht niemand eine Konsole.
+ *
+ * @returns {{ verworfen: Array<{datum: string, grund: string}>,
+ *             repariert: Array<{datum: string, was: string}> }}
  */
 export function normalisiereSessions(state) {
-  if (!Array.isArray(state?.sessions)) return state;
-  const vorher = state.sessions.length;
-  state.sessions = state.sessions.filter(istGueltigeSession);
-  const entfernt = vorher - state.sessions.length;
-  if (entfernt > 0) {
-    console.warn(`Import: ${entfernt} kaputte Session(s) übersprungen.`);
+  const bericht = { verworfen: [], repariert: [] };
+  if (!Array.isArray(state?.sessions)) return bericht;
+
+  state.sessions = state.sessions.filter((s) => {
+    const { ok, grund, reparaturen } = pruefeSession(s);
+    const datum = istIsoDatum(s?.datum) ? s.datum : '(ohne Datum)';
+    if (!ok) { bericht.verworfen.push({ datum, grund }); return false; }
+    for (const was of new Set(reparaturen)) bericht.repariert.push({ datum, was });
+    return true;
+  });
+  return bericht;
+}
+
+/**
+ * Top-Level-Listen prüfen: Was den falschen Typ hat, wird durch die leere
+ * Vorgabe ersetzt. Ohne das überlebt z.B. ein koerper: "kaputt" den Import
+ * und fällt der App erst später auf die Füße.
+ */
+export function normalisiereListen(state) {
+  const ersetzt = [];
+  const leer = leererZustand();
+  for (const [key, vorgabe] of Object.entries(leer)) {
+    if (key === 'schema') continue;
+    const ist = state[key];
+    if (ist == null) continue;                       // fehlt → migriere() ergänzt
+    const sollArray = Array.isArray(vorgabe);
+    const passt = sollArray ? Array.isArray(ist) : istObjekt(ist);
+    if (!passt) { state[key] = sollArray ? [] : {}; ersetzt.push(key); }
   }
-  return state;
+  return ersetzt;
 }
 
 // ============================================================

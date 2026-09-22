@@ -310,6 +310,23 @@ Historie, Progression und Einstellungen.
 - Die Migration von Schema 1→2 (in `storage.js`) wandelt alte eingebettete
   Alternativen in echte Übungen um und führt gleichnamige zusammen.
 
+### 6d. Der Import sagt, was er wegwirft
+
+`pruefeBackup()` gibt neben dem Zustand einen Bericht zurück, und der
+Import-Dialog zeigt ihn VOR dem Ersetzen. Auf einem Handy sieht niemand
+eine Konsole — ein stiller `console.warn` ist dort dasselbe wie gar nichts.
+
+Zwei Sorten, die nicht verwechselt werden dürfen:
+
+- **unbrauchbar** (kein Datum, keine Übungsliste, Übung ohne Verweis) → die
+  Session fliegt raus, mit Datum und Grund im Bericht.
+- **reparierbar** (ein einzelner Messwert, der keine Zahl ist) → nur dieser
+  Wert wird entfernt, die Einheit bleibt.
+
+Der Unterschied ist Absicht: Eine ganze Trainingseinheit wegen einer krummen
+Zahl wegzuwerfen wäre schlimmer als das Problem selbst.
+
+
 ### 6c. In Eingabefeldern steht nie ein Tausendertrenner
 
 Ein Feld muss zurücklesen können, was es anzeigt. `formatZahl` setzt deutsche
@@ -396,7 +413,7 @@ du beim Einbauen doch eine findest, gehört sie in die Registry.
 
 ## Tests
 
-305 Tests, alle ohne Browser lauffähig, ohne eine einzige Abhängigkeit:
+311 Tests, alle ohne Browser lauffähig, ohne eine einzige Abhängigkeit:
 
 ```
 npm test
