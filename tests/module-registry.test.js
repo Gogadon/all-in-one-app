@@ -17,7 +17,7 @@ const { leererZustand } = await import('../js/core/storage.js');
 const { esc, formatDatum } = await import('../js/ui/components.js');
 const {
   MODULE, modulNach, sessionNameFuer, erstelleModule,
-  PLANBARE_MODULE, MODUL_TABS, MODUL_LABEL,
+  PLANBARE_MODULE, MODUL_TABS, MODUL_LABEL, DASHBOARD_MODULE,
   KRAFT, RAD, WANDERN, SCHWIMMEN, KOERPER, CHALLENGE,
 } = await import('../js/module-registry.js');
 
@@ -34,6 +34,53 @@ test('Registry: jedes Modul ist vollständig beschrieben', () => {
     assert.ok(m.tabs.includes('heute'), `${m.id}: hat einen Heute-Tab`);
     assert.equal(typeof m.planbar, 'boolean', `${m.id}: planbar`);
   }
+});
+
+test('Registry: wer eine Wochenzeile hat, hat auch die Wörter dafür', () => {
+  // Die Wochenzeile heißt „3 Einheiten · 12.345 kg". Beides kommt aus der
+  // Registry — Zählwort und Kennzahl. Fehlt eines, stünde dort „undefined".
+  for (const m of MODULE) {
+    if (!m.wochenKennzahl) continue;
+    assert.equal(typeof m.wochenKennzahl, 'function', `${m.id}: wochenKennzahl`);
+    assert.ok(m.nomen?.einzahl?.length, `${m.id}: nomen.einzahl`);
+    assert.ok(m.nomen?.mehrzahl?.length, `${m.id}: nomen.mehrzahl`);
+    // Auch ohne jede Kennzahl muss ein lesbarer Text herauskommen, nicht NaN.
+    const leer = m.wochenKennzahl({});
+    assert.ok(leer.length, `${m.id}: leere Woche ergibt Text`);
+    assert.ok(!/undefined|NaN/.test(leer), `${m.id}: „${leer}"`);
+  }
+});
+
+test('Registry: die Dashboard-Liste wird abgeleitet, nicht gepflegt', () => {
+  // Früher stand diese Liste ein zweites Mal in dashboard.js. Wer ein Modul
+  // ergänzte und sie vergaß, bekam eine Kachel ohne Wochenzeile.
+  assert.deepEqual([...DASHBOARD_MODULE], [KRAFT, RAD, WANDERN, SCHWIMMEN]);
+  assert.deepEqual([...DASHBOARD_MODULE], MODULE.filter(m => m.wochenKennzahl).map(m => m.id),
+    'genau die Module mit Wochen-Kennzahl');
+  // Körper misst nur, Challenge wertet nur aus — beide erzeugen keine Einheiten.
+  for (const id of [KOERPER, CHALLENGE]) {
+    assert.ok(!DASHBOARD_MODULE.includes(id), `${id} hat keine Wochenzeile`);
+    assert.equal(modulNach(id).wochenKennzahl, undefined);
+  }
+});
+
+test('Registry: die Wochen-Kennzahlen rechnen in ihrer eigenen Einheit', () => {
+  // kg für Kraft, km für Rad/Wandern (intern in Metern), Bahnen fürs Schwimmen.
+  assert.equal(modulNach(KRAFT).wochenKennzahl({ volumen: 12345.6 }), '12.346 kg');
+  assert.equal(modulNach(RAD).wochenKennzahl({ distanz: 12500 }), '12,5 km');
+  assert.equal(modulNach(WANDERN).wochenKennzahl({ distanz: 8000 }), '8 km', 'keine überflüssige Null');
+  assert.equal(modulNach(SCHWIMMEN).wochenKennzahl({ bahnen: 40 }), '40 Bahnen');
+  assert.equal(modulNach(KRAFT).wochenKennzahl({ volumen: 0 }), '0 kg');
+});
+
+test('Registry: Kachel und Wochenzeile benutzen dieselben Wörter', () => {
+  // Die zweite Wortliste in app.js sagte für Wandern „Tour/Touren", das Modul
+  // selbst sagt „Wanderung/Wanderungen" — die Kachel und die Wochenzeile
+  // direkt darunter widersprachen sich also. Jetzt kommt beides aus `nomen`.
+  assert.deepEqual(modulNach(WANDERN).nomen, { einzahl: 'Wanderung', mehrzahl: 'Wanderungen' });
+  assert.deepEqual(modulNach(RAD).nomen, { einzahl: 'Tour', mehrzahl: 'Touren' });
+  assert.deepEqual(modulNach(KRAFT).nomen, { einzahl: 'Einheit', mehrzahl: 'Einheiten' });
+  assert.deepEqual(modulNach(SCHWIMMEN).nomen, { einzahl: 'Einheit', mehrzahl: 'Einheiten' });
 });
 
 test('Registry: IDs sind eindeutig und auffindbar', () => {

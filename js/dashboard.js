@@ -34,13 +34,10 @@
 import { heuteIso, istWertbareTour, zeitraum } from './core/model.js';
 import { aggregiereTouren } from './core/statistik.js';
 import { sessionVolumenErledigt } from './modules/kraft.js';
-
-// Module, die eigene Touren/Einheiten erzeugen und im Dashboard eine Zeile
-// bekommen — in Anzeige-Reihenfolge. Challenge erzeugt keine eigenen Sessions
-// (liest nur fremde) und ist deshalb hier bewusst NICHT dabei; ob es als
-// vierte Zeile mit rein soll, wird in Etappe 2 entschieden. Schwimmen o.Ä.
-// später = eine Zeile hier ergänzen.
-export const DASHBOARD_MODULE = Object.freeze(['kraft', 'rad', 'wandern', 'schwimmen']);
+// Welche Module eine Zeile bekommen, steht in der Registry — nicht hier.
+// Früher lag die Liste als eigenes Array an dieser Stelle und musste bei
+// jedem neuen Modul zusätzlich gepflegt werden.
+import { DASHBOARD_MODULE } from './module-registry.js';
 
 /**
  * Gehört die Session zu diesem Modul? Alt-Sessions ohne `modul`-Feld zählen
@@ -63,7 +60,7 @@ function modulUebersicht(modul, touren) {
     return { modul, anzahl: eigene.length, kennzahlen: { volumen } };
   }
 
-  // Touren-Module (rad/wandern): die Registry-Aggregation aus statistik.js
+  // Touren-Module (rad/wandern/schwimmen): die Aggregation aus statistik.js
   // wiederverwenden. kennzahlen.distanz kommt in Metern (interne Einheit);
   // die UI rechnet in km um. Weitere Kennwerte (dauer, hoehenmeter, …) sind
   // gratis dabei, falls das Dashboard später mehr zeigen will.

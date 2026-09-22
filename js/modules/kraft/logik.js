@@ -18,6 +18,13 @@ import {
 
 export const MODUL = 'kraft';
 
+/**
+ * Wie das Modul seine Sessions nennt — „1 Einheit", „3 Einheiten".
+ * Steht hier wie bei Rad/Wandern/Schwimmen im Modul selbst, damit die
+ * Registry die Wörter abholen kann, statt sie ein zweites Mal zu führen.
+ */
+export const NOMEN = Object.freeze({ einzahl: 'Einheit', mehrzahl: 'Einheiten' });
+
 // ============================================================
 // 1) REINE LOGIK
 // ============================================================
