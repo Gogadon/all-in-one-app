@@ -54,6 +54,52 @@ export function leererZustand() {
 // ------------------------------------------------------------
 
 /**
+ * Was dieses Fenster zuletzt GESEHEN hat — der Rohtext, den load() gelesen
+ * oder save() geschrieben hat.
+ *
+ * Dahinter steckt das Zwei-Fenster-Problem: Die App lädt beim Start alles in
+ * den Speicher und schreibt beim Sichern alles zurück. Prüft dabei niemand,
+ * ob sich im localStorage inzwischen etwas geändert hat, gewinnt schlicht
+ * das Fenster, das zuletzt speichert — und zwar vollständig. Kein
+ * Zusammenführen, keine Meldung: ein ganzer Trainingstag kann so still
+ * verschwinden, weil irgendwo noch ein alter Tab von gestern offen war.
+ *
+ * Der Vergleich läuft über den Rohtext statt über einen Zähler: Ein zweiter
+ * Speicher-Schlüssel wäre nicht im selben Zug geschrieben worden wie die
+ * Daten, der Rohtext ist es zwangsläufig.
+ *
+ * `undefined` heißt „dieses Fenster hat noch nie gelesen". Dann gibt es auch
+ * nichts, womit ein Konflikt entstehen könnte — save() prüft nicht.
+ */
+let zuletztGesehen;
+
+/** Fehler von save(), wenn ein anderes Fenster dazwischengeschrieben hat. */
+function konfliktFehler() {
+  const err = new Error('In einem anderen Fenster wurde inzwischen gespeichert.');
+  err.konflikt = true;      // daran erkennt die Oberfläche den Fall
+  return err;
+}
+
+/**
+ * Steht im Speicher etwas anderes, als dieses Fenster zuletzt gesehen hat?
+ * Für das `storage`-Ereignis: damit ein Fenster den fremden Stand nachladen
+ * kann, statt bis zum Zusammenstoß beim Speichern zu warten.
+ */
+export function fremderStand() {
+  if (zuletztGesehen === undefined) return false;
+  try {
+    return localStorage.getItem(STORAGE_KEY) !== zuletztGesehen;
+  } catch {
+    return false;
+  }
+}
+
+/** Nur für Tests: so tun, als hätte dieses Fenster noch nie gelesen. */
+export function vergissGesehenes() {
+  zuletztGesehen = undefined;
+}
+
+/**
  * Zustand laden. Nichts gespeichert oder kaputt → leerer Zustand.
  * Bei kaputten Daten wird VOR dem Überschreiben eine Rettungskopie
  * unter `${STORAGE_KEY}_defekt` abgelegt.
@@ -65,6 +111,7 @@ export async function load() {
   } catch {
     return leererZustand(); // z.B. Storage blockiert
   }
+  zuletztGesehen = roh;     // auch `null` ist ein gesehener Stand: „da war nichts"
   if (roh == null) return leererZustand();
 
   try {
@@ -85,14 +132,35 @@ export async function load() {
   }
 }
 
-/** Zustand speichern. Wirft bei vollem/blockiertem Speicher einen klaren Fehler. */
-export async function save(state) {
+/**
+ * Zustand speichern. Wirft bei vollem/blockiertem Speicher einen klaren Fehler.
+ *
+ * Hat ein anderes Fenster seit dem Laden geschrieben, wird NICHT gespeichert,
+ * sondern ein Fehler mit `.konflikt === true` geworfen — die Oberfläche fragt
+ * dann nach. `{ erzwingen: true }` ist die Antwort „trotzdem, meiner gilt".
+ */
+export async function save(state, { erzwingen = false } = {}) {
   pruefeGrundform(state);
+
+  if (!erzwingen && zuletztGesehen !== undefined) {
+    let jetzt, lesbar = true;
+    // Ist der Speicher blockiert, scheitert gleich das Schreiben mit einer
+    // klaren Meldung. Hier deshalb nicht auch noch einen Konflikt melden,
+    // den es gar nicht gibt.
+    try { jetzt = localStorage.getItem(STORAGE_KEY); } catch { lesbar = false; }
+    // `null` heißt: da steht gar nichts mehr (Browserdaten gelöscht). Dann
+    // gibt es auch nichts zu überschreiben — schreiben statt eine Rückfrage
+    // stellen, die von einem „anderen Fenster" erzählt, das es nicht gibt.
+    if (lesbar && jetzt != null && jetzt !== zuletztGesehen) throw konfliktFehler();
+  }
+
+  const roh = JSON.stringify(state);
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    localStorage.setItem(STORAGE_KEY, roh);
   } catch (err) {
     throw new Error('Speichern fehlgeschlagen (Speicher voll oder blockiert): ' + err.message);
   }
+  zuletztGesehen = roh;
 }
 
 // ------------------------------------------------------------

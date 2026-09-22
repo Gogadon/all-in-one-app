@@ -419,3 +419,105 @@ test('Import: importBackup bleibt die einfache Fassung ohne Bericht', async () =
   assert.deepEqual(zurueck.sessions, [], 'prüft weiterhin, gibt nur den Zustand zurück');
   assert.ok(Array.isArray(zurueck.bibliothek));
 });
+
+// ============================================================
+// Zwei Fenster, ein Speicher
+// ============================================================
+
+/** Ein zweites Fenster schreibt direkt in den Speicher, an save() vorbei. */
+function fremdesFensterSchreibt(state) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+test('Zwei Fenster: der normale Fall bleibt genau so, wie er war', async () => {
+  speicher.clear();
+  const { vergissGesehenes } = await import('../js/core/storage.js');
+  vergissGesehenes();
+
+  const { state } = baueState();
+  // Ein Fenster, das noch nie gelesen hat, darf speichern — sonst käme die
+  // App bei einem frischen Start nicht einmal bis zum ersten Sichern.
+  await save(state);
+  await load();
+  // Und mehrmals hintereinander speichern muss gehen: nach dem Schreiben ist
+  // das Geschriebene der neue „gesehene" Stand. Wäre das nicht so, würde sich
+  // die App schon beim zweiten Satz selbst blockieren.
+  state.sessions.push(neueSession({ datum: '2026-07-05' }));
+  await save(state);
+  state.sessions.push(neueSession({ datum: '2026-07-06' }));
+  await save(state);
+  assert.equal((await load()).sessions.length, 2);
+});
+
+test('Zwei Fenster: ein fremder Stand wird nicht überschrieben', async () => {
+  speicher.clear();
+  const { fremderStand } = await import('../js/core/storage.js');
+
+  // Fenster A lädt und arbeitet.
+  const { state: a } = baueState();
+  a.sessions.push(neueSession({ datum: '2026-07-05', notiz: 'Fenster A' }));
+  await save(a);
+  await load();
+  assert.equal(fremderStand(), false, 'frisch geladen: nichts Fremdes');
+
+  // Fenster B speichert dazwischen — ein ganzer Trainingstag.
+  const { state: b } = baueState();
+  b.sessions.push(neueSession({ datum: '2026-07-06', notiz: 'Fenster B' }));
+  fremdesFensterSchreibt(b);
+  assert.equal(fremderStand(), true, 'das merkt A jetzt');
+
+  // A speichert weiter — und darf B nicht einfach auslöschen.
+  a.sessions.push(neueSession({ datum: '2026-07-07', notiz: 'A macht weiter' }));
+  const fehler = await save(a).then(() => null, (e) => e);
+  assert.ok(fehler, 'save muss sich wehren');
+  assert.equal(fehler.konflikt, true, 'und zwar erkennbar als Konflikt');
+
+  // Entscheidend: im Speicher steht noch B, unangetastet.
+  const gespeichert = JSON.parse(localStorage.getItem(STORAGE_KEY));
+  assert.equal(gespeichert.sessions[0].notiz, 'Fenster B');
+});
+
+test('Zwei Fenster: beide Auswege funktionieren', async () => {
+  speicher.clear();
+  const { state: a } = baueState();
+  a.sessions.push(neueSession({ datum: '2026-07-05', notiz: 'A' }));
+  await save(a);
+  await load();
+
+  const { state: b } = baueState();
+  b.sessions.push(neueSession({ datum: '2026-07-06', notiz: 'B' }));
+  fremdesFensterSchreibt(b);
+
+  // Weg 1: „Hier weiterspeichern" — erzwingen schreibt wirklich.
+  await save(a, { erzwingen: true });
+  assert.equal(JSON.parse(localStorage.getItem(STORAGE_KEY)).sessions[0].notiz, 'A');
+  // Danach ist der Konflikt aus der Welt, das nächste Speichern läuft normal.
+  a.sessions.push(neueSession({ datum: '2026-07-08' }));
+  await save(a);
+
+  // Weg 2: „Anderen laden" — nach load() ist der fremde Stand der eigene.
+  fremdesFensterSchreibt(b);
+  const geladen = await load();
+  assert.equal(geladen.sessions[0].notiz, 'B');
+  geladen.sessions.push(neueSession({ datum: '2026-07-09' }));
+  await save(geladen);   // darf nicht mehr meckern
+  assert.equal(JSON.parse(localStorage.getItem(STORAGE_KEY)).sessions.length, 2);
+});
+
+test('Zwei Fenster: kein Fehlalarm bei gleichem Inhalt oder leerem Speicher', async () => {
+  speicher.clear();
+  const { state } = baueState();
+  state.sessions.push(neueSession({ datum: '2026-07-05' }));
+  await save(state);
+  await load();
+
+  // Das andere Fenster schreibt denselben Inhalt — da ist nichts zu verlieren.
+  fremdesFensterSchreibt(state);
+  await save(state);
+
+  // Browserdaten gelöscht: da steht nichts mehr, was man überschreiben könnte.
+  // Eine Rückfrage nach einem „anderen Fenster" wäre hier schlicht gelogen.
+  speicher.clear();
+  await save(state);
+  assert.equal((await load()).sessions.length, 1);
+});

@@ -120,6 +120,11 @@ function stelleDialogBereit() {
   });
 }
 
+/** Wartet gerade ein Dialog auf eine Antwort? */
+export function dialogOffen() {
+  return dialogAufloesen != null;
+}
+
 function schliesseDialog(ergebnis, schalterAn = null) {
   if (!dialogEl) return;
   dialogBackdrop.classList.remove('offen');
