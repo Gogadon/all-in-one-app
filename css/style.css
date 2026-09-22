@@ -386,7 +386,10 @@ h1,h2,h3,.num{font-family:var(--font-display);letter-spacing:-.02em}
   padding:24px 22px;transition:opacity .2s,transform .2s cubic-bezier(.2,.7,.2,1)}
 .dialog.offen{opacity:1;pointer-events:auto;transform:translate(-50%,-50%) scale(1)}
 .dialog h3{font-size:20px;margin-bottom:8px}
-.dialog-text{color:var(--dim);font-size:14px;line-height:1.55;margin-bottom:20px}
+/* pre-line: Der Text kommt escaped aus JS, Absätze stecken als \n drin.
+   Ohne das liefe ein Import-Befund („2 Einheiten werden NICHT übernommen…")
+   zu einem einzigen Block zusammen — genau das, was man überfliegt. */
+.dialog-text{color:var(--dim);font-size:14px;line-height:1.55;margin-bottom:20px;white-space:pre-line}
 .dialog-knoepfe{display:flex;gap:10px;justify-content:flex-end}
 .dialog-knoepfe .knopf{flex:1}
 .knopf.gefahr-voll{background:#ff6b6b;border-color:#ff6b6b;color:#0C0D0E;font-weight:700}

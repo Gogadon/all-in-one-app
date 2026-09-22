@@ -333,3 +333,89 @@ test('parseZahl: deutscher Tausenderpunkt wird als solcher erkannt', async () =>
   assert.equal(parseZahl(''), null);
   assert.equal(parseZahl('Quatsch'), null);
 });
+
+// ==================================================================
+// Import-Prüfung: unbrauchbar verwerfen, reparierbar reparieren
+// ==================================================================
+
+const bauBackup = (sessions, rest = {}) => JSON.stringify({ daten: {
+  ...leererZustand(),
+  bibliothek: [{ id: 'a1', name: 'Bank', kategorie: 'kraft', messwerte: ['gewicht', 'wdh'], einstellungen: {}, alternativen: [] }],
+  sessions, ...rest,
+} });
+const segment = (eintraege) => ({ id: 'g1', aktivitaetId: 'a1', altOf: null, erledigt: true, eintraege });
+
+test('Import: strukturell kaputte Sessions fliegen raus — mit Grund und Datum', async () => {
+  const { pruefeBackup } = await import('../js/core/storage.js');
+  const gut = { id: 's1', datum: '2026-09-20', modul: 'kraft', segmente: [segment([{ id: 'e1', messwerte: { gewicht: 80, wdh: 8 } }])] };
+  const { state, verworfen } = pruefeBackup(bauBackup([
+    gut,
+    { id: 'x1', datum: 'morgen', segmente: [] },
+    { id: 'x2', datum: '2026-09-21' },
+    { id: 'x3', datum: '2026-02-30', segmente: [] },
+    { id: 'x4', datum: '2026-09-19', segmente: [{ id: 'g', eintraege: [] }] },
+    'gar kein Objekt',
+  ]));
+
+  assert.equal(state.sessions.length, 1, 'nur die heile Session bleibt');
+  assert.equal(state.sessions[0].id, 's1');
+  assert.equal(verworfen.length, 5);
+  assert.match(verworfen.find(v => v.datum === '(ohne Datum)')?.grund ?? '', /Datum/);
+  assert.match(verworfen.find(v => v.datum === '2026-09-21')?.grund ?? '', /Übungsliste fehlt/);
+  assert.match(verworfen.find(v => v.datum === '2026-09-19')?.grund ?? '', /verweist auf nichts/);
+  // Den 30. Februar gibt es nicht — das muss auffallen, nicht durchrutschen.
+  assert.equal(verworfen.filter(v => v.datum === '(ohne Datum)').length, 3);
+});
+
+test('Import: eine krumme Zahl kostet nicht die ganze Einheit', async () => {
+  const { pruefeBackup } = await import('../js/core/storage.js');
+  const { state, verworfen, repariert } = pruefeBackup(bauBackup([
+    { id: 's1', datum: '2026-09-20', modul: 'kraft', segmente: [segment([
+      { id: 'e1', messwerte: { gewicht: 80, wdh: 'acht', puls_avg: null } },
+      { id: 'e2', messwerte: { gewicht: 80, wdh: 8 } },
+    ])] },
+  ]));
+
+  assert.equal(verworfen.length, 0, 'die Einheit bleibt erhalten');
+  assert.equal(state.sessions.length, 1);
+  const [e1, e2] = state.sessions[0].segmente[0].eintraege;
+  assert.deepEqual(e1.messwerte, { gewicht: 80 }, 'nur das Kaputte ist weg');
+  assert.deepEqual(e2.messwerte, { gewicht: 80, wdh: 8 }, 'der heile Satz bleibt unangetastet');
+  assert.equal(repariert.length, 2);
+  assert.ok(repariert.every(r => r.datum === '2026-09-20'));
+});
+
+test('Import: fehlende messwerte und flags werden ergänzt statt zu stören', async () => {
+  const { pruefeBackup } = await import('../js/core/storage.js');
+  const { state, verworfen } = pruefeBackup(bauBackup([
+    { id: 's1', datum: '2026-09-20', segmente: [segment([{ id: 'e1' }])] },
+  ]));
+  assert.equal(verworfen.length, 0);
+  assert.deepEqual(state.sessions[0].segmente[0].eintraege[0].messwerte, {});
+  assert.deepEqual(state.sessions[0].segmente[0].eintraege[0].flags, []);
+});
+
+test('Import: Top-Level-Listen mit falschem Typ werden geleert', async () => {
+  const { pruefeBackup } = await import('../js/core/storage.js');
+  const { state, ersetzt } = pruefeBackup(bauBackup([], { koerper: 'kaputt', termine: 42, plaene: [] }));
+  assert.deepEqual(ersetzt.sort(), ['koerper', 'plaene', 'termine']);
+  assert.deepEqual(state.koerper, []);
+  assert.deepEqual(state.termine, []);
+  assert.deepEqual(state.plaene, {});
+});
+
+test('Import: ein heiles Backup meldet nichts', async () => {
+  const { pruefeBackup, exportBackup } = await import('../js/core/storage.js');
+  const state = leererZustand();
+  state.sessions.push({ id: 's1', datum: '2026-09-20', modul: 'kraft', abgeschlossen: true,
+    segmente: [segment([{ id: 'e1', messwerte: { gewicht: 80, wdh: 8 }, flags: [], quelle: 'manuell' }])] });
+  const { verworfen, repariert, ersetzt } = pruefeBackup(exportBackup(state));
+  assert.deepEqual([verworfen, repariert, ersetzt], [[], [], []]);
+});
+
+test('Import: importBackup bleibt die einfache Fassung ohne Bericht', async () => {
+  const { importBackup } = await import('../js/core/storage.js');
+  const zurueck = importBackup(bauBackup([{ id: 'x', datum: 'kaputt', segmente: [] }]));
+  assert.deepEqual(zurueck.sessions, [], 'prüft weiterhin, gibt nur den Zustand zurück');
+  assert.ok(Array.isArray(zurueck.bibliothek));
+});
