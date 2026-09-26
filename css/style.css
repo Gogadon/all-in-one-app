@@ -737,3 +737,17 @@ body.eingabe-aktiv main{padding-bottom:calc(76px + 50vh)}
   border:1px solid var(--line);border-radius:999px;padding:3px 9px}
 .kw-chip strong{color:var(--text)}
 .kw-weg{flex:none;color:var(--dim-2);font-size:13px;padding:4px 8px}
+
+/* Zeitraum-Umschalter über den Körper-Karten */
+/* Alle fünf auf eine Zeile, gleich breit — wie ein Schiebeschalter. Mit
+   normalem Chip-Innenabstand rutschte „Eigene" auf schmalen Handys allein
+   in eine zweite Zeile. */
+.kw-zeitraum{margin:0 2px 10px;flex-wrap:nowrap}
+.kw-zeitraum .chip{flex:1 1 0;min-width:0;padding:7px 4px;text-align:center;white-space:nowrap}
+.kw-zeitraum .chip.aktiv{
+  background:var(--surface-2);border-color:var(--koerper);color:var(--koerper)}
+.kw-eigene{display:flex;align-items:center;gap:8px;margin:-2px 2px 12px;font-size:12.5px}
+.kw-eigene input{width:76px;background:var(--surface-2);border:1px solid var(--line);
+  border-radius:10px;padding:7px 10px;color:var(--text);font:inherit;
+  font-variant-numeric:tabular-nums;text-align:right}
+.kw-eigene input:focus{outline:none;border-color:var(--koerper)}
