@@ -13,6 +13,7 @@ import {
   KOERPER_WERTE, standardWerte, formatKoerperWert,
   messungen, messungAmTag, verlauf, letzterWert, veraenderung,
   setzeMessung, entferneMessung,
+  KOERPER_ZEITRAEUME, koerperZeitraum, setzeKoerperZeitraum, zeitraumAb, veraenderungAb,
 } from '../core/koerper.js';
 import { parseZahl, formatZahl, formatZahlEingabe } from '../core/metrics.js';
 import { heuteIso } from '../core/model.js';
@@ -63,25 +64,70 @@ export function erstelleKoerperModul(ctx) {
     return html + `</div>`;
   }
 
+  /** Die Änderung als farbige Zahl: „−1,2 kg". */
+  function trendZahl(def, diff) {
+    // Färbung nach Richtung: „gut" hängt vom Wert ab (Gewicht runter,
+    // Muskelmasse hoch). Ohne Richtung bleibt es neutral.
+    const besser = def.richtung === 'hoch' ? diff > 0
+      : def.richtung === 'runter' ? diff < 0 : null;
+    const klasse = diff === 0 ? 'gleich' : besser === true ? 'gut' : besser === false ? 'schlecht' : '';
+    const vor = diff > 0 ? '+' : '';
+    return `<span class="kw-trend ${klasse}">${vor}${formatZahl(diff, def.dezimal ?? 1)}${def.einheit ? ' ' + def.einheit : ''}</span>`;
+  }
+
+  /** „in den letzten 30 Tagen" / „in 30 Tagen" — ohne „letzten 1 Jahr". */
+  function zeitraumWorte(z) {
+    if (z.tage === 365) return { lang: 'im letzten Jahr', kurz: 'in 1 Jahr' };
+    if (z.tage === 1) return { lang: 'seit gestern', kurz: 'seit gestern' };
+    return { lang: `in den letzten ${z.tage} Tagen`, kurz: `in ${z.tage} Tagen` };
+  }
+
+  /**
+   * Umschalter über den Karten. Schaltet alle Karten gleichzeitig um —
+   * und nur die Karten: Eingabe und Verlaufsliste bleiben, wie sie sind.
+   */
+  function zeitraumHtml(z) {
+    const chips = KOERPER_ZEITRAEUME.map(({ art, label }) =>
+      `<button class="chip ${z.art === art ? 'aktiv' : ''}" data-action="koerper.zeitraum" data-art="${art}" aria-pressed="${z.art === art}">${esc(label)}</button>`).join('');
+    const eigene = z.art !== 'eigene' ? '' : `<label class="kw-eigene">
+        <input type="number" inputmode="numeric" min="1" max="3650" step="1"
+          value="${z.eigeneTage}" data-change="koerper.eigeneTage" data-einzeln aria-label="Tage zurück">
+        <span class="dim">Tage zurück</span>
+      </label>`;
+    return `<div class="chip-zeile kw-zeitraum anim">${chips}</div>${eigene}`;
+  }
+
   /** Große Zahlen oben: aktueller Stand je Standardwert + Trend. */
   function kennzahlenHtml() {
+    const z = koerperZeitraum(S());
+    const ab = zeitraumAb(z);
+
     const karten = standardWerte().map(typ => {
+      // Die große Zahl ist IMMER der aktuelle Stand — auch wenn im gewählten
+      // Zeitraum gar nicht gemessen wurde. Der Zeitraum schneidet nur Kurve
+      // und Trend zu.
       const letzte = letzterWert(S(), typ);
       if (!letzte) return '';
-      const v = veraenderung(S(), typ);
-      const punkte = verlauf(S(), typ).map(p => p.wert);
+      const punkte = verlauf(S(), typ, { ab }).map(p => p.wert);
       const def = KOERPER_WERTE[typ];
 
-      let trend = '<span class="dim">erste Messung</span>';
-      if (v) {
-        // Färbung nach Richtung: „gut" hängt vom Wert ab (Gewicht runter,
-        // Muskelmasse hoch). Ohne Richtung bleibt es neutral.
-        const besser = def.richtung === 'hoch' ? v.diff > 0
-          : def.richtung === 'runter' ? v.diff < 0 : null;
-        const klasse = v.diff === 0 ? 'gleich' : besser === true ? 'gut' : besser === false ? 'schlecht' : '';
-        const vor = v.diff > 0 ? '+' : '';
-        trend = `<span class="kw-trend ${klasse}">${vor}${formatZahl(v.diff, def.dezimal ?? 1)}${def.einheit ? ' ' + def.einheit : ''}</span>
-          <span class="dim">seit ${esc(ctx.formatDatum(v.seit))}</span>`;
+      let trend;
+      if (ab == null) {
+        // Gesamt: genau wie vor dem Umschalter — Vergleich zur Messung davor.
+        const v = veraenderung(S(), typ);
+        trend = v
+          ? `${trendZahl(def, v.diff)}
+          <span class="dim">seit ${esc(ctx.formatDatum(v.seit))}</span>`
+          : '<span class="dim">erste Messung</span>';
+      } else {
+        // Zeitraum: erster gegen letzten Wert darin. Sonst stünde neben einer
+        // Jahreskurve eine Zahl von vorgestern.
+        const v = veraenderungAb(S(), typ, ab);
+        const { lang, kurz } = zeitraumWorte(z);
+        trend = v.anzahl === 0 ? `<span class="dim">Keine Messung ${lang}</span>`
+          : v.diff == null ? `<span class="dim">Nur eine Messung ${lang}</span>`
+          : `${trendZahl(def, v.diff)}
+          <span class="dim">${kurz}</span>`;
       }
 
       return `<div class="karte kw-karte anim">
@@ -97,7 +143,7 @@ export function erstelleKoerperModul(ctx) {
     if (!karten) {
       return `<div class="karte leer anim"><p>Noch keine Werte. Trag unten deine erste Messung ein — Gewicht reicht für den Anfang. ⚖️</p></div>`;
     }
-    return karten;
+    return zeitraumHtml(z) + karten;
   }
 
   /** Eingabeformular: Datum + Wertezeilen + Chips für weitere Werte. */
@@ -179,6 +225,16 @@ export function erstelleKoerperModul(ctx) {
       const n = parseZahl(el.value);
       if (n == null) delete dd.werte[d.typ]; else dd.werte[d.typ] = n;
       // kein Re-Render → Fokus und Tastatur bleiben (siehe Fallstrick 5)
+    },
+    async 'koerper.zeitraum'(d) {
+      setzeKoerperZeitraum(S(), d.art);
+      await speichernUndZeigen();   // gemerkt: wer immer auf 30 Tage schaut, tippt nicht jedes Mal
+    },
+    async 'koerper.eigeneTage'(d, el) {
+      // Unbrauchbares (leer, 0, „abc") lässt die bisherige Zahl stehen;
+      // das Neuzeichnen setzt das Feld dann sichtbar auf sie zurück.
+      setzeKoerperZeitraum(S(), 'eigene', parseZahl(el.value));
+      await speichernUndZeigen();
     },
     'koerper.feldPlus'(d) {
       const dd = entwurfHolen();

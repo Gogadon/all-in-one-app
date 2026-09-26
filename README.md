@@ -284,6 +284,22 @@ ein Eintrag dort, sonst nichts.
 vorhandenen (upsert), statt eine zweite Zeile zu erzeugen — so bleibt der
 Verlauf eine Kurve statt einer Punktewolke.
 
+**Zeitraum der Karten** (7 Tage / 30 Tage / 1 Jahr / Gesamt / Eigene): rollende
+Fenster ab heute, keine Kalendermonate. Die Grenze zählt **mit** — bei
+„7 Tage" gehört die Messung von vor genau 7 Tagen dazu, sonst hätte, wer sich
+wöchentlich wiegt, jede Woche nur einen einsamen Punkt. Der Zeitraum schneidet
+nur Kurve und Trend zu; die große Zahl ist immer der aktuelle Wert, und Eingabe
+und Verlaufsliste bleiben unberührt. Bei „Gesamt" (Voreinstellung) vergleicht
+der Trend wie eh und je mit der Messung davor, in allen anderen den ersten mit
+dem letzten Wert im Zeitraum. Die Auswahl steht in
+`einstellungen.koerperZeitraum`; `koerperZeitraum()` liest sie immer in
+sauberer Form, auch wenn im Speicher Unsinn steht.
+
+Das Feld „Tage zurück" trägt `data-einzeln`: Es gehört zu keinem Formular,
+also springt „Weiter" auf der Tastatur weder hinein noch heraus (siehe
+`ui/tastatur.js`). Ohne das landete man nach der Tageszahl im Datumsfeld der
+nächsten Messung.
+
 ### 4. Service Worker cacht nichts — mit Absicht
 
 Er existiert, damit Chrome die App als installierbar erkennt, und er sorgt
@@ -452,7 +468,7 @@ sogar: Die Kachel sagte „2 Wanderungen", die Zeile darunter „2 Touren".)
 
 ## Tests
 
-319 Tests, alle ohne Browser lauffähig, ohne eine einzige Abhängigkeit:
+326 Tests, alle ohne Browser lauffähig, ohne eine einzige Abhängigkeit:
 
 ```
 npm test
