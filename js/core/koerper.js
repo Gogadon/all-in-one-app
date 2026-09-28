@@ -26,7 +26,7 @@
 // und sähe aus, als stünde schon ein Wert drin.
 // ============================================================
 
-import { neueId, heuteIso } from './model.js';
+import { neueId, heuteIso, isoZuDatum } from './model.js';
 import { formatZahl } from './metrics.js';
 
 export const KOERPER_WERTE = Object.freeze({
@@ -97,11 +97,13 @@ export function messungAmTag(state, iso) {
  * Verlauf eines einzelnen Werts, ÄLTESTE zuerst (so wollen es Diagramme).
  * Enthält nur Messungen, in denen der Wert wirklich steht — fehlende Tage
  * werden nicht als 0 erfunden.
+ * `ab` (ISO, einschließlich) schneidet alles davor ab; ohne → der ganze Verlauf.
  * @returns [{ datum, wert }]
  */
-export function verlauf(state, typ) {
+export function verlauf(state, typ, { ab = null } = {}) {
   return (state?.koerper ?? [])
     .filter(m => typeof m.werte?.[typ] === 'number' && Number.isFinite(m.werte[typ]))
+    .filter(m => ab == null || m.datum >= ab)
     .map(m => ({ datum: m.datum, wert: m.werte[typ] }))
     .sort((a, b) => a.datum.localeCompare(b.datum));
 }
@@ -171,4 +173,93 @@ export function entferneMessung(state, datum) {
 /** Hat eine Messung überhaupt einen Wert? (Leere Tage sind nutzlos.) */
 export function istLeer(messung) {
   return Object.keys(messung?.werte ?? {}).length === 0;
+}
+
+// ------------------------------------------------------------
+// Zeitraum der Kennzahl-Karten
+//
+// Rollende Fenster ab heute rückwärts, keine Kalendermonate: „30 Tage" heißt
+// auch am 2. Oktober die letzten 30 Tage und nicht „seit dem 1.".
+//
+// Die Grenze zählt MIT: Bei „7 Tage" gehört die Messung von vor genau
+// 7 Tagen dazu. Wer sich einmal pro Woche wiegt, hat so zwei Punkte und
+// sieht einen Trend — sonst stünde dort jede Woche nur ein einsamer Punkt.
+// ------------------------------------------------------------
+
+/** Die festen Zeiträume in Anzeige-Reihenfolge. `tage: null` = alles. */
+export const KOERPER_ZEITRAEUME = Object.freeze([
+  Object.freeze({ art: '7',      label: '7 Tage',  tage: 7 }),
+  Object.freeze({ art: '30',     label: '30 Tage', tage: 30 }),
+  Object.freeze({ art: '365',    label: '1 Jahr',  tage: 365 }),
+  Object.freeze({ art: 'gesamt', label: 'Gesamt',  tage: null }),
+  Object.freeze({ art: 'eigene', label: 'Eigene',  tage: null }),
+]);
+
+/** Voreinstellung für „Eigene", solange noch nie eine Zahl eingetragen wurde. */
+export const EIGENE_TAGE_STANDARD = 45;
+/** Zehn Jahre reichen — darüber ist es ohnehin „Gesamt". */
+export const EIGENE_TAGE_MAX = 3650;
+
+/** 1 … 3650 ganze Tage, sonst null. */
+function gueltigeTage(n) {
+  if (typeof n !== 'number' || !Number.isFinite(n)) return null;
+  const t = Math.round(n);
+  return t >= 1 && t <= EIGENE_TAGE_MAX ? t : null;
+}
+
+/**
+ * Der gewählte Zeitraum — immer in sauberer Form, egal was im Speicher steht
+ * (ein Backup von Hand bearbeitet, ein alter Stand ohne Einstellung).
+ * @returns {{ art, label, tage: number|null, eigeneTage: number }}
+ *   tage === null heißt „Gesamt": kein Schnitt.
+ */
+export function koerperZeitraum(state) {
+  const roh = state?.einstellungen?.koerperZeitraum;
+  const eigeneTage = gueltigeTage(roh?.eigeneTage) ?? EIGENE_TAGE_STANDARD;
+  const def = KOERPER_ZEITRAEUME.find(z => z.art === roh?.art)
+    ?? KOERPER_ZEITRAEUME.find(z => z.art === 'gesamt');
+  if (def.art === 'eigene') {
+    return { art: 'eigene', label: `${eigeneTage} Tage`, tage: eigeneTage, eigeneTage };
+  }
+  return { art: def.art, label: def.label, tage: def.tage, eigeneTage };
+}
+
+/**
+ * Zeitraum wählen. `eigeneTage` nur bei „Eigene" nötig; ein unbrauchbarer
+ * Wert lässt die bisherige Zahl stehen. Die Zahl bleibt auch gemerkt, wenn
+ * man zwischendurch auf „30 Tage" wechselt.
+ */
+export function setzeKoerperZeitraum(state, art, eigeneTage) {
+  if (!KOERPER_ZEITRAEUME.some(z => z.art === art)) return koerperZeitraum(state);
+  const bisher = koerperZeitraum(state);
+  state.einstellungen ??= {};
+  state.einstellungen.koerperZeitraum = {
+    art,
+    eigeneTage: gueltigeTage(eigeneTage) ?? bisher.eigeneTage,
+  };
+  return koerperZeitraum(state);
+}
+
+/**
+ * Erster Tag (ISO, einschließlich), der zum Zeitraum gehört — null bei Gesamt.
+ * Heute 26.09., 7 Tage → „2026-09-19".
+ */
+export function zeitraumAb(zeitraum, heute = heuteIso()) {
+  if (zeitraum?.tage == null) return null;
+  const d = isoZuDatum(heute);
+  d.setUTCDate(d.getUTCDate() - zeitraum.tage);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Veränderung über den Zeitraum: erster gegen letzten Wert DARIN.
+ * @returns {{ anzahl, diff: number|null, seit: string|null }}
+ *   anzahl — Messungen dieses Werts im Zeitraum
+ *   diff   — letzter minus erster; null bei weniger als zwei Messungen
+ *   seit   — Datum der ersten Messung im Zeitraum
+ */
+export function veraenderungAb(state, typ, ab) {
+  const v = verlauf(state, typ, { ab });
+  if (v.length < 2) return { anzahl: v.length, diff: null, seit: v[0]?.datum ?? null };
+  return { anzahl: v.length, diff: v[v.length - 1].wert - v[0].wert, seit: v[0].datum };
 }

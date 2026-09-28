@@ -54,11 +54,16 @@ function eingabeModus(an) {
  */
 export function installiereTastaturVerhalten(main) {
   // Sichtbare Eingabefelder des Inhaltsbereichs, in DOM-Reihenfolge.
+  // `data-einzeln` = Feld steht für sich (z.B. „Tage zurück" über den
+  // Körper-Karten): gehört zu keinem Formular, also springt „Weiter" weder
+  // hinein noch heraus — sonst landete man nach der Tageszahl im Datum der
+  // nächsten Messung.
   const eingabeFelder = () =>
-    [...main.querySelectorAll('input[data-change]')].filter(el =>
+    [...main.querySelectorAll('input[data-change]:not([data-einzeln])')].filter(el =>
       el.type !== 'file' && el.type !== 'hidden' && el.offsetParent !== null);
 
   const naechstesFeld = (el) => {
+    if (el.hasAttribute('data-einzeln')) return null;
     const felder = eingabeFelder();
     const i = felder.indexOf(el);
     return (i >= 0 && i < felder.length - 1) ? felder[i + 1] : null;

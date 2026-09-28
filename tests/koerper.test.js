@@ -191,3 +191,169 @@ test('Körper: ein abgewähltes Feld wird wirklich gelöscht', async () => {
   await k.actions['koerper.speichern']();
   assert.deepEqual(messungAmTag(state, HEUTE).werte, { gewicht: 95.5, muskelmasse: 41 });
 });
+
+// ============================================================
+// Zeitraum der Kennzahl-Karten (7 Tage / 30 Tage / 1 Jahr / Gesamt / Eigene)
+// ============================================================
+
+/** ISO-Tag `n` Tage vor `heute` — gleiche UTC-Rechnung wie der Kern. */
+function tageVor(n, heute = heuteIso()) {
+  const [j, m, t] = heute.split('-').map(Number);
+  return new Date(Date.UTC(j, m - 1, t - n)).toISOString().slice(0, 10);
+}
+
+test('Zeitraum: Grenze zählt mit — die Messung von vor genau 7 Tagen gehört dazu', async () => {
+  const { zeitraumAb, koerperZeitraum, setzeKoerperZeitraum } = await import('../js/core/koerper.js');
+  const s = leer();
+  const HEUTE = '2026-09-26';
+  setzeKoerperZeitraum(s, '7');
+  assert.equal(zeitraumAb(koerperZeitraum(s), HEUTE), '2026-09-19');
+
+  // Wer sich wöchentlich wiegt, hat so zwei Punkte statt einem.
+  setzeMessung(s, '2026-09-18', { gewicht: 96.0 });   // 8 Tage: draußen
+  setzeMessung(s, '2026-09-19', { gewicht: 95.4 });   // 7 Tage: drin
+  setzeMessung(s, '2026-09-26', { gewicht: 94.9 });   // heute: drin
+  const ab = zeitraumAb(koerperZeitraum(s), HEUTE);
+  assert.deepEqual(verlauf(s, 'gewicht', { ab }).map(p => p.datum), ['2026-09-19', '2026-09-26']);
+  assert.equal(verlauf(s, 'gewicht').length, 3, 'ohne ab: alles wie bisher');
+});
+
+test('Zeitraum: 30 Tage und 1 Jahr sind rollend, keine Kalendermonate', async () => {
+  const { zeitraumAb, koerperZeitraum, setzeKoerperZeitraum } = await import('../js/core/koerper.js');
+  const s = leer();
+  setzeKoerperZeitraum(s, '30');
+  // Am 2. Oktober sind es trotzdem 30 Tage zurück — nicht „seit dem 1.".
+  assert.equal(zeitraumAb(koerperZeitraum(s), '2026-10-02'), '2026-09-02');
+  setzeKoerperZeitraum(s, '365');
+  assert.equal(zeitraumAb(koerperZeitraum(s), '2026-09-26'), '2025-09-26');
+  // Über den Jahreswechsel und den Schalttag hinweg.
+  setzeKoerperZeitraum(s, '30');
+  assert.equal(zeitraumAb(koerperZeitraum(s), '2028-03-15'), '2028-02-14');
+  assert.equal(zeitraumAb(koerperZeitraum(s), '2027-01-10'), '2026-12-11');
+  // Gesamt schneidet nichts ab.
+  setzeKoerperZeitraum(s, 'gesamt');
+  assert.equal(zeitraumAb(koerperZeitraum(s), '2026-09-26'), null);
+});
+
+test('Zeitraum: Gesamt ist voreingestellt, Unsinn im Speicher fällt darauf zurück', async () => {
+  const { koerperZeitraum } = await import('../js/core/koerper.js');
+  const s = leer();
+  assert.equal(koerperZeitraum(s).art, 'gesamt', 'ohne Zutun: alles wie vorher');
+  assert.equal(koerperZeitraum(s).tage, null);
+  for (const kaputt of ['30', { art: 'quatsch' }, { art: 7 }, null, 42]) {
+    s.einstellungen.koerperZeitraum = kaputt;
+    assert.equal(koerperZeitraum(s).art, 'gesamt', JSON.stringify(kaputt));
+  }
+  assert.equal(koerperZeitraum({}).art, 'gesamt', 'auch ohne einstellungen');
+});
+
+test('Zeitraum: „Eigene" merkt sich die Zahl und lässt Unsinn nicht durch', async () => {
+  const { koerperZeitraum, setzeKoerperZeitraum, EIGENE_TAGE_STANDARD } = await import('../js/core/koerper.js');
+  const s = leer();
+  setzeKoerperZeitraum(s, 'eigene');
+  assert.equal(koerperZeitraum(s).tage, EIGENE_TAGE_STANDARD, 'Voreinstellung');
+
+  setzeKoerperZeitraum(s, 'eigene', 45);
+  assert.deepEqual([koerperZeitraum(s).tage, koerperZeitraum(s).label], [45, '45 Tage']);
+  // Kurz auf 30 Tage und zurück: die 45 sind noch da.
+  setzeKoerperZeitraum(s, '30');
+  assert.equal(koerperZeitraum(s).tage, 30);
+  setzeKoerperZeitraum(s, 'eigene');
+  assert.equal(koerperZeitraum(s).tage, 45);
+
+  // Leer, 0, negativ, absurd, keine Zahl → die 45 bleiben stehen.
+  for (const unsinn of [null, 0, -5, 99999, NaN, '45']) {
+    setzeKoerperZeitraum(s, 'eigene', unsinn);
+    assert.equal(koerperZeitraum(s).tage, 45, String(unsinn));
+  }
+  setzeKoerperZeitraum(s, 'eigene', 12.6);
+  assert.equal(koerperZeitraum(s).tage, 13, 'ganze Tage');
+  // Eine unbekannte Art ändert gar nichts.
+  setzeKoerperZeitraum(s, 'quatsch');
+  assert.equal(koerperZeitraum(s).art, 'eigene');
+});
+
+test('Zeitraum: Veränderung ist erster gegen letzten Wert DARIN', async () => {
+  const { veraenderungAb } = await import('../js/core/koerper.js');
+  const s = leer();
+  setzeMessung(s, '2026-08-01', { gewicht: 99.0 });   // vor dem Zeitraum
+  setzeMessung(s, '2026-09-01', { gewicht: 96.1, kfa: 24.0 });
+  setzeMessung(s, '2026-09-15', { gewicht: 95.5 });
+  setzeMessung(s, '2026-09-25', { gewicht: 94.9 });
+
+  const v = veraenderungAb(s, 'gewicht', '2026-08-27');
+  assert.equal(v.anzahl, 3);
+  assert.equal(Math.round(v.diff * 10) / 10, -1.2, '94,9 − 96,1, nicht 94,9 − 95,5');
+  assert.equal(v.seit, '2026-09-01');
+
+  assert.deepEqual(veraenderungAb(s, 'kfa', '2026-08-27'), { anzahl: 1, diff: null, seit: '2026-09-01' });
+  assert.deepEqual(veraenderungAb(s, 'gewicht', '2026-09-26'), { anzahl: 0, diff: null, seit: null });
+});
+
+test('Körper-Tab: der Umschalter schaltet beide Karten, nicht die Liste', async () => {
+  const { installiereBrowserAttrappe, testKontext } = await import('./helpers/umgebung.js');
+  installiereBrowserAttrappe();
+  const { esc, formatDatum } = await import('../js/ui/components.js');
+  const { erstelleKoerperModul } = await import('../js/modules/koerper.js');
+
+  const state = leererZustand();
+  setzeMessung(state, tageVor(200), { gewicht: 99.0, kfa: 26.0 });
+  setzeMessung(state, tageVor(20), { gewicht: 96.1, kfa: 24.0 });
+  setzeMessung(state, tageVor(3), { gewicht: 94.9, kfa: 23.1 });
+  const { ctx, protokoll } = testKontext(state, { esc, formatDatum });
+  const k = erstelleKoerperModul(ctx);
+  const karten = (html) => html.split('kw-karte').slice(1).map(t => t.split('kw-spark')[0]);
+
+  // Gesamt (Voreinstellung): Trend wie früher — gegen die Messung davor.
+  let html = k.heuteHtml();
+  assert.match(html, /data-art="gesamt"[^>]*aria-pressed="true"/);
+  assert.match(karten(html)[0], /-1,2 kg/, 'Gewicht: 94,9 − 96,1');
+  assert.match(karten(html)[0], /seit /);
+  assert.equal((html.match(/kw-zeile-karte/g) ?? []).length, 3, 'Liste: alle drei');
+
+  // 30 Tage: beide Karten gleichzeitig, Liste unberührt.
+  await k.actions['koerper.zeitraum']({ art: '30' });
+  assert.equal(protokoll.saves, 1, 'Auswahl wird gespeichert');
+  html = k.heuteHtml();
+  assert.match(karten(html)[0], /-1,2 kg/);
+  assert.match(karten(html)[0], /in 30 Tagen/);
+  assert.match(karten(html)[1], /-0,9 %/, 'Körperfett schaltet mit');
+  assert.match(karten(html)[1], /in 30 Tagen/);
+  assert.equal((html.match(/kw-zeile-karte/g) ?? []).length, 3, 'Liste bleibt vollständig');
+
+  // 1 Jahr: die Messung von vor 200 Tagen ist jetzt der Anfang.
+  await k.actions['koerper.zeitraum']({ art: '365' });
+  html = k.heuteHtml();
+  assert.match(karten(html)[0], /-4,1 kg/, '94,9 − 99,0');
+  assert.match(karten(html)[0], /in 1 Jahr/);
+
+  // 7 Tage: nur eine Messung — ehrlich sagen statt einen Trend zu erfinden.
+  // Die große Zahl bleibt der aktuelle Wert.
+  await k.actions['koerper.zeitraum']({ art: '7' });
+  html = k.heuteHtml();
+  assert.match(karten(html)[0], /Nur eine Messung in den letzten 7 Tagen/);
+  assert.match(karten(html)[0], /94,9 kg/);
+
+  // Eigene: das Feld erscheint, und 2 Tage zeigen „keine Messung".
+  await k.actions['koerper.zeitraum']({ art: 'eigene' });
+  assert.match(k.heuteHtml(), /data-change="koerper\.eigeneTage"/);
+  await k.actions['koerper.eigeneTage']({}, { value: '2' });
+  html = k.heuteHtml();
+  assert.match(karten(html)[0], /Keine Messung in den letzten 2 Tagen/);
+  assert.match(karten(html)[0], /94,9 kg/, 'große Zahl trotzdem da');
+  assert.match(html, /value="2"/);
+  // Unsinn eingetippt → die 2 bleiben.
+  await k.actions['koerper.eigeneTage']({}, { value: 'abc' });
+  assert.match(k.heuteHtml(), /value="2"/);
+});
+
+test('Körper-Tab: ohne Messungen kein Umschalter', async () => {
+  const { installiereBrowserAttrappe, testKontext } = await import('./helpers/umgebung.js');
+  installiereBrowserAttrappe();
+  const { esc, formatDatum } = await import('../js/ui/components.js');
+  const { erstelleKoerperModul } = await import('../js/modules/koerper.js');
+  const { ctx } = testKontext(leererZustand(), { esc, formatDatum });
+  const html = erstelleKoerperModul(ctx).heuteHtml();
+  assert.doesNotMatch(html, /kw-zeitraum/, 'Zeitraum über nichts ergibt keinen Sinn');
+  assert.match(html, /Noch keine Werte/);
+});
