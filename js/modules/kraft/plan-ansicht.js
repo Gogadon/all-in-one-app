@@ -15,7 +15,7 @@ import {
 import {
   planFuer, einheitenBibliothek, zyklusEinheiten, aktuelleEinheit, einheitIstRuhetag,
 } from '../../core/plan.js';
-import { MODUL, PROG_DEFAULTS } from './logik.js';
+import { MODUL, PROG_DEFAULTS, uebungsUebersicht } from './logik.js';
 import { scheibenSatz } from '../../core/scheiben.js';
 import { formatZahlEingabe } from '../../core/metrics.js';
 
@@ -59,6 +59,13 @@ export function erstellePlanAnsicht(k) {
       html += `<div class="knopf-zeile"><button class="knopf" data-action="k.zyklusPlus">+ Einheit in den Zyklus</button>
         <button class="knopf geist" data-action="k.heuteWaehlen">Heute korrigieren</button></div>`;
     }
+
+    // ---- ALLE ÜBUNGEN ----
+    // Die einzige Stelle, an der man JEDE Übung erreicht — auch die, die in
+    // keiner Einheit stecken (Alternativen, spontan im Training angelegte)
+    // und die archivierten.
+    const anzahl = uebungsUebersicht(S()).filter(u => !u.archiviert).length;
+    html += `<button class="knopf voll alle-uebungen" data-action="k.bibliothek">Alle Übungen (${anzahl})</button>`;
 
     // ---- EINHEITEN-BIBLIOTHEK ----
     html += `<p class="sheet-abschnitt zwischen">Einheiten · Bibliothek</p>`;
@@ -208,6 +215,51 @@ export function erstellePlanAnsicht(k) {
       </div>` : ''}`;
   }
 
+  /** „3 Einheiten · 42×" — wo steckt die Übung, wie oft gemacht. */
+  function uebungInfo(u) {
+    const wo = u.einheiten > 0 ? `${u.einheiten} ${u.einheiten === 1 ? 'Einheit' : 'Einheiten'}`
+      : u.istAlternative ? 'Alternative'
+      : 'nirgends eingeplant';
+    const wie = u.trainiert > 0 ? `${u.trainiert}×` : 'noch nie';
+    return `${wo} · ${wie}`;
+  }
+
+  /**
+   * Sheet „Alle Übungen": jede Kraft-/Cardio-Übung, ein Tippen öffnet ihr
+   * ⚙️-Sheet. Archivierte stehen unten und lassen sich wiederherstellen —
+   * vorher gab es dafür gar keinen Knopf, archiviert hieß praktisch weg.
+   */
+  function bibliothekHtml() {
+    const q = (ui.bibliothek?.suche ?? '').trim().toLowerCase();
+    const alle = uebungsUebersicht(S())
+      .filter(u => !q || u.aktivitaet.name.toLowerCase().includes(q));
+    const aktiv = alle.filter(u => !u.archiviert);
+    const archiv = alle.filter(u => u.archiviert);
+
+    const zeile = (u) => `<button class="picker-zeile bib-zeile" data-action="k.einstellungen" data-akt="${u.aktivitaet.id}" data-von="bibliothek">
+        <span class="punkt ${u.aktivitaet.kategorie}"></span>
+        <span class="bib-text">
+          <span class="bib-name">${esc(u.aktivitaet.name)}</span>
+          <small class="dim bib-info">${uebungInfo(u)}</small>
+        </span>
+      </button>`;
+
+    let html = `<h3>Alle Übungen</h3>
+      <input class="suche" type="text" placeholder="Suchen…" value="${esc(ui.bibliothek?.suche ?? '')}" data-change="k.bibSuche">
+      <div class="picker-liste bib-liste">`;
+    html += aktiv.map(zeile).join('')
+      || `<p class="dim">${q ? 'Keine Treffer.' : 'Noch keine Übungen — leg sie über „+ Übung" in einer Einheit an.'}</p>`;
+    if (archiv.length) {
+      html += `<p class="sheet-abschnitt zwischen">Archiviert (${archiv.length})</p>`
+        + archiv.map(u => `<div class="picker-zeile bib-zeile archiviert">
+            <span class="punkt ${u.aktivitaet.kategorie}"></span>
+            <span class="bib-name">${esc(u.aktivitaet.name)}</span>
+            <button class="knopf klein" data-action="k.aktReaktiv" data-akt="${u.aktivitaet.id}">Wiederherstellen</button>
+          </div>`).join('');
+    }
+    return html + `</div>`;
+  }
+
   function einstellungenHtml(aktId, altId) {
     const akt = findeAktivitaet(S(), aktId);
     if (!akt) return '';
@@ -220,7 +272,11 @@ export function erstellePlanAnsicht(k) {
     const param = (name, label, wert) =>
       `<label class="feld breit"><input type="text" inputmode="decimal" value="${esc(wert)}" data-change="k.progParam" data-akt="${aktId}" ${altId ? `data-alt="${altId}"` : ''} data-param="${name}"><span>${label}</span></label>`;
 
-    let html = `<h3>${esc(ziel.name)}</h3>`;
+    // Aus „Alle Übungen" gekommen? Dann führt ein Knopf dorthin zurück,
+    // statt dass man das Sheet schließen und neu öffnen muss.
+    let html = ui.bibliothek && !altId
+      ? `<button class="sheet-zurueck" data-action="k.bibliothek" data-behalten="1">‹ Alle Übungen</button>` : '';
+    html += `<h3>${esc(ziel.name)}</h3>`;
 
     // Umbenennen (nur Hauptübung; Alternative behält ihren eigenen Bearbeiten-Weg)
     if (!altId) {
@@ -333,5 +389,5 @@ export function erstellePlanAnsicht(k) {
     return html;
   }
 
-  return { planHtml, heuteWaehlenHtml, einheitNeuHtml, umbenennenHtml, zyklusPickerHtml, pickerHtml, einstellungenHtml };
+  return { planHtml, heuteWaehlenHtml, einheitNeuHtml, umbenennenHtml, zyklusPickerHtml, pickerHtml, einstellungenHtml, bibliothekHtml };
 }

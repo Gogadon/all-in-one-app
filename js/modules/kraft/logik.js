@@ -458,3 +458,62 @@ export function wochenVolumen(state, { wochen = 6, modul = MODUL } = {}) {
   const letzte = sortiert.slice(-wochen);
   return { wochen: letzte, werte: letzte.map(w => Math.round(proWoche.get(w))) };
 }
+
+// ============================================================
+// Übungs-Übersicht („Alle Übungen" im Plan-Tab)
+// ============================================================
+
+/**
+ * Alle Kraft- und Cardio-Übungen der Bibliothek mit dem, was man zum
+ * Aufräumen wissen will: Wo steckt sie, wie oft wurde sie trainiert?
+ *
+ * Dieselbe Auswahl wie „Übung hinzufügen" (kraft + sonstiges). Rad, Wandern
+ * und Schwimmen legen intern auch Bibliotheks-Einträge an — das sind keine
+ * Übungen, die man hier verwalten will.
+ *
+ * „Trainiert" zählt nach derselben Regel wie Verlauf und Vorschläge: Segment
+ * abgehakt, mit Sätzen, und gezählt wird die Übung, die WIRKLICH gemacht
+ * wurde (identVon). Wer auf die Alternative ausgewichen ist, hat die
+ * Alternative trainiert, nicht die Hauptübung. Pro Session höchstens einmal,
+ * übersprungene Sessions zählen nicht.
+ *
+ * @returns [{ aktivitaet, einheiten, istAlternative, trainiert, archiviert }]
+ *   nach Name sortiert (deutsch: „Ä" bei „A", nicht hinter „Z").
+ */
+export function uebungsUebersicht(state) {
+  const trainiert = new Map();
+  for (const s of state.sessions ?? []) {
+    if (s.uebersprungen) continue;
+    const inDieser = new Set();
+    for (const seg of s.segmente ?? []) {
+      if (seg.erledigt === true && seg.eintraege?.length) inDieser.add(identVon(seg));
+    }
+    for (const id of inDieser) trainiert.set(id, (trainiert.get(id) ?? 0) + 1);
+  }
+
+  const einheiten = new Map();
+  for (const plan of Object.values(state.plaene ?? {})) {
+    for (const e of plan?.einheiten ?? []) {
+      // Eine Einheit zählt einmal, auch wenn die Übung zweimal darin steht.
+      for (const id of new Set((e.segmente ?? []).map(v => v.aktivitaetId))) {
+        einheiten.set(id, (einheiten.get(id) ?? 0) + 1);
+      }
+    }
+  }
+
+  const alsAlternative = new Set();
+  for (const a of state.bibliothek ?? []) {
+    for (const id of a.alternativen ?? []) alsAlternative.add(id);
+  }
+
+  return (state.bibliothek ?? [])
+    .filter(a => a.kategorie === 'kraft' || a.kategorie === 'sonstiges')
+    .map(a => ({
+      aktivitaet: a,
+      einheiten: einheiten.get(a.id) ?? 0,
+      istAlternative: alsAlternative.has(a.id),
+      trainiert: trainiert.get(a.id) ?? 0,
+      archiviert: a.archiviert === true,
+    }))
+    .sort((x, y) => x.aktivitaet.name.localeCompare(y.aktivitaet.name, 'de'));
+}
