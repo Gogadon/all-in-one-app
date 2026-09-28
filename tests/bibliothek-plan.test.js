@@ -601,3 +601,163 @@ test('Zyklus: „Heute korrigieren" nach einem Überspringen landet nicht danebe
   // Und am Folgetag zählt der Anker-Tag ganz normal mit.
   assert.equal(P.aktuelleEinheit(state, 'kraft', '2026-09-06').name, 'Brust');
 });
+
+// ============================================================
+// „Alle Übungen" — Übersicht, Sheet, Wiederherstellen
+// ============================================================
+
+/** Kleine Welt: Übungen in Einheiten, Alternativen, Sessions. */
+function uebungsWelt() {
+  const state = leererZustand();
+  const bank = addAktivitaet(state, { name: 'Bankdrücken', kategorie: 'kraft', messwerte: ['gewicht', 'wdh'] });
+  const kh = addAktivitaet(state, { name: 'KH-Bank', kategorie: 'kraft', messwerte: ['gewicht', 'wdh'] });
+  const aeh = addAktivitaet(state, { name: 'Ärmel-Curls', kategorie: 'kraft', messwerte: ['gewicht', 'wdh'] });
+  const lauf = addAktivitaet(state, { name: 'Laufband', kategorie: 'sonstiges', messwerte: ['dauer'] });
+  const zug = addAktivitaet(state, { name: 'Zugmaschine', kategorie: 'kraft', messwerte: ['gewicht', 'wdh'] });
+  addAktivitaet(state, { name: 'Radtour', kategorie: 'rad', messwerte: ['distanz'] });
+  addAlternative(state, bank.id, kh.id);
+
+  const push = addEinheit(state, 'kraft', { name: 'Push A' });
+  addAktivitaetZuEinheit(state, 'kraft', push.id, bank.id);
+  addAktivitaetZuEinheit(state, 'kraft', push.id, lauf.id);
+  const push2 = addEinheit(state, 'kraft', { name: 'Push B' });
+  addAktivitaetZuEinheit(state, 'kraft', push2.id, bank.id);
+
+  /** Session mit Segmenten: [aktivitaetId, { alt, erledigt, saetze }] */
+  const session = (datum, segs, { uebersprungen = false } = {}) => {
+    const s = neueSession({ datum });
+    s.modul = 'kraft';
+    if (uebersprungen) s.uebersprungen = true;
+    for (const [id, { alt = null, erledigt = true, saetze = 1 } = {}] of segs) {
+      const seg = addSegment(s, neuesSegment(id, { altOf: alt }));
+      seg.erledigt = erledigt;
+      for (let i = 0; i < saetze; i++) addEintrag(seg, neuerEintrag({ gewicht: 80, wdh: 8 }));
+    }
+    state.sessions.push(s);
+  };
+  session('2026-09-01', [[bank.id], [lauf.id]]);
+  session('2026-09-03', [[bank.id], [bank.id]]);                 // zweimal drin → einmal zählen
+  session('2026-09-05', [[bank.id, { alt: kh.id }]]);           // ausgewichen → KH-Bank zählt
+  session('2026-09-07', [[bank.id, { erledigt: false }]]);      // nicht abgehakt → zählt nicht
+  session('2026-09-09', [[bank.id, { saetze: 0 }]]);            // abgehakt, aber leer → zählt nicht
+  session('2026-09-11', [[bank.id]], { uebersprungen: true });  // übersprungen → zählt nicht
+  return { state, bank, kh, aeh, lauf, zug };
+}
+
+test('Übersicht: „trainiert" zählt, was wirklich gemacht wurde', async () => {
+  const { uebungsUebersicht } = await import('../js/modules/kraft/logik.js');
+  const { state, bank, kh, lauf, zug } = uebungsWelt();
+  const u = Object.fromEntries(uebungsUebersicht(state).map(x => [x.aktivitaet.id, x]));
+  assert.equal(u[bank.id].trainiert, 2, 'nur 01.09. und 03.09.');
+  assert.equal(u[kh.id].trainiert, 1, 'ausgewichen am 05.09. zählt für die Alternative');
+  assert.equal(u[lauf.id].trainiert, 1);
+  assert.equal(u[zug.id].trainiert, 0);
+});
+
+test('Übersicht: wo steckt die Übung', async () => {
+  const { uebungsUebersicht } = await import('../js/modules/kraft/logik.js');
+  const { state, bank, kh, aeh } = uebungsWelt();
+  const u = Object.fromEntries(uebungsUebersicht(state).map(x => [x.aktivitaet.id, x]));
+  assert.equal(u[bank.id].einheiten, 2, 'Push A und Push B');
+  assert.equal(u[kh.id].einheiten, 0);
+  assert.equal(u[kh.id].istAlternative, true);
+  assert.equal(u[bank.id].istAlternative, false);
+  assert.equal(u[aeh.id].einheiten, 0);
+  assert.equal(u[aeh.id].istAlternative, false, 'eine Karteileiche');
+});
+
+test('Übersicht: nur Kraft und Cardio, deutsch sortiert, Archiv markiert', async () => {
+  const { uebungsUebersicht } = await import('../js/modules/kraft/logik.js');
+  const { state, zug } = uebungsWelt();
+  archiviere(state, zug.id);
+  const liste = uebungsUebersicht(state);
+  assert.deepEqual(liste.map(x => x.aktivitaet.name),
+    ['Ärmel-Curls', 'Bankdrücken', 'KH-Bank', 'Laufband', 'Zugmaschine'],
+    'Radtour fehlt; „Ä" steht bei „A", nicht hinter „Z"');
+  assert.equal(liste.find(x => x.aktivitaet.id === zug.id).archiviert, true);
+});
+
+/** Kraft-Modul mit Test-Kontext bauen. */
+async function kraftMit(state) {
+  const { installiereBrowserAttrappe, testKontext } = await import('./helpers/umgebung.js');
+  installiereBrowserAttrappe();
+  const { esc, formatDatum } = await import('../js/ui/components.js');
+  const { erstelleKraftModul } = await import('../js/modules/kraft.js');
+  const { ctx, protokoll } = testKontext(state, { esc, formatDatum });
+  return { k: erstelleKraftModul(ctx), protokoll };
+}
+
+test('Alle Übungen: Knopf im Plan zählt ohne Archiv, Sheet zeigt alles', async () => {
+  const { state, zug, kh } = uebungsWelt();
+  archiviere(state, zug.id);
+  const { k, protokoll } = await kraftMit(state);
+
+  const plan = k.planHtml();
+  assert.match(plan, /data-action="k\.bibliothek"[^>]*>Alle Übungen \(4\)</, 'fünf Übungen, eine archiviert');
+  assert.ok(plan.indexOf('Alle Übungen') < plan.indexOf('Einheiten · Bibliothek'), 'über der Einheiten-Bibliothek');
+
+  k.actions['k.bibliothek']({});
+  const sheet = protokoll.sheet;
+  assert.match(sheet, /<h3>Alle Übungen<\/h3>/);
+  assert.match(sheet, /Bankdrücken[\s\S]*2 Einheiten · 2×/);
+  assert.match(sheet, /KH-Bank[\s\S]*Alternative · 1×/);
+  assert.match(sheet, /Ärmel-Curls[\s\S]*nirgends eingeplant · noch nie/);
+  assert.doesNotMatch(sheet, /Radtour/);
+  // Die archivierte steht unten, mit Wiederherstellen statt ⚙️-Weg.
+  assert.match(sheet, /Archiviert \(1\)[\s\S]*Zugmaschine[\s\S]*k\.aktReaktiv/);
+  // Jede aktive Zeile führt ins ⚙️-Sheet — mit Merker, woher man kam.
+  assert.match(sheet, new RegExp(`data-action="k\\.einstellungen" data-akt="${kh.id}" data-von="bibliothek"`));
+});
+
+test('Alle Übungen: Suche filtert, auch im Archiv', async () => {
+  const { state, zug } = uebungsWelt();
+  archiviere(state, zug.id);
+  const { k, protokoll } = await kraftMit(state);
+  k.actions['k.bibliothek']({});
+  k.actions['k.bibSuche']({}, { value: 'bank' });
+  assert.match(protokoll.sheet, /Bankdrücken/);
+  assert.match(protokoll.sheet, /KH-Bank/);
+  assert.doesNotMatch(protokoll.sheet, /Laufband|Zugmaschine/);
+  k.actions['k.bibSuche']({}, { value: 'xyz' });
+  assert.match(protokoll.sheet, /Keine Treffer/);
+});
+
+test('Alle Übungen: Wiederherstellen holt die Übung zurück in die Auswahl', async () => {
+  const { state, zug } = uebungsWelt();
+  archiviere(state, zug.id);
+  const { k, protokoll } = await kraftMit(state);
+  k.actions['k.bibliothek']({});
+  await k.actions['k.aktReaktiv']({ akt: zug.id });
+  assert.equal(zug.archiviert, undefined);
+  assert.equal(protokoll.saves, 1, 'gespeichert');
+  assert.doesNotMatch(protokoll.sheet, /Archiviert/, 'Sheet bleibt offen, Archiv jetzt leer');
+  assert.match(protokoll.sheet, /Zugmaschine/);
+  // …und sie taucht wieder bei „Übung hinzufügen" auf.
+  k.actions['k.uebungPlus']();
+  assert.match(protokoll.sheet, /Zugmaschine/);
+});
+
+test('Alle Übungen: Zurück-Knopf nur, wenn man aus der Liste kommt', async () => {
+  const { state, bank, kh } = uebungsWelt();
+  const { k, protokoll } = await kraftMit(state);
+
+  // Aus der Liste → Zurück-Knopf, und er führt mit der alten Suche zurück.
+  k.actions['k.bibliothek']({});
+  k.actions['k.bibSuche']({}, { value: 'bank' });
+  k.actions['k.einstellungen']({ akt: bank.id, von: 'bibliothek' });
+  assert.match(protokoll.sheet, /‹ Alle Übungen/);
+  // Das ⚙️ einer Alternative im Sheet lässt den Weg zurück stehen.
+  k.actions['k.einstellungen']({ akt: bank.id, alt: kh.id });
+  k.actions['k.einstellungen']({ akt: bank.id, von: 'bibliothek' });
+  assert.match(protokoll.sheet, /‹ Alle Übungen/);
+  k.actions['k.bibliothek']({ behalten: '1' });
+  assert.match(protokoll.sheet, /value="bank"/, 'Suche behalten');
+  assert.doesNotMatch(protokoll.sheet, /Laufband/);
+
+  // Über das ⚙️ im Plan → wie immer, kein Zurück-Knopf.
+  k.actions['k.einstellungen']({ akt: bank.id });
+  assert.doesNotMatch(protokoll.sheet, /‹ Alle Übungen/);
+  // Frisch über den Plan-Knopf geöffnet → Suche wieder leer.
+  k.actions['k.bibliothek']({});
+  assert.match(protokoll.sheet, /value=""/);
+});

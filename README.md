@@ -341,6 +341,16 @@ bewusst blockieren statt still herauslöschen, sonst ändert sich der Plan,
 ohne dass es jemand merkt). Alternativ-Verweise blockieren **nicht** — die
 räumt `entferneAktivitaet` selbst auf.
 
+**„Alle Übungen" im Plan-Tab** ist die einzige Stelle, an der man *jede*
+Übung erreicht — auch solche, die in keiner Einheit stecken (Alternativen,
+spontan im Training angelegte) und archivierte. Vorher gab es für die kein
+⚙️, und Archivieren war praktisch endgültig: `reaktiviere()` existierte im
+Kern, aber kein Knopf rief es auf. Die Zahl „42×" zählt nach derselben Regel
+wie Verlauf und Vorschläge (`identVon`, nur abgehakte Segmente mit Sätzen,
+höchstens einmal pro Session): Wer auf die Alternative ausgewichen ist, hat
+die Alternative trainiert. Rechnung in `uebungsUebersicht()`
+(`modules/kraft/logik.js`).
+
 ### 6. Alternativen sind echte Bibliotheks-Übungen (ID-Verweise)
 
 Eine Übung trägt `alternativen: [uebungsId, …]` — reine Verweise auf andere
@@ -468,7 +478,7 @@ sogar: Die Kachel sagte „2 Wanderungen", die Zeile darunter „2 Touren".)
 
 ## Tests
 
-326 Tests, alle ohne Browser lauffähig, ohne eine einzige Abhängigkeit:
+333 Tests, alle ohne Browser lauffähig, ohne eine einzige Abhängigkeit:
 
 ```
 npm test

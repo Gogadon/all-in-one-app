@@ -27,7 +27,7 @@ import {
 } from '../core/model.js';
 import {
   addAktivitaet, addAlternative, entferneAlternative, vorschlagMesswerte,
-  benenneUm, setzeMesswerte, entferneAktivitaet, archiviere,
+  benenneUm, setzeMesswerte, entferneAktivitaet, archiviere, reaktiviere,
 } from '../core/library.js';
 import {
   planFuer, addEinheit, benenneEinheitUm, loescheEinheit,
@@ -72,6 +72,7 @@ export function erstelleKraftModul(ctx) {
     picker: null,           // { ziel:'session'|'einheit', einheitId?, suche:'' }
     progMetrik: 'gewicht',  // Fortschritt: 'gewicht' | 'avg' | 'volumen'
     umbenennen: null,       // { typ:'einheit'|'altName'|'altNeu', id?, altId?, wert }
+    bibliothek: null,       // { suche:'' } solange man aus „Alle Übungen" kommt
   };
   const progExpand = new Set();     // Übungs-IDs mit vollständig ausgeklappter Verlaufsliste
   const progGruppeAuf = new Set();  // manuell aufgeklappte Einheiten-Gruppen im Fortschritt
@@ -105,7 +106,7 @@ export function erstelleKraftModul(ctx) {
   const { heuteHtml, aktualisiereVolumenAnzeige } = erstelleHeuteAnsicht(ansichtKontext);
   const {
     planHtml, heuteWaehlenHtml, einheitNeuHtml, umbenennenHtml,
-    zyklusPickerHtml, pickerHtml, einstellungenHtml,
+    zyklusPickerHtml, pickerHtml, einstellungenHtml, bibliothekHtml,
   } = erstellePlanAnsicht(ansichtKontext);
   const { fortschrittHtml } = erstelleFortschrittAnsicht(ansichtKontext);
 
@@ -576,7 +577,29 @@ export function erstelleKraftModul(ctx) {
     },
 
     // ---- Einstellungen-Sheet ----
-    'k.einstellungen'(d) { sheet.oeffne(einstellungenHtml(d.akt, d.alt || null)); },
+    'k.einstellungen'(d) {
+      // Nur wer aus „Alle Übungen" kommt, bekommt dorthin einen Zurück-Knopf.
+      // Das ⚙️ im Plan oder im Training öffnet das Sheet wie immer.
+      // (Das ⚙️ einer Alternative INNERHALB des Sheets lässt den Weg stehen.)
+      if (d.von === 'bibliothek') ui.bibliothek ??= { suche: '' };
+      else if (!d.alt) ui.bibliothek = null;
+      sheet.oeffne(einstellungenHtml(d.akt, d.alt || null));
+    },
+    'k.bibliothek'(d) {
+      // Zurück aus dem ⚙️-Sheet: Suche behalten. Frisch vom Plan-Knopf: leer.
+      if (!d.behalten || !ui.bibliothek) ui.bibliothek = { suche: '' };
+      sheet.oeffne(bibliothekHtml());
+    },
+    'k.bibSuche'(d, el) {
+      ui.bibliothek = { suche: el.value };
+      sheet.aktualisiere(bibliothekHtml());
+    },
+    async 'k.aktReaktiv'(d) {
+      reaktiviere(S(), d.akt);
+      await ctx.save();
+      sheet.aktualisiere(bibliothekHtml());   // Sheet bleibt offen, Zeile wandert nach oben
+      ctx.render();                          // Zähler „Alle Übungen (n)" im Plan
+    },
     async 'k.aktName'(d, el) {
       const name = el.value.trim();
       if (!name) return;
@@ -606,7 +629,9 @@ export function erstelleKraftModul(ctx) {
         text: `„${akt?.name}" verschwindet aus Auswahllisten, dein Verlauf bleibt erhalten.`,
         jaText: 'Archivieren' })) return;
       archiviere(S(), d.akt);
-      sheet.schliesse();
+      // Aus „Alle Übungen" gekommen → dorthin zurück; man sieht sie dann
+      // unten bei „Archiviert" stehen, samt Weg zurück.
+      if (ui.bibliothek) sheet.oeffne(bibliothekHtml()); else sheet.schliesse();
       await speichernUndZeigen();
     },
     async 'k.aktWeg'(d) {
@@ -615,7 +640,7 @@ export function erstelleKraftModul(ctx) {
         text: `„${akt?.name}" wird endgültig gelöscht.`, jaText: 'Löschen', gefahr: true })) return;
       try {
         entferneAktivitaet(S(), d.akt);
-        sheet.schliesse();
+        if (ui.bibliothek) sheet.oeffne(bibliothekHtml()); else sheet.schliesse();
         await speichernUndZeigen();
       } catch (err) {
         await hinweis('Nicht möglich', err.message);
