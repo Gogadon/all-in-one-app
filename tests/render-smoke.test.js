@@ -412,3 +412,57 @@ test('Scheiben: Einstellungs-Sheet hat das Stangen-Feld, Scheibensatz erst mit S
   assert.equal(bank.einstellungen.stange, undefined, 'leer löscht die Einstellung');
   assert.equal(state.einstellungen.scheiben, undefined, 'Scheibensatz unangetastet');
 });
+
+test('Smoke Kraft: Rekord sitzt am Feld, nicht als eigenes Abzeichen in der Zeile', async () => {
+  // Das Abzeichen „🎉 Wdh" stand früher hinter den Feldern. Bei einarmigen
+  // Übungen (kg × L / R) war dafür kein Platz — es rutschte samt ✕ in eine
+  // zweite Zeile. Jetzt markiert es das Feld, das den Rekord trägt.
+  const state = leererZustand();
+  const curls = addAktivitaet(state, { name: 'Armbeugen, Arm auf Schrägbank', kategorie: 'kraft', messwerte: ['gewicht', 'wdh'] });
+  curls.einstellungen = { einarmig: true };
+  const bank = addAktivitaet(state, { name: 'Bankdrücken', kategorie: 'kraft', messwerte: ['gewicht', 'wdh'] });
+  const e = addEinheit(state, 'kraft', { name: 'Arme' });
+  addAktivitaetZuEinheit(state, 'kraft', e.id, curls.id);
+  addAktivitaetZuEinheit(state, 'kraft', e.id, bank.id);
+  addZuZyklus(state, 'kraft', e.id);
+
+  // Letztes Mal: 17,5 kg × 4/6 und Bank 80 × 8.
+  const alt = neueSession({ datum: '2026-01-05' });
+  alt.modul = 'kraft'; alt.abgeschlossen = true;
+  const a1 = addSegment(alt, neuesSegment(curls.id)); a1.erledigt = true;
+  addEintrag(a1, neuerEintrag({ gewicht: 17.5, wdh_l: 4, wdh_r: 6 }));
+  const a2 = addSegment(alt, neuesSegment(bank.id)); a2.erledigt = true;
+  addEintrag(a2, neuerEintrag({ gewicht: 80, wdh: 8 }));
+  state.sessions.push(alt);
+
+  const { m: kraft } = modul(erstelleKraftModul, state);
+  await kraft.actions['k.start']({ einheit: e.id });
+  const heute = state.sessions.find(s => s !== alt);
+  const [sCurls, sBank] = heute.segmente;
+  const wert = (seg, eintrag, typ, value) =>
+    kraft.actions['k.wert']({ seg: seg.id, eintrag: eintrag.id, typ }, { value });
+
+  // Curls: 17,5 × 10/12 → Wdh-Rekord (schwächere Seite 10 > 4).
+  const c = sCurls.eintraege[0];
+  await wert(sCurls, c, 'gewicht', '17,5'); await wert(sCurls, c, 'wdh_l', '10'); await wert(sCurls, c, 'wdh_r', '12');
+  // Bank: 85 × 5 → Gewichts-Rekord.
+  const b = sBank.eintraege[0];
+  await wert(sBank, b, 'gewicht', '85'); await wert(sBank, b, 'wdh', '5');
+
+  const html = kraft.heuteHtml();
+  const zeilen = html.split('class="satz ').slice(1);
+  const curlsZeile = zeilen.find(z => z.includes(`data-eintrag="${c.id}"`));
+  const bankZeile = zeilen.find(z => z.includes(`data-eintrag="${b.id}"`));
+
+  assert.doesNotMatch(html, /class="pr"/, 'kein Abzeichen mehr in der Zeile');
+  // Einarmig: beide Wdh-Felder markiert, EIN Aufkleber (auf R), kg unmarkiert.
+  assert.equal((curlsZeile.match(/feld schmal rekord/g) ?? []).length, 2);
+  assert.equal((curlsZeile.match(/pr-marke/g) ?? []).length, 1);
+  assert.match(curlsZeile, /data-typ="wdh_r"><span class="pr-marke"[^>]*aria-label="Neuer Rekord: Wiederholungen"/,
+    'Aufkleber auf dem R-Feld');
+  assert.doesNotMatch(curlsZeile, /<label class="feld rekord">/);
+  // Zweiarmig, Gewicht: nur das kg-Feld.
+  assert.match(bankZeile, /<label class="feld rekord">\s*<span class="feld-box"><input[^>]*data-typ="gewicht"/);
+  assert.match(bankZeile, /aria-label="Neuer Rekord: Gewicht"/);
+  assert.equal((bankZeile.match(/ rekord/g) ?? []).length, 1);
+});

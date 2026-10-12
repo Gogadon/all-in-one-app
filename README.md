@@ -326,6 +326,25 @@ Wird ein Feld während der Eingabe neu erzeugt, verliert es den Fokus und der
 „Weiter"-Knopf der Handy-Tastatur springt ins Leere. Deshalb speichert
 `k.wert` nur und rendert *nicht* neu.
 
+### 5a. Die Satz-Zeile bleibt einzeilig — die Felder geben nach
+
+`kg × L / R` mit +/−-Knopf braucht auf einem 360-px-Handy rund 60 px mehr,
+als da sind. Statt umzubrechen, werden die Eingabefelder schmaler, nur so
+weit wie nötig und nie unter ihre Mindestbreite (kg fasst „102,5", L/R zwei
+Ziffern). Die Schrift bleibt gleich groß. Drei Dinge halten das zusammen:
+
+- `.satz` hat **kein** `flex-wrap`. Mit wrap bricht Flexbox um, *bevor* es
+  schrumpft.
+- Breite und Mindestbreite sitzen an der `.feld-box`, das `<input>` füllt sie
+  mit `width:100%`. Hat das Feld selbst eine feste Breite, meldet es diese als
+  Minimum, und es schrumpft nichts.
+- Ein Rekord ist kein eigenes Abzeichen in der Zeile, sondern markiert das
+  Feld, das ihn trägt (Rand + 🎉 auf der Ecke). Das kostet keine Breite. Der
+  Aufkleber hängt in der Box, damit er beim Schrumpfen mitwandert.
+
+Nur unter 330 px (z. B. das Außendisplay eines Klapphandys) darf die Zeile
+noch umbrechen.
+
 ### 5b. Löschen prüft ALLE Referenzen, nicht nur Sessions
 
 `referenzenVonAktivitaet(state, id)` beantwortet an einer Stelle, wo eine Übung
@@ -478,7 +497,7 @@ sogar: Die Kachel sagte „2 Wanderungen", die Zeile darunter „2 Touren".)
 
 ## Tests
 
-333 Tests, alle ohne Browser lauffähig, ohne eine einzige Abhängigkeit:
+334 Tests, alle ohne Browser lauffähig, ohne eine einzige Abhängigkeit:
 
 ```
 npm test

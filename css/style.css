@@ -145,11 +145,34 @@ h1,h2,h3,.num{font-family:var(--font-display);letter-spacing:-.02em}
 .verlauf-liste .dim{margin-right:6px}
 
 /* Satz-Zeilen */
-/* Umbruch statt Überlappung: Die Zeile hat im weitesten Fall (einarmig +
-   assistiert + PR-Abzeichen) mehr fixe Breiten, als ein schmales Handy
-   hergibt. Ohne wrap wurde das Einheiten-Label unter dem Abzeichen
-   begraben — lieber eine zweite Zeile als übereinanderliegender Text. */
-.satz{display:flex;align-items:center;gap:8px;flex-wrap:wrap;row-gap:6px}
+/* Immer EINE Zeile. Im weitesten Fall (einarmig + assistiert) braucht die
+   Zeile auf einem 360-px-Handy rund 60 px mehr, als da sind. Statt
+   umzubrechen, werden die Eingabefelder schmaler — und zwar nur so weit wie
+   nötig (flex-shrink bis zur Mindestbreite): Auf breiten Handys bleibt alles,
+   wie es war, die Schrift bleibt überall gleich groß.
+   Kein flex-wrap: Mit wrap bricht Flexbox um, BEVOR es schrumpft. */
+.satz{display:flex;align-items:center;gap:8px;flex-wrap:nowrap}
+/* min-width:auto (statt 0): ein Label wird nie schmaler als Feld-Mindestbreite
+   plus Einheit — sonst klebte „kg" am „×" daneben. */
+.satz .feld{flex:0 1 auto;min-width:auto}
+/* Mindestbreiten: kg muss „102,5" fassen (einseitige Beinpresse), L/R nur
+   zwei Ziffern — also geben vor allem L/R nach. */
+/* Die BOX trägt Breite und Mindestbreite, das Feld füllt sie aus. Andersherum
+   (feste Breite am Feld) meldet das Feld seine volle Breite als Minimum —
+   dann schrumpft nichts, und die Zeile ragt über die Karte. */
+.satz .feld-box{flex:0 1 var(--feld-b);min-width:var(--feld-min,56px)}
+.satz .feld input{width:100%;min-width:0;padding-left:3px;padding-right:3px}
+.satz .feld.schmal{--feld-min:32px}
+.satz .mal{flex:none}
+/* Einarmig: drei Zahlenfelder — Abstände etwas enger, damit weniger
+   geschrumpft werden muss. */
+.satz.einarmig{gap:5px}
+.satz.einarmig .feld{gap:3px}
+.satz.einarmig .vz{width:30px}
+.satz.einarmig .weg{padding:6px 2px 6px 4px}
+/* Letzter Ausweg für sehr schmale Bildschirme (z.B. Außendisplay eines
+   Klapphandys): dort lieber umbrechen als Felder unter die Mindestbreite. */
+@media (max-width:330px){ .satz{flex-wrap:wrap;row-gap:6px} }
 .satz-nr{flex:none;width:26px;height:26px;border-radius:9px;background:var(--surface-2);
   font-size:12px;font-weight:700;color:var(--dim)}
 .satz-nr.warm{background:rgba(252,180,75,.15);color:var(--wandern)}
@@ -166,7 +189,7 @@ h1,h2,h3,.num{font-family:var(--font-display);letter-spacing:-.02em}
 .scheiben-zeile strong{color:var(--text);font-weight:600}
 .scheiben-zeile.warnung{color:var(--wandern)}
 .feld{display:flex;align-items:center;gap:5px;min-width:0}
-.feld input{width:64px;padding:9px 8px;text-align:center;
+.feld input{width:var(--feld-b,64px);padding:9px 8px;text-align:center;
   background:var(--surface-2);border:1px solid var(--line);
   border-radius:var(--r-icon);font-family:var(--font-display);
   font-weight:700;font-size:15px;color:var(--text)}
@@ -174,14 +197,24 @@ h1,h2,h3,.num{font-family:var(--font-display);letter-spacing:-.02em}
 .feld span{font-size:11px;color:var(--dim-2)}
 .feld.breit{flex-direction:column;align-items:stretch;gap:3px}
 .feld.breit span{text-align:center}
-/* flex:none — sonst quetscht die Zeile das Abzeichen zusammen, bis es über
-   dem „Wdh" daneben liegt. */
-.pr{flex:none;font-size:12px;color:var(--kraft);white-space:nowrap}
+/* Rekord: am Feld selbst statt als Abzeichen in der Zeile — braucht keine
+   Breite, also bricht auch kg × L / R nicht mehr um. Der Aufkleber hängt in
+   der Box um das Eingabefeld und sitzt dadurch auf dessen Ecke — auch wenn
+   das Feld auf schmalen Handys schrumpft (eine ausgerechnete Position wäre
+   dann aufs „kg" daneben gerutscht). --feld-b ist die Normalbreite. */
+.feld{--feld-b:64px}
+.feld.schmal{--feld-b:48px}
+.feld-box{position:relative;display:flex;min-width:0;flex:0 1 auto}
+.feld.rekord input{border-color:rgba(205,253,52,.6);
+  box-shadow:0 0 0 1px rgba(205,253,52,.18)}
+.feld.rekord input:focus{border-color:var(--kraft)}
+.feld .pr-marke{position:absolute;top:-9px;right:-6px;
+  font-size:14px;line-height:1;color:inherit;pointer-events:none;
+  filter:drop-shadow(0 1px 1px rgba(0,0,0,.6))}
 .weg{margin-left:auto;color:var(--dim-2);font-size:14px;padding:6px}
 
 /* Einarmig / Assistiert */
 .mal{color:var(--dim-2);font-size:13px;flex:none}
-.feld.schmal input{width:48px}
 .vz{flex:none;width:34px;height:38px;border-radius:var(--r-icon);
   background:var(--surface-2);border:1px solid var(--line);
   font-family:var(--font-display);font-weight:800;font-size:18px;line-height:1}
