@@ -145,7 +145,8 @@ h1,h2,h3,.num{font-family:var(--font-display);letter-spacing:-.02em}
 .verlauf-liste .dim{margin-right:6px}
 
 /* Satz-Zeilen */
-/* Immer EINE Zeile. Im weitesten Fall (einarmig + assistiert) braucht die
+/* Kraftsätze: immer EINE Zeile (Cardio-Einträge siehe .satz.cardio unten).
+   Im weitesten Fall (einarmig + assistiert) braucht die
    Zeile auf einem 360-px-Handy rund 60 px mehr, als da sind. Statt
    umzubrechen, werden die Eingabefelder schmaler — und zwar nur so weit wie
    nötig (flex-shrink bis zur Mindestbreite): Auf breiten Handys bleibt alles,
@@ -154,14 +155,14 @@ h1,h2,h3,.num{font-family:var(--font-display);letter-spacing:-.02em}
 .satz{display:flex;align-items:center;gap:8px;flex-wrap:nowrap}
 /* min-width:auto (statt 0): ein Label wird nie schmaler als Feld-Mindestbreite
    plus Einheit — sonst klebte „kg" am „×" daneben. */
-.satz .feld{flex:0 1 auto;min-width:auto}
+.satz:not(.cardio) .feld{flex:0 1 auto;min-width:auto}
 /* Mindestbreiten: kg muss „102,5" fassen (einseitige Beinpresse), L/R nur
    zwei Ziffern — also geben vor allem L/R nach. */
 /* Die BOX trägt Breite und Mindestbreite, das Feld füllt sie aus. Andersherum
    (feste Breite am Feld) meldet das Feld seine volle Breite als Minimum —
    dann schrumpft nichts, und die Zeile ragt über die Karte. */
 .satz .feld-box{flex:0 1 var(--feld-b);min-width:var(--feld-min,56px)}
-.satz .feld input{width:100%;min-width:0;padding-left:3px;padding-right:3px}
+.satz:not(.cardio) .feld input{width:100%;min-width:0;padding-left:3px;padding-right:3px}
 .satz .feld.schmal{--feld-min:32px}
 .satz .mal{flex:none}
 /* Einarmig: drei Zahlenfelder — Abstände etwas enger, damit weniger
@@ -173,6 +174,13 @@ h1,h2,h3,.num{font-family:var(--font-display);letter-spacing:-.02em}
 /* Letzter Ausweg für sehr schmale Bildschirme (z.B. Außendisplay eines
    Klapphandys): dort lieber umbrechen als Felder unter die Mindestbreite. */
 @media (max-width:330px){ .satz{flex-wrap:wrap;row-gap:6px} }
+/* Cardio in der Kraft-Einheit (Laufband, Ergometer …) hat bis zu fünf Felder
+   und dreistellige Werte (Puls, kcal). Das passt in keine Zeile — hier wird
+   NICHT geschrumpft, sondern wie früher in eine zweite Zeile umgebrochen,
+   bei normaler Feldbreite. Die Einzeilig-Regeln oben gelten deshalb nur für
+   Kraftsätze (:not(.cardio)). Ohne diese Ausnahme wurden „109" und „183"
+   abgeschnitten. */
+.satz.cardio{flex-wrap:wrap;row-gap:6px}
 .satz-nr{flex:none;width:26px;height:26px;border-radius:9px;background:var(--surface-2);
   font-size:12px;font-weight:700;color:var(--dim)}
 .satz-nr.warm{background:rgba(252,180,75,.15);color:var(--wandern)}

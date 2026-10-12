@@ -466,3 +466,35 @@ test('Smoke Kraft: Rekord sitzt am Feld, nicht als eigenes Abzeichen in der Zeil
   assert.match(bankZeile, /aria-label="Neuer Rekord: Gewicht"/);
   assert.equal((bankZeile.match(/ rekord/g) ?? []).length, 1);
 });
+
+test('Smoke Kraft: Cardio-Einträge schrumpfen nicht — sie brechen um', async () => {
+  // PR #38 machte Kraftsätze einzeilig, indem die Felder schrumpfen dürfen.
+  // Die Regel traf auch Cardio in der Kraft-Einheit (Laufband: fünf Felder,
+  // dreistellige Pulswerte) — dort wurden „109" und „183" abgeschnitten.
+  // Layout lässt sich in Node nicht messen; geprüft wird deshalb das, woran
+  // es hängt: die Klasse am Eintrag und der Geltungsbereich der CSS-Regeln.
+  const state = leererZustand();
+  const lauf = addAktivitaet(state, { name: 'Laufband', kategorie: 'sonstiges',
+    messwerte: ['dauer', 'puls_avg', 'puls_max', 'distanz', 'kalorien'] });
+  const e = addEinheit(state, 'kraft', { name: 'Cardio' });
+  addAktivitaetZuEinheit(state, 'kraft', e.id, lauf.id);
+  addZuZyklus(state, 'kraft', e.id);
+  const { m: kraft } = modul(erstelleKraftModul, state);
+  await kraft.actions['k.start']({ einheit: e.id });
+  assert.match(kraft.heuteHtml(), /<div class="satz cardio">/);
+
+  const { readFileSync } = await import('node:fs');
+  const css = readFileSync(new URL('../css/style.css', import.meta.url), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.match(css, /\.satz\.cardio\{[^}]*flex-wrap:wrap/, 'Cardio darf umbrechen');
+  // Jede Regel, die Satz-Felder schrumpfen lässt, muss Cardio ausklammern.
+  for (const [, selektor, rumpf] of css.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+    if (!/\.satz\b/.test(selektor) || !/\.feld/.test(selektor)) continue;
+    if (!/width:100%|min-width:0\b|flex:0 1/.test(rumpf)) continue;
+    for (const teil of selektor.split(',')) {
+      if (!/\.satz\b/.test(teil)) continue;
+      assert.match(teil, /:not\(\.cardio\)|\.feld-box/,
+        `„${teil.trim()}" lässt auch Cardio-Felder schrumpfen`);
+    }
+  }
+});
