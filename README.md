@@ -345,6 +345,13 @@ Ziffern). Die Schrift bleibt gleich groß. Drei Dinge halten das zusammen:
 Nur unter 330 px (z. B. das Außendisplay eines Klapphandys) darf die Zeile
 noch umbrechen.
 
+**Das gilt nur für Kraftsätze.** Cardio in der Kraft-Einheit (Laufband,
+Ergometer …) hat bis zu fünf Felder mit dreistelligen Werten — das passt in
+keine Zeile. Dort wird nicht geschrumpft, sondern bei normaler Feldbreite in
+eine zweite Zeile umgebrochen (`.satz.cardio`). Die Schrumpf-Regeln tragen
+deshalb `:not(.cardio)`. Ohne diese Ausnahme wurden „109" und „183"
+abgeschnitten; ein Test in `render-smoke.test.js` prüft den Geltungsbereich.
+
 ### 5b. Löschen prüft ALLE Referenzen, nicht nur Sessions
 
 `referenzenVonAktivitaet(state, id)` beantwortet an einer Stelle, wo eine Übung
@@ -497,7 +504,7 @@ sogar: Die Kachel sagte „2 Wanderungen", die Zeile darunter „2 Touren".)
 
 ## Tests
 
-334 Tests, alle ohne Browser lauffähig, ohne eine einzige Abhängigkeit:
+335 Tests, alle ohne Browser lauffähig, ohne eine einzige Abhängigkeit:
 
 ```
 npm test
