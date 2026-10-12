@@ -202,7 +202,21 @@ export function erstelleHeuteAnsicht(k) {
   }
 
   /** Felder eines Kraftsatzes: Gewicht (mit +/− bei assistiert), dann Wdh bzw. L/R. */
-  function kraftFelderHtml(aktivitaet, seg, e) {
+  /**
+   * Rekord-Markierung direkt am Feld, das den Rekord trägt: farbiger Rand
+   * plus 🎉 als kleiner Aufkleber auf der Ecke.
+   *
+   * Vorher stand „🎉 Wdh" als eigenes Abzeichen in der Zeile. Bei einarmigen
+   * Übungen (kg × L / R) war dafür kein Platz mehr — Abzeichen und ✕
+   * rutschten in eine zweite Zeile. Am Feld braucht die Markierung keine
+   * Breite, und sie sagt nebenbei genauer, WAS der Rekord ist.
+   */
+  function rekordKlasse(an) { return an ? ' rekord' : ''; }
+  function rekordMarke(an, was) {
+    return an ? `<span class="pr-marke" role="img" aria-label="Neuer Rekord: ${was}" title="Neuer Rekord: ${was}">🎉</span>` : '';
+  }
+
+  function kraftFelderHtml(aktivitaet, seg, e, pr = null) {
     const einst = effektiveEinstellungen(seg);
     const assistiert = !!einst.assist;
     const einarmig = !!einst.einarmig;
@@ -217,28 +231,31 @@ export function erstelleHeuteAnsicht(k) {
       html += `<button class="vz ${neg ? 'minus' : 'plus'}" data-action="k.vorzeichen"
         data-seg="${seg.id}" data-eintrag="${e.id}" title="Hilfe (−) oder Zusatzgewicht (+)">${neg ? '−' : '+'}</button>`;
     }
-    html += `<label class="feld">
-      <input type="text" inputmode="decimal" value="${escT(kgBetrag)}" placeholder="kg"
-        data-change="k.wert" data-seg="${seg.id}" data-eintrag="${e.id}" data-typ="gewicht">
+    html += `<label class="feld${rekordKlasse(pr === 'gewicht')}">
+      <span class="feld-box"><input type="text" inputmode="decimal" value="${escT(kgBetrag)}" placeholder="kg"
+        data-change="k.wert" data-seg="${seg.id}" data-eintrag="${e.id}" data-typ="gewicht">${rekordMarke(pr === 'gewicht', 'Gewicht')}</span>
       <span>kg</span></label>
       <span class="mal">×</span>`;
 
     if (einarmig) {
       const l = e.messwerte.wdh_l, r = e.messwerte.wdh_r;
-      html += `<label class="feld schmal">
-        <input type="text" inputmode="numeric" value="${l != null ? formatZahl(l, 0) : ''}" placeholder="L"
-          data-change="k.wert" data-seg="${seg.id}" data-eintrag="${e.id}" data-typ="wdh_l">
+      // Wdh-Rekord einarmig: gezählt wird die schwächere Seite, also sind
+      // beide Felder beteiligt. Der Aufkleber sitzt nur auf R — zwei wären Lärm.
+      const wdhPR = pr === 'wdh';
+      html += `<label class="feld schmal${rekordKlasse(wdhPR)}">
+        <span class="feld-box"><input type="text" inputmode="numeric" value="${l != null ? formatZahl(l, 0) : ''}" placeholder="L"
+          data-change="k.wert" data-seg="${seg.id}" data-eintrag="${e.id}" data-typ="wdh_l"></span>
         <span>L</span></label>
         <span class="mal">/</span>
-        <label class="feld schmal">
-        <input type="text" inputmode="numeric" value="${r != null ? formatZahl(r, 0) : ''}" placeholder="R"
-          data-change="k.wert" data-seg="${seg.id}" data-eintrag="${e.id}" data-typ="wdh_r">
+        <label class="feld schmal${rekordKlasse(wdhPR)}">
+        <span class="feld-box"><input type="text" inputmode="numeric" value="${r != null ? formatZahl(r, 0) : ''}" placeholder="R"
+          data-change="k.wert" data-seg="${seg.id}" data-eintrag="${e.id}" data-typ="wdh_r">${rekordMarke(wdhPR, 'Wiederholungen')}</span>
         <span>R</span></label>`;
     } else {
       const w = e.messwerte.wdh;
-      html += `<label class="feld">
-        <input type="text" inputmode="numeric" value="${w != null ? formatZahl(w, 0) : ''}" placeholder="Wdh"
-          data-change="k.wert" data-seg="${seg.id}" data-eintrag="${e.id}" data-typ="wdh">
+      html += `<label class="feld${rekordKlasse(pr === 'wdh')}">
+        <span class="feld-box"><input type="text" inputmode="numeric" value="${w != null ? formatZahl(w, 0) : ''}" placeholder="Wdh"
+          data-change="k.wert" data-seg="${seg.id}" data-eintrag="${e.id}" data-typ="wdh">${rekordMarke(pr === 'wdh', 'Wiederholungen')}</span>
         <span>Wdh</span></label>`;
     }
     return html;
@@ -298,10 +315,11 @@ export function erstelleHeuteAnsicht(k) {
     const warm = hatFlag(eintrag, 'aufwaermsatz');
     const unsauber = hatFlag(eintrag, 'unsauber');
     const pr = eintragPR(S(), identVon(seg), eintrag, session.datum);
-    return `<div class="satz ${warm ? 'warm' : ''} ${unsauber ? 'unsauber' : ''}">
+    // einarmig = drei Zahlenfelder statt zwei; die Zeile darf dann enger werden.
+    const einarmig = effektiveEinstellungen(seg).einarmig ? 'einarmig' : '';
+    return `<div class="satz ${einarmig} ${warm ? 'warm' : ''} ${unsauber ? 'unsauber' : ''}">
       ${satzArtKnopf(seg, eintrag, idx)}
-      ${kraftFelderHtml(aktivitaet, seg, eintrag)}
-      ${pr ? `<span class="pr">🎉${pr === 'wdh' ? ' Wdh' : ''}</span>` : ''}
+      ${kraftFelderHtml(aktivitaet, seg, eintrag, pr)}
       <button class="weg" data-action="k.satzWeg" data-seg="${seg.id}" data-eintrag="${eintrag.id}">✕</button>
     </div>`;
   }
