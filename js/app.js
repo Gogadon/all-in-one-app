@@ -23,7 +23,7 @@ import {
 import { wochenUebersicht } from './dashboard.js';
 import { routeVonZustand, routeParsen } from './route.js';
 import { installiereTastaturVerhalten } from './ui/tastatur.js';
-import { erledigteSegmentZeilen } from './views/session-zeilen.js';
+import { erledigteSegmentZeilen, sessionNotizHtml } from './views/session-zeilen.js';
 import { datenHtml } from './views/daten-ansicht.js';
 import { kalenderStreifenHtml, kalenderMonatHtml, tagSheetHtml } from './views/kalender-ansicht.js';
 
@@ -359,6 +359,7 @@ function verlaufHtml() {
           ${vol > 0 ? `<span class="num dim">${formatZahl(vol, 0)} kg</span>` : ''}</div>
       </div>
       ${zeilen || '<small class="dim">Nichts abgehakt.</small>'}
+      ${sessionNotizHtml(s)}
       ${s.abgeschlossen ? `<button class="knopf klein geist voll" data-action="k.teilen" data-datum="1" data-sid="${s.id}" style="margin-top:12px">Teilen</button>` : ''}
     </div>`;
   }).join('');

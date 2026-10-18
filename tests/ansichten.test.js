@@ -22,7 +22,7 @@ const { addEinheit, addAktivitaetZuEinheit } = await import('../js/core/plan.js'
 const { tagSheetHtml, kalenderStreifenHtml, kalenderMonatHtml, langesDatum, kalPunkte } =
   await import('../js/views/kalender-ansicht.js');
 const { datenHtml, exportStatusText } = await import('../js/views/daten-ansicht.js');
-const { erledigteSegmentZeilen } = await import('../js/views/session-zeilen.js');
+const { erledigteSegmentZeilen, sessionNotizHtml } = await import('../js/views/session-zeilen.js');
 
 const HEUTE = heuteIso();   // wie die App: Ortszeit, nicht UTC
 const tagPlus = (n) => {
@@ -223,4 +223,15 @@ test('Session-Zeilen: nur Abgehaktes, mit Alternativ-Namen', () => {
   assert.match(html, /Kurzhantel-Bank/);
   assert.doesNotMatch(html, /Bankdrücken/, 'das nicht abgehakte Segment fehlt');
   assert.equal((html.match(/verlauf-zeile/g) ?? []).length, 1);
+});
+
+test('Kraft-Verlauf: die Notiz zum Tag steht unter den Übungen', () => {
+  // Bis Oktober 2026 tauchte sie im Verlauf gar nicht auf — nur im Heute-Tab
+  // des Tages selbst und versteckt im Kalender-Tagesblatt.
+  assert.equal(sessionNotizHtml({ notiz: '  Trizeps-Prio  ' }),
+    '<p class="verlauf-sitzung-notiz">Trizeps-Prio</p>');
+  assert.equal(sessionNotizHtml({ notiz: '   ' }), '', 'nur Leerzeichen → keine Zeile');
+  assert.equal(sessionNotizHtml({}), '');
+  assert.match(sessionNotizHtml({ notiz: '<img src=x onerror=alert(1)>' }), /&lt;img/, 'escaped');
+  assert.match(sessionNotizHtml({ notiz: 'Zeile 1\nZeile 2' }), /Zeile 1\nZeile 2/, 'Umbrüche bleiben');
 });

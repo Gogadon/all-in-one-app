@@ -498,3 +498,96 @@ test('Smoke Kraft: Cardio-Einträge schrumpfen nicht — sie brechen um', async 
     }
   }
 });
+
+// ==================================================================
+// Notiz zum Tag: „Letztes Mal" und in den alten Zahlen
+// ==================================================================
+
+/** Plan mit zwei Einheiten und abgeschlossenen Sessions aus der Vergangenheit. */
+function notizWelt() {
+  const state = leererZustand();
+  const trizeps = addAktivitaet(state, { name: 'Trizepsdrücken', kategorie: 'kraft', messwerte: ['gewicht', 'wdh'] });
+  const ruder = addAktivitaet(state, { name: 'Rudern', kategorie: 'kraft', messwerte: ['gewicht', 'wdh'] });
+  const push = addEinheit(state, 'kraft', { name: 'Brust · Schulter · Trizeps' });
+  addAktivitaetZuEinheit(state, 'kraft', push.id, trizeps.id);
+  const ruecken = addEinheit(state, 'kraft', { name: 'Rücken · Bizeps' });
+  addAktivitaetZuEinheit(state, 'kraft', ruecken.id, ruder.id);
+  addZuZyklus(state, 'kraft', push.id);
+  addZuZyklus(state, 'kraft', ruecken.id);
+
+  const session = (datum, einheit, akt, notiz, { uebersprungen = false, kg = 30 } = {}) => {
+    const s = neueSession({ datum });
+    s.modul = 'kraft'; s.ausPlan = einheit.id; s.abgeschlossen = true;
+    if (uebersprungen) s.uebersprungen = true;
+    if (notiz != null) s.notiz = notiz;
+    const seg = addSegment(s, neuesSegment(akt.id)); seg.erledigt = !uebersprungen;
+    if (!uebersprungen) addEintrag(seg, neuerEintrag({ gewicht: kg, wdh: 10 }));
+    state.sessions.push(s);
+    return s;
+  };
+  return { state, push, ruecken, trizeps, ruder, session };
+}
+
+test('Notiz: „Letztes Mal" ist die letzte Session DIESER Einheit', async () => {
+  const { letzteNotizDerEinheit } = await import('../js/modules/kraft/logik.js');
+  const { state, push, ruecken, trizeps, ruder, session } = notizWelt();
+  session('2026-09-01', push, trizeps, 'Brust-Prio');
+  session('2026-09-04', push, trizeps, '  Trizeps-Prio  ');
+  session('2026-09-06', ruecken, ruder, 'Rücken war schwer');   // andere Einheit
+  session('2026-09-08', push, trizeps, null, { uebersprungen: true });  // übersprungen
+
+  assert.deepEqual(letzteNotizDerEinheit(state, push.id, { vor: '2026-09-10' }),
+    { datum: '2026-09-04', notiz: 'Trizeps-Prio' }, 'getrimmt; Rücken und Übersprungenes zählen nicht');
+  assert.deepEqual(letzteNotizDerEinheit(state, push.id, { vor: '2026-09-04' }),
+    { datum: '2026-09-01', notiz: 'Brust-Prio' }, 'nur Tage davor');
+
+  // Letztes Mal ohne Notiz → nichts, statt eine ältere hervorzukramen.
+  session('2026-09-09', push, trizeps, '   ');
+  assert.equal(letzteNotizDerEinheit(state, push.id, { vor: '2026-09-10' }), null);
+  assert.equal(letzteNotizDerEinheit(state, null), null, 'freie Session ohne Einheit');
+});
+
+test('Notiz: Startbildschirm und laufende Einheit zeigen „Letztes Mal"', async () => {
+  const { state, push, trizeps, session } = notizWelt();
+  session('2026-01-05', push, trizeps, 'Trizeps-Prio');
+  const { m: kraft } = modul(erstelleKraftModul, state);
+
+  // Vor dem Start — genau dann, wenn man entscheidet, was heute Prio ist.
+  assert.match(kraft.heuteHtml(), /Letztes Mal \(.*\):<\/span> Trizeps-Prio/);
+
+  // Gestartet: oben in der Einheit, solange sie läuft.
+  await kraft.actions['k.start']({ einheit: push.id });
+  const heute = state.sessions.at(-1);
+  assert.match(kraft.heuteHtml(), /class="letzte-notiz"[\s\S]*Trizeps-Prio/);
+  // Die eigene, heutige Notiz ist nicht „letztes Mal".
+  await kraft.actions['k.sessionNotiz']({}, { value: 'Schulter-Prio' });
+  assert.match(kraft.heuteHtml(), /Letztes Mal[^<]*<\/span> Trizeps-Prio/);
+  // Abgeschlossen: keine Rückschau mehr, nur die eigene Notiz.
+  heute.abgeschlossen = true;
+  assert.doesNotMatch(kraft.heuteHtml(), /letzte-notiz/);
+  assert.match(kraft.heuteHtml(), /Schulter-Prio/);
+});
+
+test('Notiz: alte Zahlen zeigen die Notiz ihres Tages — im Training und im Verlauf-Tab', async () => {
+  const { state, push, trizeps, session } = notizWelt();
+  session('2026-01-05', push, trizeps, 'Trizeps-Prio', { kg: 30 });
+  session('2026-01-12', push, trizeps, 'Schulter-Prio, Trizeps zum Schluss', { kg: 27.5 });
+  session('2026-01-19', push, trizeps, null, { kg: 30 });
+  session('2026-01-26', push, trizeps, '<b>Brust</b>-Prio', { kg: 32.5 });
+  const { m: kraft } = modul(erstelleKraftModul, state);
+
+  // Verlauf-Tab („Fortschritt"): eine Notiz-Zeile pro Tag, der eine hatte.
+  const fortschritt = kraft.fortschrittHtml();
+  assert.equal((fortschritt.match(/class="dim notiz"/g) ?? []).length, 3);
+  assert.match(fortschritt, /Schulter-Prio, Trizeps zum Schluss/);
+  assert.match(fortschritt, /&lt;b&gt;Brust&lt;\/b&gt;-Prio/, 'Notiz wird escaped');
+  assert.doesNotMatch(fortschritt, /<b>Brust/);
+
+  // Im Training: „Verlauf ⌄" aufklappen.
+  await kraft.actions['k.start']({ einheit: push.id });
+  const seg = state.sessions.at(-1).segmente[0];
+  kraft.actions['k.verlauf']({ seg: seg.id });
+  const liste = kraft.heuteHtml().split('class="verlauf-liste"')[1].split('</div></div>')[0];
+  assert.equal((liste.match(/verlauf-notiz/g) ?? []).length, 3, 'vier Tage, drei mit Notiz');
+  assert.match(liste, /Trizeps-Prio/);
+});
