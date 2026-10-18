@@ -89,6 +89,34 @@ export function eintragLeer(e) {
   return Object.keys(e.messwerte).length === 0;
 }
 
+/** Die Notiz zum Tag einer Session, getrimmt — null, wenn leer. */
+export function notizVon(session) {
+  const t = (session?.notiz ?? '').trim();
+  return t || null;
+}
+
+/**
+ * Die Notiz vom letzten Mal DIESER Einheit — für die Prio-Rotation
+ * („letztes Mal Trizeps-Prio, heute Schulter").
+ *
+ * Gemeint ist die letzte frühere Session derselben Plan-Einheit, nicht die
+ * letzte Notiz überhaupt: Hatte das letzte Mal keine Notiz, gibt es nichts
+ * zu zeigen (null), statt eine ältere hervorzukramen, die nicht mehr stimmt.
+ * Übersprungene Tage zählen nicht als „letztes Mal".
+ *
+ * @param vor   ISO-Tag; nur Sessions davor zählen (Standard: heute)
+ * @param ohne  Session-ID, die nicht zählt (die gerade laufende)
+ * @returns {{ datum, notiz }} | null
+ */
+export function letzteNotizDerEinheit(state, einheitId, { vor = heuteIso(), ohne = null } = {}) {
+  if (!einheitId) return null;
+  const letzte = (state.sessions ?? [])
+    .filter(s => s.ausPlan === einheitId && !s.uebersprungen && s.id !== ohne && s.datum < vor)
+    .sort((a, b) => b.datum.localeCompare(a.datum))[0];
+  const notiz = notizVon(letzte);
+  return notiz ? { datum: letzte.datum, notiz } : null;
+}
+
 /**
  * Erledigte Segmente einer Identität, VOR einem Stichtag, neueste zuerst.
  * (Zählregel aus der Gym-App: nur explizit abgehakte Übungen zählen.)
@@ -101,7 +129,7 @@ function segmenteVor(state, identId, vorIso) {
   for (const s of sessions) {
     for (const seg of s.segmente) {
       if (seg.erledigt === true && identVon(seg) === identId && seg.eintraege.length) {
-        out.push({ datum: s.datum, segment: seg });
+        out.push({ datum: s.datum, segment: seg, notiz: notizVon(s) });
       }
     }
   }
@@ -362,7 +390,7 @@ export function fortschrittsSerie(state, identId, { limit = 12 } = {}) {
       if (seg.erledigt === true && identVon(seg) === identId && seg.eintraege.length) {
         const b = segmentBestwerte(seg);
         if (b.topKg != null || b.vol > 0) {
-          punkte.push({ datum: s.datum, ...b, saetze: seg.eintraege.map(fmtSatz) });
+          punkte.push({ datum: s.datum, ...b, saetze: seg.eintraege.map(fmtSatz), notiz: notizVon(s) });
         }
       }
     }

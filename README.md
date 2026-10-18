@@ -352,6 +352,24 @@ eine zweite Zeile umgebrochen (`.satz.cardio`). Die Schrumpf-Regeln tragen
 deshalb `:not(.cardio)`. Ohne diese Ausnahme wurden „109" und „183"
 abgeschnitten; ein Test in `render-smoke.test.js` prüft den Geltungsbereich.
 
+### 5c. Die Notiz zum Tag erscheint überall, wo der Tag erscheint
+
+`session.notiz` ist die Notiz unten im Heute-Tab (z. B. „Trizeps-Prio"). Sie
+steht:
+
+- im **Kraft-Verlauf** (Liste der Einheiten) vollständig unter den Übungen
+  (`sessionNotizHtml` in `views/session-zeilen.js`),
+- unter jeder **alten Zahlenzeile**, im Fortschritt und bei „Verlauf ⌄" im
+  Training, auf eine Zeile gekürzt. `segmenteVor` und `fortschrittsSerie`
+  reichen dafür `notiz` mit durch,
+- als **„Letztes Mal (…)"** vor dem Start und oben in der laufenden Einheit:
+  die Notiz der letzten früheren Session *derselben* Einheit
+  (`letzteNotizDerEinheit`). Hatte das letzte Mal keine Notiz, erscheint
+  nichts. Es wird bewusst keine ältere hervorgeholt, die nicht mehr stimmt.
+
+Bis Oktober 2026 stand sie nur im Heute-Tab des Tages selbst und versteckt im
+Kalender-Tagesblatt.
+
 ### 5b. Löschen prüft ALLE Referenzen, nicht nur Sessions
 
 `referenzenVonAktivitaet(state, id)` beantwortet an einer Stelle, wo eine Übung
@@ -504,7 +522,7 @@ sogar: Die Kachel sagte „2 Wanderungen", die Zeile darunter „2 Touren".)
 
 ## Tests
 
-335 Tests, alle ohne Browser lauffähig, ohne eine einzige Abhängigkeit:
+339 Tests, alle ohne Browser lauffähig, ohne eine einzige Abhängigkeit:
 
 ```
 npm test

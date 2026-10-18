@@ -143,6 +143,15 @@ h1,h2,h3,.num{font-family:var(--font-display);letter-spacing:-.02em}
 .verlauf-liste{font-size:12.5px;display:flex;flex-direction:column;gap:4px;
   padding:8px 10px;background:var(--surface-2);border-radius:var(--r-icon)}
 .verlauf-liste .dim{margin-right:6px}
+/* Notiz im Kraft-Verlauf (Liste der Einheiten): vollständig, als Zitat. */
+.verlauf-sitzung-notiz{margin:10px 0 0;padding:2px 0 2px 10px;border-left:2px solid var(--line);
+  font-size:13px;line-height:1.45;color:var(--dim);font-style:italic;white-space:pre-line}
+.verlauf-liste .verlauf-notiz{display:block;margin:1px 0 0;font-size:12px;font-style:italic;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* „Letztes Mal (Mi, 07.10.): Trizeps-Prio" — vor dem Start und oben in der
+   laufenden Einheit. Höchstens drei Zeilen, Zeilenumbrüche der Notiz bleiben. */
+.letzte-notiz{font-size:13px;line-height:1.45;margin:6px 0 10px;white-space:pre-line;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 
 /* Satz-Zeilen */
 /* Kraftsätze: immer EINE Zeile (Cardio-Einträge siehe .satz.cardio unten).
@@ -372,6 +381,11 @@ h1,h2,h3,.num{font-family:var(--font-display);letter-spacing:-.02em}
 .verlauf-zeile2 .wert{font-size:14px;font-weight:700;grid-row:1;grid-column:2}
 .verlauf-zeile2 .wert.rauf{color:var(--kraft)}
 .verlauf-zeile2 .saetze{font-size:12px;grid-column:2;grid-row:2;line-height:1.45}
+/* Notiz des Tages (z.B. „Trizeps-Prio") — erklärt, warum die Zahlen an dem
+   Tag so sind. Eine Zeile, Rest abgeschnitten; die volle Notiz steht im
+   Kalender beim Tag. */
+.verlauf-zeile2 .notiz{font-size:12px;grid-column:2;grid-row:3;font-style:italic;
+  min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .prog-karte .knopf.voll{margin-top:10px;margin-bottom:0}
 
 /* Fortschritt: Gruppen-Titel (nach Einheiten) */

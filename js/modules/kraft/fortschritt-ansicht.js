@@ -64,6 +64,7 @@ export function erstelleFortschrittAnsicht(k) {
           <span class="dim datum">${esc(formatDatum(p.datum))}</span>
           <span class="wert ${p.rauf ? 'rauf' : ''}">${esc(textVon(p))}${p.rauf ? ' ↑' : ''}</span>
           <span class="dim saetze">${esc(p.saetze.join(', '))}</span>
+          ${p.notiz ? `<span class="dim notiz">${esc(p.notiz)}</span>` : ''}
         </div>`).join('');
       const mehr = rueck.length > 5
         ? `<button class="knopf klein geist voll" data-action="k.progExpand" data-akt="${akt.id}">${offen ? 'Weniger anzeigen ⌃' : `Alle ${rueck.length} anzeigen ⌄`}</button>`

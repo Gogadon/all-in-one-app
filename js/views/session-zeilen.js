@@ -22,3 +22,13 @@ export function erledigteSegmentZeilen(state, session) {
     return `<div class="verlauf-zeile"><span class="punkt ${aktivitaet.kategorie}"></span>${esc(anzeigeName)} <span class="dim">${esc(zsf)}</span></div>`;
   }).join('');
 }
+
+/**
+ * Die Notiz zum Tag als eigene Zeile unter den Übungen — '' ohne Notiz.
+ * Vollständig, mit ihren Zeilenumbrüchen: Im Verlauf ist sie der Grund, die
+ * Karte anzuschauen („Trizeps-Prio", „Schulter hat gezwickt").
+ */
+export function sessionNotizHtml(session) {
+  const t = (session?.notiz ?? '').trim();
+  return t ? `<p class="verlauf-sitzung-notiz">${esc(t)}</p>` : '';
+}

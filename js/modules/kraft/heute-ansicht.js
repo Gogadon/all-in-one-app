@@ -15,7 +15,7 @@ import { formatZahl } from '../../core/metrics.js';
 import { neuerEintrag, hatFlag, findeAktivitaet, loeseSegmentAuf } from '../../core/model.js';
 import { findeEinheit, naechsteEinheit } from '../../core/plan.js';
 import {
-  MODUL, identVon, verlaufLetzte, eintragPR, berechneVorschlag,
+  MODUL, identVon, verlaufLetzte, eintragPR, berechneVorschlag, letzteNotizDerEinheit,
   segmentZusammenfassungKraft, segmentZusammenfassungWerte,
   sessionVolumenErledigt, fmtSatz,
 } from './logik.js';
@@ -42,6 +42,17 @@ export function erstelleHeuteAnsicht(k) {
     el.textContent = formatZahl(sessionVolumenErledigt(s), 0);
   }
 
+  /**
+   * „Letztes Mal (Mi, 07.10.): Trizeps-Prio" — die Notiz vom letzten Mal
+   * derselben Einheit. Für die Prio-Rotation: vor dem Start sehen, was
+   * zuletzt dran war. Ohne Notiz beim letzten Mal: gar keine Zeile.
+   */
+  function letzteNotizHtml(einheitId, optionen) {
+    const n = letzteNotizDerEinheit(S(), einheitId, optionen);
+    if (!n) return '';
+    return `<p class="letzte-notiz"><span class="dim">Letztes Mal (${esc(formatDatum(n.datum))}):</span> ${esc(n.notiz)}</p>`;
+  }
+
   function startHtml() {
     const naechste = naechsteEinheit(S(), MODUL);
     if (!naechste) {
@@ -58,6 +69,7 @@ export function erstelleHeuteAnsicht(k) {
       <span class="eyebrow"><span class="pip"></span>Nächste Einheit</span>
       <h1>${esc(naechste.name)}</h1>
       <p class="dim">${naechste.segmente.length} Übungen im Plan</p>
+      ${letzteNotizHtml(naechste.id)}
       <div class="knopf-zeile">
         <button class="knopf primaer gross" data-action="k.start" data-einheit="${naechste.id}">Jetzt starten</button>
         <button class="knopf" data-action="k.ueberspringen">Überspringen ›</button>
@@ -80,6 +92,7 @@ export function erstelleHeuteAnsicht(k) {
       </div>
       <div class="vol"><span class="num" id="volZahl">${formatZahl(vol, 0)}</span><span class="dim">kg bewegt</span></div>
     </div>`;
+    if (!fertig) html += letzteNotizHtml(s.ausPlan, { vor: s.datum, ohne: s.id });
 
     html += s.segmente.map(seg => segmentKarteHtml(s, seg)).join('');
 
@@ -181,7 +194,8 @@ export function erstelleHeuteAnsicht(k) {
         </button>`;
         if (verlaufOffen.has(seg.id)) {
           html += `<div class="verlauf-liste">${verlauf.map((t, i) =>
-            `<div class="${i === 0 ? 'gruen' : ''}"><span class="dim">${formatDatum(t.datum)}</span> ${esc(zeile(t))}</div>`).join('')}</div>`;
+            `<div class="${i === 0 ? 'gruen' : ''}"><span class="dim">${formatDatum(t.datum)}</span> ${esc(zeile(t))}${
+              t.notiz ? `<span class="verlauf-notiz dim">${esc(t.notiz)}</span>` : ''}</div>`).join('')}</div>`;
         }
       }
 
